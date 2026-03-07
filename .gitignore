@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+momentum_data.json
+
+# DO NOT block quant_screener.db, we want it committed so it can seed the cloud DB.
