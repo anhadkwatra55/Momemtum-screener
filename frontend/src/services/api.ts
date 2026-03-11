@@ -116,7 +116,7 @@ interface ApiFetchOptions extends RequestInit {
  * @throws {ApiError} Throws a custom `ApiError` if the server responds with a non-OK status after all retries.
  * @throws {Error} Throws a generic `Error` for network issues or unexpected errors during the fetch operation.
  */
-async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
   const url = `${API_BASE}${path}`;
   const method = options?.method?.toUpperCase() || "GET";
   const {

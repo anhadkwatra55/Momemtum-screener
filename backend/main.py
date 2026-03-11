@@ -700,6 +700,268 @@ async def get_derived():
     return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
 
 
+# ── Portfolio Intelligence Engine ──
+
+# All 11 GICS sectors for gap analysis
+_ALL_SECTORS = [
+    "Technology", "Healthcare", "Financials", "Consumer Cyclical",
+    "Industrials", "Energy", "Consumer Defensive", "Utilities",
+    "Real Estate", "Basic Materials", "Communication Services",
+]
+
+
+def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
+    """
+    Cross-reference user holdings against in-memory pipeline data.
+    Returns aura score, sector exposure, alpha alerts, rotation suggestions.
+    All in-memory lookups — sub-10ms execution.
+    """
+    data = _CACHED_DASHBOARD_DATA
+    if not data or not data.get("signals"):
+        return {"error": "Pipeline data not available yet"}
+
+    # Build signal lookup: ticker -> signal dict
+    signal_map = {s["ticker"]: s for s in data.get("signals", [])}
+    sector_regimes = data.get("sector_regimes", {})
+
+    # Build exhausting set for alert flagging
+    exhausting_tickers = {s["ticker"] for s in data.get("exhausting_momentum", [])}
+
+    holdings_analysis = []
+    total_value = 0.0
+    total_cost = 0.0
+    sector_values: dict[str, float] = {}
+    sector_composites: dict[str, list[float]] = {}
+    weighted_score_sum = 0.0
+
+    for h in holdings:
+        ticker = str(h.get("ticker", "")).upper().strip()
+        shares = float(h.get("shares", 0))
+        avg_cost = float(h.get("avg_cost", 0))
+        if not ticker or shares <= 0:
+            continue
+
+        sig = signal_map.get(ticker)
+        current_price = sig["price"] if sig else avg_cost
+        position_value = shares * current_price
+        cost_basis = shares * avg_cost
+        pnl = position_value - cost_basis
+        pnl_pct = ((current_price - avg_cost) / avg_cost * 100) if avg_cost > 0 else 0.0
+
+        total_value += position_value
+        total_cost += cost_basis
+
+        sector = sig["sector"] if sig else "Unknown"
+        composite = sig["composite"] if sig else 0.0
+        sentiment = sig["sentiment"] if sig else "Neutral"
+        regime = sig["regime"] if sig else "Choppy"
+        phase = sig.get("momentum_phase", "Neutral") if sig else "Neutral"
+
+        # Accumulate sector data
+        sector_values[sector] = sector_values.get(sector, 0.0) + position_value
+        if sector not in sector_composites:
+            sector_composites[sector] = []
+        sector_composites[sector].append(composite)
+
+        # Weighted score for aura
+        # Normalize composite: map [-2, 2] -> [0, 100]
+        norm_score = max(0, min(100, (composite + 2) / 4 * 100))
+        weighted_score_sum += norm_score * position_value
+
+        # Detect alerts
+        alert = None
+        alert_type = None
+        action = None
+        if sig:
+            if ticker in exhausting_tickers:
+                alert = f"{ticker} is showing exhausting momentum — trend may be losing steam"
+                alert_type = "exhausting_momentum"
+                action = "Consider taking profits or tightening stops"
+            elif sentiment in ("Bearish", "Strong Bearish") and composite < -0.5:
+                alert = f"{ticker} is bearish with composite {composite:.2f} — downside risk elevated"
+                alert_type = "bearish_impulse"
+                action = "Evaluate stop-loss or reduce position size"
+            elif phase == "Exhausting":
+                alert = f"{ticker} momentum phase is exhausting — move may be overextended"
+                alert_type = "exhausting_phase"
+                action = "Monitor closely for reversal signals"
+
+        entry = {
+            "ticker": ticker,
+            "shares": shares,
+            "avg_cost": round(avg_cost, 2),
+            "current_price": round(current_price, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl_pct, 2),
+            "composite": round(composite, 2) if sig else None,
+            "sentiment": sentiment,
+            "regime": regime,
+            "momentum_phase": phase,
+            "sector": sector,
+            "weight_pct": 0.0,  # filled below
+            "alert": alert,
+            "alert_type": alert_type,
+            "action": action,
+            "in_universe": sig is not None,
+        }
+        holdings_analysis.append(entry)
+
+    # Calculate weight percentages
+    for entry in holdings_analysis:
+        if total_value > 0:
+            val = entry["shares"] * entry["current_price"]
+            entry["weight_pct"] = round(val / total_value * 100, 2)
+
+    # ── Aura Score (0-100) ──
+    aura_score = round(weighted_score_sum / total_value, 1) if total_value > 0 else 50.0
+    # Bonus for diversification (up to +10)
+    unique_sectors = len([s for s in sector_values if s != "Unknown"])
+    diversification_bonus = min(10, unique_sectors * 1.5)
+    aura_score = round(min(100, max(0, aura_score + diversification_bonus)), 1)
+
+    if aura_score >= 80:
+        aura_label = "Ultra Instinct"
+    elif aura_score >= 65:
+        aura_label = "Strong"
+    elif aura_score >= 50:
+        aura_label = "Moderate"
+    elif aura_score >= 35:
+        aura_label = "Weak"
+    else:
+        aura_label = "Critical"
+
+    # ── Sector Exposure ──
+    sector_exposure = {}
+    for sector, value in sector_values.items():
+        comps = sector_composites.get(sector, [])
+        regime_info = sector_regimes.get(sector, {})
+        sector_exposure[sector] = {
+            "weight_pct": round(value / total_value * 100, 2) if total_value > 0 else 0,
+            "regime": regime_info.get("regime", "Unknown"),
+            "avg_composite": round(sum(comps) / len(comps), 2) if comps else 0,
+            "count": len(comps),
+        }
+
+    # ── Missing Sectors (gap analysis) ──
+    held_sectors = set(sector_values.keys()) - {"Unknown"}
+    missing_sectors = []
+    for sector in _ALL_SECTORS:
+        if sector in held_sectors:
+            continue
+        regime_info = sector_regimes.get(sector, {})
+        regime = regime_info.get("regime", "Unknown")
+        avg_comp = regime_info.get("avg_composite", 0)
+        # Find top pick in this sector
+        sector_signals = [s for s in data.get("signals", []) if s.get("sector") == sector]
+        sector_signals.sort(key=lambda s: s.get("composite", 0), reverse=True)
+        top = sector_signals[0] if sector_signals else None
+        missing_sectors.append({
+            "sector": sector,
+            "regime": regime,
+            "avg_composite": round(avg_comp, 2) if isinstance(avg_comp, (int, float)) else 0,
+            "top_pick": top["ticker"] if top else None,
+            "top_pick_composite": round(top["composite"], 2) if top else None,
+            "top_pick_sentiment": top.get("sentiment") if top else None,
+            "priority": "high" if regime == "Trending" and avg_comp > 0.3 else "medium" if regime == "Trending" else "low",
+        })
+    # Sort: trending sectors with high composites first
+    missing_sectors.sort(key=lambda x: (
+        0 if x["priority"] == "high" else 1 if x["priority"] == "medium" else 2,
+        -(x["avg_composite"] or 0),
+    ))
+
+    # ── Alpha Alerts ──
+    alpha_alerts = [
+        {
+            "ticker": e["ticker"],
+            "alert_type": e["alert_type"],
+            "message": e["alert"],
+            "composite": e["composite"],
+            "sentiment": e["sentiment"],
+            "action": e["action"],
+        }
+        for e in holdings_analysis if e["alert"]
+    ]
+
+    # ── Rotation Suggestions ──
+    rotation_suggestions = []
+    # For each alerted holding, suggest a replacement from the same or trending sector
+    for alert_entry in alpha_alerts[:5]:  # Max 5 suggestions
+        ticker = alert_entry["ticker"]
+        holding_entry = next((h for h in holdings_analysis if h["ticker"] == ticker), None)
+        if not holding_entry:
+            continue
+        # Find best replacement: fresh momentum in same sector or top trending sector
+        candidates = [
+            s for s in data.get("fresh_momentum", [])
+            if s["ticker"] != ticker and s.get("composite", 0) > 0.5
+        ]
+        if not candidates:
+            candidates = [
+                s for s in data.get("signals", [])
+                if s["ticker"] != ticker and s.get("composite", 0) > 0.8
+                and s.get("sentiment") in ("Bullish", "Strong Bullish")
+            ]
+        if candidates:
+            candidates.sort(key=lambda s: s.get("composite", 0), reverse=True)
+            best = candidates[0]
+            rotation_suggestions.append({
+                "sell_ticker": ticker,
+                "sell_composite": alert_entry["composite"],
+                "sell_sentiment": alert_entry["sentiment"],
+                "buy_ticker": best["ticker"],
+                "buy_composite": round(best.get("composite", 0), 2),
+                "buy_sentiment": best.get("sentiment", "Neutral"),
+                "buy_sector": best.get("sector", "Unknown"),
+                "rationale": f"Rotate out of {alert_entry['alert_type'].replace('_', ' ')} "
+                             f"into {best.get('momentum_phase', 'fresh')} momentum in {best.get('sector', 'N/A')}",
+            })
+
+    total_pnl = total_value - total_cost
+    total_pnl_pct = round((total_pnl / total_cost * 100), 2) if total_cost > 0 else 0.0
+
+    return {
+        "aura_score": aura_score,
+        "aura_label": aura_label,
+        "total_value": round(total_value, 2),
+        "total_cost": round(total_cost, 2),
+        "total_pnl": round(total_pnl, 2),
+        "total_pnl_pct": total_pnl_pct,
+        "holdings_count": len(holdings_analysis),
+        "holdings_analysis": holdings_analysis,
+        "sector_exposure": sector_exposure,
+        "missing_sectors": missing_sectors,
+        "alpha_alerts": alpha_alerts,
+        "rotation_suggestions": rotation_suggestions,
+    }
+
+
+@app.post("/api/portfolio/analyze")
+async def portfolio_analyze(request: Request):
+    """
+    Portfolio Intelligence endpoint.
+    Accepts: { "holdings": [{ "ticker": "AAPL", "shares": 50, "avg_cost": 170.0 }] }
+    Returns aura score, sector exposure, alpha alerts, rotation suggestions.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(content={"error": "Invalid JSON body"}, status_code=400)
+
+    holdings = body.get("holdings", [])
+    if not holdings or not isinstance(holdings, list):
+        return JSONResponse(
+            content={"error": "Request body must include a non-empty 'holdings' array"},
+            status_code=400,
+        )
+
+    result = _compute_portfolio_analysis(holdings)
+    if "error" in result:
+        return JSONResponse(content=result, status_code=503)
+
+    return encode_response(result)
+
+
 # ── WebSocket for real-time pipeline status ──
 
 @app.websocket("/ws/pipeline")

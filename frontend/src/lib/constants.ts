@@ -57,6 +57,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Intelligence", icon: "bolt.fill", pageId: "intelligence", section: "PLATFORM" },
   { label: "Vector Market Map", icon: "map.fill", pageId: "vector-map", section: "PLATFORM" },
   { label: "Sector Intelligence", icon: "antenna.radiowaves.left.and.right", pageId: "sector-intel", section: "PLATFORM" },
+  { label: "Portfolio Intelligence", icon: "briefcase.fill", pageId: "portfolio-intel", section: "PLATFORM" },
   { label: "Ticker Detail", icon: "chart.bar.fill", pageId: "ticker-detail", section: "PLATFORM" },
   // Signal Screeners
   { label: "Fresh Momentum", icon: "leaf.fill", pageId: "fresh", section: "SIGNAL SCREENERS" },

@@ -303,6 +303,7 @@ export default function CommandCenterPage() {
       { name: "Intelligence", tag: "Core", color: "cyan", href: ROUTES.dashboard, pageId: "intelligence", icon: findIcon("intelligence"), desc: `${data.summary.bullish} Bullish · ${data.summary.bearish} Bearish`, ariaLabel: "Open Intelligence Dashboard" },
       { name: "Fresh Momentum", tag: "Screener", color: "cyan", href: ROUTES.dashboard, pageId: "fresh", icon: findIcon("fresh"), desc: `${freshCount} Fresh Signals`, ariaLabel: "View Fresh Momentum Signals" },
       { name: "Sector Intel", tag: "Intel", color: "cyan", href: ROUTES.dashboard, pageId: "sector-intel", icon: findIcon("sector-intel"), desc: `${sectorCount} Sectors Tracked`, ariaLabel: "Explore Sector Intelligence" },
+      { name: "Portfolio Intel", tag: "New", color: "violet", href: ROUTES.dashboard, pageId: "portfolio-intel", icon: findIcon("portfolio-intel"), desc: "Aura Score · Alpha Alerts", ariaLabel: "Open Portfolio Intelligence" },
       { name: "Receipts", tag: "History", color: "violet", href: ROUTES.receipts, pageId: "receipts", icon: findIcon("receipts"), desc: "Performance Tracking", ariaLabel: "View Receipts Ledger" },
     ];
   }, [data?.summary, freshCount, sectorCount]);

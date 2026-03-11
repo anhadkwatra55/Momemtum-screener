@@ -44,6 +44,7 @@ const LazyTickerSearch = dynamic(() => import('@/components/momentum/ticker-sear
 const LazyStrategyBuilder = dynamic(() => import('@/components/momentum/strategy-builder').then(m => ({ default: m.StrategyBuilder })), { ssr: false });
 const LazyYieldTable = dynamic(() => import('@/components/momentum/yield-table').then(m => ({ default: m.YieldTable })), { ssr: false });
 const LazySectorHeatmap = dynamic(() => import('@/components/momentum/sector-heatmap').then(m => ({ default: m.SectorHeatmap })), { ssr: false });
+const LazyPortfolioIntelligence = dynamic(() => import('@/components/momentum/portfolio-intelligence').then(m => ({ default: m.PortfolioIntelligence })), { ssr: false });
 
 const SCREENER_MAP: Record<string, { key: string; title: string; icon: string }> = {
   fresh: { key: "fresh_momentum", title: "Fresh Momentum", icon: "leaf.fill" },
@@ -670,6 +671,19 @@ const DashboardPage = memo(() => {
                     onSelectTicker={handlePageTickerSelect}
                   />
                 </DataReveal>
+              </motion.div>
+            )}
+
+            {/* ══════ PORTFOLIO INTELLIGENCE ══════ */}
+            {activePage === "portfolio-intel" && (
+              <motion.div
+                key="portfolio-intel"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-8 md:pt-12 pb-16 md:pb-24"
+              >
+                <LazyPortfolioIntelligence
+                  signalTickers={sortedSignals?.map((s: { ticker: string }) => s.ticker) || []}
+                />
               </motion.div>
             )}
 
