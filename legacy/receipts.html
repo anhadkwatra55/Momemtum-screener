@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOMENTUM — Receipts Ledger</title>
+  <meta name="description" content="MOMENTUM — 30-day model performance receipts. Every call tracked, every win and loss documented.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg-base:#050a12;--bg-primary:#0b1120;--bg-secondary:#111827;
+      --bg-card:rgba(15,23,42,.6);--bg-card-hover:rgba(15,23,42,.88);
+      --border:rgba(148,163,184,.08);--border-light:rgba(148,163,184,.15);
+      --text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;
+      --cyan:#06b6d4;--emerald:#10b981;--amber:#f59e0b;--rose:#f43f5e;
+      --violet:#8b5cf6;--blue:#3b82f6;--radius:14px;--radius-sm:8px;
+      --font:'Inter',-apple-system,system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font);background:var(--bg-base);color:var(--text-primary);min-height:100vh;-webkit-font-smoothing:antialiased}
+    body::before{content:'';position:fixed;inset:0;
+      background:radial-gradient(ellipse 80% 50% at 20% 0%,rgba(245,158,11,.06),transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%,rgba(139,92,246,.05),transparent);
+      pointer-events:none;z-index:0}
+
+    .container{max-width:1360px;margin:0 auto;padding:0 28px;position:relative;z-index:1}
+
+    /* NAV */
+    .topnav{position:fixed;top:0;left:0;right:0;z-index:100;
+      background:rgba(5,10,18,.85);backdrop-filter:blur(20px);
+      border-bottom:1px solid var(--border);padding:0 28px;
+      display:flex;align-items:center;justify-content:space-between;height:54px}
+    .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+    .nav-logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--amber),var(--rose));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff}
+    .nav-logo h1{font-size:.9rem;font-weight:800;letter-spacing:.08em}
+    .nav-right{display:flex;align-items:center;gap:10px}
+    .nav-link{color:var(--text-secondary);font-size:.76rem;font-weight:500;text-decoration:none;padding:4px 10px;border-radius:6px;transition:all .2s}
+    .nav-link:hover{color:var(--text-primary);background:rgba(255,255,255,.05)}
+    .nav-link.active{color:var(--amber);background:rgba(245,158,11,.08)}
+
+    /* MAIN */
+    .main{padding-top:74px;padding-bottom:48px}
+
+    .page-header{margin-bottom:28px}
+    .page-title{font-size:1.6rem;font-weight:800;letter-spacing:-.03em;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .page-sub{font-size:.8rem;color:var(--text-muted)}
+
+    /* KPI STRIP */
+    .kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+    .kpi-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px;text-align:center;transition:all .2s}
+    .kpi-card:hover{background:var(--bg-card-hover);border-color:var(--border-light)}
+    .kpi-val{font-size:1.8rem;font-weight:800;font-family:var(--mono);letter-spacing:-.03em;line-height:1}
+    .kpi-lbl{font-size:.64rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-top:6px;font-weight:600}
+
+    /* CARDS */
+    .card{background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:16px}
+    .card-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .chart-box{height:240px;position:relative}
+
+    /* RECEIPTS TABLE */
+    .receipts-table{width:100%;border-collapse:collapse;font-size:.77rem}
+    .receipts-table thead th{text-align:left;padding:9px 12px;font-weight:700;font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border-light);background:rgba(11,17,32,.8);position:sticky;top:54px;z-index:10}
+    .receipts-table tbody tr{border-bottom:1px solid var(--border);transition:background .15s;cursor:default}
+    .receipts-table tbody tr:hover{background:rgba(245,158,11,.03)}
+    .receipts-table tbody td{padding:10px 12px;font-family:var(--mono);font-size:.75rem}
+    .receipt-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
+
+    /* Badge */
+    .badge{display:inline-block;padding:2px 9px;border-radius:6px;font-size:.65rem;font-weight:700;letter-spacing:.02em}
+    .b-win{background:rgba(16,185,129,.15);color:var(--emerald);border:1px solid rgba(16,185,129,.3)}
+    .b-loss{background:rgba(244,63,94,.15);color:var(--rose);border:1px solid rgba(244,63,94,.3)}
+    .b-open{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+    .b-bull{background:rgba(132,204,22,.12);color:#84cc16;border:1px solid rgba(132,204,22,.25)}
+    .b-fresh{background:rgba(6,182,212,.12);color:var(--cyan);border:1px solid rgba(6,182,212,.25)}
+
+    /* Receipt row expand */
+    .receipt-note{font-size:.68rem;color:var(--text-muted);font-family:var(--font);display:block;margin-top:2px}
+
+    /* EMPTY STATE */
+    .empty-state{text-align:center;padding:60px 20px}
+    .empty-icon{font-size:3rem;margin-bottom:16px}
+    .empty-title{font-size:1.1rem;font-weight:700;margin-bottom:8px}
+    .empty-sub{font-size:.8rem;color:var(--text-muted);line-height:1.6;max-width:480px;margin:0 auto 20px}
+    .btn-link{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;background:linear-gradient(135deg,var(--amber),var(--orange));color:#000;font-weight:700;font-size:.8rem;border-radius:var(--radius-sm);text-decoration:none;transition:all .2s}
+    .btn-link:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(245,158,11,.3)}
+
+    /* FILTER BAR */
+    .filter-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+    .filter-btn{padding:5px 14px;font-size:.72rem;font-weight:600;border:1px solid var(--border-light);border-radius:20px;background:transparent;color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:var(--font)}
+    .filter-btn:hover,.filter-btn.active{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:var(--amber)}
+    .filter-btn.active-green{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:var(--emerald)}
+    .filter-btn.active-red{background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.3);color:var(--rose)}
+
+    /* ROW 2 */
+    .row-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:900px){.row-2{grid-template-columns:1fr}}
+
+    #loading{position:fixed;inset:0;background:var(--bg-base);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+    #loading.done{opacity:0;pointer-events:none}
+    .spin{width:38px;height:38px;border:3px solid rgba(148,163,184,.15);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div id="loading"><div class="spin"></div><p style="margin-top:14px;color:var(--text-muted);font-size:.8rem" id="loadMsg">Loading Receipts…</p></div>
+
+  <nav class="topnav">
+    <a class="nav-logo" href="index.html">
+      <div class="nav-logo-icon">🧾</div>
+      <div><h1>RECEIPTS</h1></div>
+    </a>
+    <div class="nav-right">
+      <a href="index.html" class="nav-link">🏠 Command Center</a>
+      <a href="momentum_dashboard.html" class="nav-link">⚡ Intelligence</a>
+      <a href="receipts.html" class="nav-link active">🧾 Receipts</a>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="container">
+      <div class="page-header">
+        <div class="page-title">🧾 Receipts Ledger</div>
+        <div class="page-sub">30-day model performance history · Every call documented · Win &amp; Loss receipts included</div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-strip" id="kpiStrip">
+        <div class="kpi-card"><div class="kpi-val" id="kpWin" style="color:var(--emerald)">—</div><div class="kpi-lbl">Win Rate</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="kpAvgRet" style="color:var(--cyan)">—</div><div class="kpi-lbl">Avg Return</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="kpBest" style="color:var(--emerald)">—</div><div class="kpi-lbl">Best Call</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="kpWorst" style="color:var(--rose)">—</div><div class="kpi-lbl">Worst Call</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="kpTrades" style="color:var(--amber)">—</div><div class="kpi-lbl">Total Calls</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="kpSharpe" style="color:var(--violet)">—</div><div class="kpi-lbl">Sharpe</div></div>
+      </div>
+
+      <!-- CHARTS -->
+      <div class="row-2" style="margin-bottom:16px">
+        <div class="card">
+          <div class="card-title">📈 30-Day P&amp;L Curve</div>
+          <div class="chart-box"><canvas id="chPnL"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 Win / Loss Distribution</div>
+          <div class="chart-box"><canvas id="chWinLoss"></canvas></div>
+        </div>
+      </div>
+
+      <!-- RECEIPTS TABLE -->
+      <div class="card" style="padding:0">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--border)">
+          <div class="card-title" style="margin-bottom:10px">🧾 Receipt Log <span style="font-weight:400;color:var(--text-muted)" id="receiptCount"></span></div>
+          <div class="filter-bar">
+            <button class="filter-btn active" id="fAll" onclick="filterReceipts('all',this)">All</button>
+            <button class="filter-btn" id="fWin" onclick="filterReceipts('win',this)">✅ Wins</button>
+            <button class="filter-btn" id="fLoss" onclick="filterReceipts('loss',this)">❌ Losses</button>
+            <button class="filter-btn" id="fOpen" onclick="filterReceipts('open',this)">🟡 Open</button>
+          </div>
+        </div>
+        <div class="receipt-wrap" id="receiptWrap" style="max-height:600px;overflow-y:auto">
+          <div id="receiptBody"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+  const C = {cyan:'#06b6d4',emerald:'#10b981',amber:'#f59e0b',rose:'#f43f5e',violet:'#8b5cf6'};
+  let allReceipts = [];
+  let chartPnL = null, chartWL = null;
+
+  async function init(){
+    // Try to load from /api/receipts
+    try{
+      let r = await fetch('/api/receipts');
+      if(r.ok){
+        let data = await r.json();
+        allReceipts = data.receipts || [];
+        renderAll(data);
+        document.getElementById('loading').classList.add('done');
+        return;
+      }
+    }catch(e){}
+
+    // Fallback: pull from backtest history
+    try{
+      let r = await fetch('/api/backtest/history?limit=50');
+      let data = await r.json();
+      let history = data.history || [];
+      if(history.length){
+        allReceipts = history.map(h=>{
+          let p=h.params||{}, s=h.summary||{};
+          let ret = s.total_return_pct || s.avg_return_pct || 0;
+          let win = ret > 0;
+          return {
+            id: h.id,
+            date: (h.run_time||'').replace('T',' ').slice(0,16),
+            ticker: p.ticker || 'Universe',
+            entry_price: null,
+            exit_price: null,
+            return_pct: ret,
+            pnl: s.total_return || 0,
+            signal_type: p.systems ? 'S'+p.systems.join('+S') + ' Backtest' : 'Backtest',
+            result: win ? 'WIN' : 'LOSS',
+            trades: s.total_trades || 0,
+            sharpe: s.sharpe_ratio || s.avg_sharpe || 0,
+            holding: p.holding_period || 5,
+            note: `Win rate: ${(s.win_rate||0).toFixed(0)}% · Sharpe: ${(s.sharpe_ratio||0).toFixed(2)} · ${(s.total_trades||0)} trades`
+          };
+        });
+        renderFromHistory();
+        document.getElementById('loading').classList.add('done');
+        return;
+      }
+    }catch(e){}
+
+    // Empty state
+    document.getElementById('loading').classList.add('done');
+    renderEmpty();
+  }
+
+  function renderAll(data){
+    let receipts = data.receipts || [];
+    let wr = data.win_rate || '—';
+    let ar = data.avg_return || 0;
+    let best = data.best_call || '—';
+    let worst = data.worst_call || '—';
+    let total = data.total_calls || receipts.length;
+    let sharpe = data.sharpe || '—';
+    document.getElementById('kpWin').textContent = typeof wr === 'number' ? wr+'%' : wr;
+    document.getElementById('kpAvgRet').textContent = typeof ar === 'number' ? (ar>0?'+':'')+ar+'%' : ar;
+    document.getElementById('kpBest').textContent = best;
+    document.getElementById('kpWorst').textContent = worst;
+    document.getElementById('kpTrades').textContent = total;
+    document.getElementById('kpSharpe').textContent = typeof sharpe === 'number' ? sharpe.toFixed(2) : sharpe;
+    renderReceiptTable(receipts);
+    if(data.pnl_curve) renderPnLChart(data.pnl_curve);
+    renderWinLossChart(receipts);
+  }
+
+  function renderFromHistory(){
+    let receipts = allReceipts;
+    let wins = receipts.filter(r=>r.result==='WIN');
+    let losses = receipts.filter(r=>r.result==='LOSS');
+    let wr = receipts.length ? Math.round(wins.length/receipts.length*100) : 0;
+    let returns = receipts.map(r=>r.return_pct||0);
+    let avgRet = returns.length ? returns.reduce((a,b)=>a+b,0)/returns.length : 0;
+    let best = returns.length ? Math.max(...returns) : 0;
+    let worst = returns.length ? Math.min(...returns) : 0;
+    let sharpeVals = receipts.map(r=>r.sharpe||0).filter(v=>v);
+    let avgSharpe = sharpeVals.length ? sharpeVals.reduce((a,b)=>a+b,0)/sharpeVals.length : 0;
+
+    document.getElementById('kpWin').textContent = wr+'%';
+    document.getElementById('kpAvgRet').textContent = (avgRet>0?'+':'')+avgRet.toFixed(1)+'%';
+    document.getElementById('kpBest').textContent = (best>0?'+':'')+best.toFixed(1)+'%';
+    document.getElementById('kpWorst').textContent = worst.toFixed(1)+'%';
+    document.getElementById('kpTrades').textContent = receipts.length;
+    document.getElementById('kpSharpe').textContent = avgSharpe.toFixed(2);
+
+    // Build running P&L curve from return_pct
+    let equity = 100000;
+    let curve = receipts.map((r,i)=>{
+      equity = equity * (1 + (r.return_pct||0)/100);
+      return {date: r.date, equity: Math.round(equity)};
+    });
+    if(curve.length) renderPnLChart(curve);
+    renderWinLossChart(receipts);
+    renderReceiptTable(receipts);
+  }
+
+  function renderEmpty(){
+    document.getElementById('receiptWrap').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🧾</div>
+        <div class="empty-title">No Receipts Yet</div>
+        <div class="empty-sub">
+          Run your first backtest in the Strategy Builder to start building your receipt history.
+          Every backtest call will show up here as a receipt — wins and losses, all documented.
+        </div>
+        <a href="momentum_dashboard.html" class="btn-link">🧪 Go to Strategy Builder →</a>
+      </div>`;
+    document.getElementById('receiptCount').textContent = '(no data)';
+    // Empty state charts
+    renderWinLossChart([]);
+  }
+
+  let _currentFilter = 'all';
+  function filterReceipts(type, btn){
+    _currentFilter = type;
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active','active-green','active-red'));
+    if(type==='win'){btn.classList.add('active-green')}
+    else if(type==='loss'){btn.classList.add('active-red')}
+    else{btn.classList.add('active')}
+    let filtered = type==='all'?allReceipts:allReceipts.filter(r=>r.result&&r.result.toLowerCase()===type);
+    renderReceiptTable(filtered);
+  }
+
+  function renderReceiptTable(receipts){
+    let el = document.getElementById('receiptBody');
+    document.getElementById('receiptCount').textContent = `— ${receipts.length} receipts`;
+    if(!receipts.length){
+      el.innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No receipts match</div><div class="empty-sub">Try a different filter.</div></div>';
+      return;
+    }
+    let html = `<table class="receipts-table"><thead><tr>
+      <th>#</th><th>Date</th><th>Ticker</th><th>Signal Type</th><th>Result</th>
+      <th>Return %</th><th>P&amp;L</th><th>Trades</th><th>Sharpe</th><th>Details</th>
+    </tr></thead><tbody>`;
+    receipts.forEach((r,i)=>{
+      let win = r.result==='WIN';
+      let loss = r.result==='LOSS';
+      let ret = r.return_pct||0;
+      let retCol = ret>0?C.emerald:ret<0?C.rose:'#64748b';
+      let resultBadge = win?'b-win':loss?'b-loss':'b-open';
+      let resultLabel = win?'✅ WIN':loss?'❌ LOSS':'🟡 OPEN';
+      html += `<tr>
+        <td style="color:var(--text-muted)">${i+1}</td>
+        <td style="color:var(--text-secondary);font-size:.7rem">${r.date||'—'}</td>
+        <td style="font-weight:700;color:var(--cyan)">${r.ticker||'—'}</td>
+        <td><span class="badge b-fresh" style="font-size:.6rem">${r.signal_type||'—'}</span></td>
+        <td><span class="badge ${resultBadge}">${resultLabel}</span></td>
+        <td style="font-weight:700;color:${retCol}">${ret>0?'+':''}${(ret||0).toFixed(1)}%</td>
+        <td style="color:${retCol}">${r.pnl!==null&&r.pnl!==undefined?'$'+(r.pnl>0?'+':'')+Math.round(r.pnl).toLocaleString():'—'}</td>
+        <td style="color:var(--text-secondary)">${r.trades||'—'}</td>
+        <td style="color:${(r.sharpe||0)>0.5?C.emerald:(r.sharpe||0)>0?C.amber:C.rose}">${r.sharpe?r.sharpe.toFixed(2):'—'}</td>
+        <td style="color:var(--text-muted);font-size:.68rem;max-width:200px">${r.note||''}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  function renderPnLChart(curve){
+    let ctx = document.getElementById('chPnL').getContext('2d');
+    let labels = curve.map(d=>d.date);
+    let values = curve.map(d=>d.equity);
+    let g = ctx.createLinearGradient(0,0,0,240);
+    g.addColorStop(0,'rgba(245,158,11,.2)');
+    g.addColorStop(1,'rgba(245,158,11,0)');
+    if(chartPnL) chartPnL.destroy();
+    chartPnL = new Chart(ctx, {
+      type:'line',
+      data:{labels,datasets:[{label:'Equity',data:values,borderColor:C.amber,backgroundColor:g,borderWidth:2,pointRadius:0,tension:.3,fill:true}]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(11,17,32,.92)',titleFont:{family:'Inter'},bodyFont:{family:'JetBrains Mono',size:11},callbacks:{label:ctx=>`$${ctx.raw.toLocaleString()}`}}},
+        scales:{x:{ticks:{color:'#475569',font:{size:9},maxTicksLimit:6},grid:{color:'rgba(148,163,184,.04)'}},y:{ticks:{color:'#475569',font:{size:9},callback:v=>'$'+v.toLocaleString()},grid:{color:'rgba(148,163,184,.05)'}}}
+      }
+    });
+  }
+
+  function renderWinLossChart(receipts){
+    let ctx = document.getElementById('chWinLoss').getContext('2d');
+    if(chartWL) chartWL.destroy();
+    let wins = receipts.filter(r=>r.result==='WIN').length;
+    let losses = receipts.filter(r=>r.result==='LOSS').length;
+    let open = receipts.filter(r=>r.result!=='WIN'&&r.result!=='LOSS').length;
+    if(!wins&&!losses&&!open){
+      // Draw empty state
+      ctx.fillStyle='rgba(148,163,184,.1)';ctx.fillRect(0,0,10000,10000);
+      return;
+    }
+    chartWL = new Chart(ctx,{
+      type:'doughnut',
+      data:{
+        labels:['Wins','Losses','Open'],
+        datasets:[{data:[wins,losses,open],backgroundColor:['rgba(16,185,129,.5)','rgba(244,63,94,.5)','rgba(245,158,11,.4)'],borderColor:['rgba(16,185,129,.8)','rgba(244,63,94,.8)','rgba(245,158,11,.7)'],borderWidth:1}]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:true,position:'bottom',labels:{color:'#64748b',font:{family:'Inter',size:10},padding:12}},
+          tooltip:{backgroundColor:'rgba(11,17,32,.92)',titleFont:{family:'Inter'},bodyFont:{family:'JetBrains Mono',size:11}}}
+      }
+    });
+  }
+
+  init();
+  </script>
+</body>
+</html>

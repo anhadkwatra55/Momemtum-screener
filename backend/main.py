@@ -1,0 +1,1075 @@
+#!/usr/bin/env python3
+"""
+MOMENTUM — FastAPI Backend Server
+==================================
+Wraps the existing Python quant pipeline (from legacy/) into a modern
+FastAPI microservice. All endpoint logic is directly reused from the
+original momentum_dashboard.py handler methods.
+
+Run:  cd backend && uvicorn main:app --host 0.0.0.0 --port 8060 --reload
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import threading
+import traceback
+import warnings
+from pathlib import Path
+from typing import Any, Optional
+
+import numpy as np
+import pandas as pd
+from fastapi import FastAPI, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+
+warnings.filterwarnings("ignore")
+
+# Add pipelines/ to sys.path so legacy imports work unmodified
+PIPELINES_DIR = Path(__file__).parent / "pipelines"
+sys.path.insert(0, str(PIPELINES_DIR))
+
+# ── Legacy pipeline imports (unchanged) ──
+import momentum_config as cfg
+import db
+from backtester import backtest_universe, compare_systems, run_backtest
+from momentum_data import smart_fetch, fetch_universe
+from momentum_screener import screen_universe, sector_regimes
+from momentum_strategies import generate_all_strategies
+from strategy_engine import (
+    get_indicator_catalog, run_strategy_backtest, run_code_strategy,
+    compare_strategies as compare_strategy_results,
+)
+from redis_cache import get_cache, RedisCache
+from validators import validate_universe, validate_ohlcv_dataframe
+
+# ── JSON Encoder for numpy types ──
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            v = float(obj)
+            return None if (np.isnan(v) or np.isinf(v)) else v
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, (np.bool_,)):
+            return bool(obj)
+        if isinstance(obj, pd.Timestamp):
+            return obj.strftime("%Y-%m-%d")
+        return super().default(obj)
+
+
+def encode_response(data: Any) -> JSONResponse:
+    """Return JSON with numpy-safe encoding."""
+    body = json.loads(json.dumps(data, cls=NumpyEncoder))
+    return JSONResponse(content=body)
+
+
+# ── In-memory caches ──
+
+_DATA_CACHE: dict[str, dict[str, pd.DataFrame]] = {}
+_CACHE_LOCK = threading.Lock()
+_CANCEL_EVENT = threading.Event()
+_BACKTEST_LOCK = threading.Lock()
+_PIPELINE_STATUS = {"state": "idle", "message": ""}
+
+# ── Webhook registry ──
+_WEBHOOK_URLS: list[str] = []
+_WEBHOOK_LOCK = threading.Lock()
+
+
+def _cache_key(period, start, end, tickers=None):
+    t = tuple(sorted(tickers)) if tickers else "all"
+    return f"{t}|{period}|{start}|{end}"
+
+
+def _cached_fetch(tickers=None, period=None, start=None, end=None, progress=True):
+    key = _cache_key(period, start, end, tickers)
+    with _CACHE_LOCK:
+        if key in _DATA_CACHE:
+            if progress:
+                print(f"    ✓ Using in-memory cache ({len(_DATA_CACHE[key])} tickers).")
+            return _DATA_CACHE[key]
+    result = smart_fetch(tickers=tickers, period=period, start=start, end=end, progress=progress)
+    with _CACHE_LOCK:
+        _DATA_CACHE[key] = result
+    return result
+
+
+def _fetch_ticker_data(ticker, period="1y", start=None, end=None):
+    try:
+        ohlcv = _cached_fetch(tickers=[ticker], period=period, start=start, end=end, progress=False)
+        if ticker in ohlcv and len(ohlcv[ticker]) > 10:
+            return ohlcv[ticker]
+    except Exception:
+        pass
+    try:
+        import yfinance as yf
+        tk = yf.Ticker(ticker)
+        df = tk.history(period=period)
+        if df is not None and len(df) > 10:
+            df.index = pd.to_datetime(df.index).tz_localize(None)
+            try:
+                db.upsert_ohlcv(ticker, df)
+            except Exception:
+                pass
+            return df
+    except Exception:
+        pass
+    return None
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  DASHBOARD DATA BUILDER (from legacy)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def build_dashboard_data() -> dict:
+    """Full pipeline: fetch → validate → screen → strategise → package for JSON."""
+    global _PIPELINE_STATUS
+    import random
+
+    cache = get_cache()
+    _PIPELINE_STATUS = {"state": "running", "message": "Fetching data..."}
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+    print("=" * 64)
+    print("  MOMENTUM TRADING SCREENER — Pipeline")
+    print("=" * 64)
+
+    print("\n[1/5] Fetching data (DB-backed incremental sync) …")
+    _PIPELINE_STATUS["message"] = "[1/5] Fetching data (DB-backed)…"
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+    ohlcv = smart_fetch(progress=True)
+    if not ohlcv:
+        _PIPELINE_STATUS = {"state": "error", "message": "No data fetched"}
+        cache.set_pipeline_status(_PIPELINE_STATUS)
+        raise RuntimeError("No data fetched")
+
+    print("\n[2/5] Validating OHLCV data (Pydantic) …")
+    _PIPELINE_STATUS["message"] = "[2/5] Validating data…"
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+    ohlcv, diags = validate_universe(ohlcv, progress=True)
+    invalid_tickers = [d.ticker for d in diags if not d.is_valid]
+    if invalid_tickers:
+        print(f"    ⚠ Dropped {len(invalid_tickers)} invalid tickers: {invalid_tickers[:5]}…")
+
+    print("\n[3/5] Running 4-system momentum screen …")
+    _PIPELINE_STATUS["message"] = "[3/5] Running 4-system screen…"
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+    results = screen_universe(ohlcv, progress=True)
+
+    print("\n[4/5] Computing sector regimes & strategies …")
+    _PIPELINE_STATUS["message"] = "[4/5] Computing strategies…"
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+    sec_regimes = sector_regimes(results)
+    strategies = generate_all_strategies(results)
+
+    print("\n[5/5] Packaging dashboard data …")
+    _PIPELINE_STATUS["message"] = "[5/5] Packaging data…"
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+
+    composites = [r["composite"] for r in results]
+    n_bull = sum(1 for r in results if r["composite"] > 0.1)
+    n_bear = sum(1 for r in results if r["composite"] < -0.1)
+    n_neutral = len(results) - n_bull - n_bear
+    avg_prob = float(np.mean([r["probability"] for r in results])) if results else 0
+
+    bull_results = [r for r in results if r["composite"] > 0.1]
+    bear_results = [r for r in results if r["composite"] < -0.1]
+    top_bull = max(bull_results, key=lambda x: x["composite"]) if bull_results else None
+    top_bear = min(bear_results, key=lambda x: x["composite"]) if bear_results else None
+
+    sector_sentiment = {}
+    for r in results:
+        s = r["sector"]
+        if s not in sector_sentiment:
+            sector_sentiment[s] = {"bullish": 0, "bearish": 0, "neutral": 0}
+        if "Bull" in r["sentiment"]:
+            sector_sentiment[s]["bullish"] += 1
+        elif "Bear" in r["sentiment"]:
+            sector_sentiment[s]["bearish"] += 1
+        else:
+            sector_sentiment[s]["neutral"] += 1
+
+    signals_table = []
+    for r in results:
+        row = {k: v for k, v in r.items() if k not in ("charts", "sys1", "sys2", "sys3", "sys4")}
+        signals_table.append(row)
+
+    chart_data = {r["ticker"]: r.get("charts", {}) for r in results}
+    actionable = [s for s in strategies if s["direction"] != "NEUTRAL"][:30]
+    quote = random.choice(cfg.QUOTES)
+
+    try:
+        db_stats = db.get_db_stats()
+    except Exception:
+        db_stats = {}
+
+    fresh_momentum = sorted(
+        [r for r in results if r.get("momentum_phase") == "Fresh" and r["composite"] > 0],
+        key=lambda x: x["composite"], reverse=True
+    )[:100]
+    exhausting_momentum = sorted(
+        [r for r in results if r.get("momentum_phase") == "Exhausting"],
+        key=lambda x: x["composite"], reverse=True
+    )[:100]
+    shock_signals = sorted(
+        [r for r in results if r.get("momentum_shock", {}).get("trigger", False)],
+        key=lambda x: abs(x.get("momentum_shock", {}).get("shock_strength", 0)), reverse=True
+    )[:100]
+    smart_money_signals = sorted(
+        [r for r in results if r.get("smart_money", {}).get("trigger", False)],
+        key=lambda x: x.get("smart_money", {}).get("score", 0), reverse=True
+    )[:100]
+    continuation_signals = sorted(
+        [r for r in results if r.get("continuation", {}).get("probability", 0) > 30],
+        key=lambda x: x.get("continuation", {}).get("probability", 0), reverse=True
+    )[:100]
+    rotation_ideas = sorted(
+        [r for r in results if r.get("regime") == "Trending" and r["composite"] > 0.3],
+        key=lambda x: x["composite"], reverse=True
+    )[:100]
+
+    sector_bull_counts = {}
+    for r in results:
+        if r["composite"] > 0.1:
+            sec = r.get("sector", "Unknown")
+            sector_bull_counts.setdefault(sec, []).append(r)
+    cluster_list = []
+    for sec, stocks in sorted(sector_bull_counts.items(), key=lambda x: len(x[1]), reverse=True):
+        if len(stocks) >= 3:
+            for s in sorted(stocks, key=lambda x: x["composite"], reverse=True)[:5]:
+                s_copy = dict(s)
+                s_copy["cluster_size"] = len(stocks)
+                cluster_list.append(s_copy)
+    momentum_clusters = cluster_list[:100]
+
+    shock_sector_counts = {}
+    for r in shock_signals:
+        sec = r.get("sector", "Unknown")
+        shock_sector_counts.setdefault(sec, []).append(r)
+    sector_shock_list = []
+    for sec, stocks in sorted(shock_sector_counts.items(), key=lambda x: len(x[1]), reverse=True):
+        for s in stocks[:5]:
+            s_copy = dict(s)
+            s_copy["cluster_size"] = len(stocks)
+            sector_shock_list.append(s_copy)
+    shock_clusters = sector_shock_list[:100]
+
+    gamma_signals = sorted(
+        [r for r in results if r.get("vol_spike", 1.0) > 2.0 and r["composite"] > 0],
+        key=lambda x: x.get("vol_spike", 0), reverse=True
+    )[:100]
+
+    # Hidden Gems — high momentum + high probability + low daily movement (underrated)
+    hidden_gems = []
+    for r in results:
+        comp = r.get("composite", 0)
+        prob = r.get("probability", 0)
+        daily = abs(r.get("daily_change", 0))
+        sent = r.get("sentiment", "")
+        if comp > 0.3 and "bull" in sent.lower():
+            gem_score = comp * (prob / 100) * (1 / (1 + daily))
+            r_copy = dict(r)
+            r_copy["gem_score"] = round(gem_score, 3)
+            hidden_gems.append(r_copy)
+    hidden_gems.sort(key=lambda x: x["gem_score"], reverse=True)
+    hidden_gems = hidden_gems[:100]
+
+    # ── High-Yield ETFs & Dividend Stocks ──
+    print("\n[5.5/5] Fetching yield data for ETFs & dividend stocks …")
+    _PIPELINE_STATUS["message"] = "[5.5/5] Fetching yield data…"
+    cache.set_pipeline_status(_PIPELINE_STATUS)
+
+    def _fetch_yield_info(ticker_list, label=""):
+        """Fetch dividend yield info for a list of tickers via yfinance."""
+        import yfinance as yf
+        yield_data = []
+        for ticker in ticker_list:
+            try:
+                tk = yf.Ticker(ticker)
+                info = tk.info or {}
+                div_yield = info.get("dividendYield") or info.get("yield") or 0
+                annual_div = info.get("dividendRate") or info.get("trailingAnnualDividendRate") or 0
+                price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose") or 0
+                name = info.get("shortName") or info.get("longName") or ticker
+                ex_date = info.get("exDividendDate")
+                sector_info = info.get("sector") or cfg.TICKER_SECTOR.get(ticker, "Unknown")
+                category = info.get("category") or ""
+
+                # Find matching screened result for momentum data
+                matched = next((r for r in results if r["ticker"] == ticker), None)
+
+                entry = {
+                    "ticker": ticker,
+                    "company_name": name[:40],
+                    "sector": sector_info,
+                    "category": category,
+                    "price": round(price, 2) if price else 0,
+                    "dividend_yield": round(div_yield * 100, 2) if div_yield else 0,
+                    "annual_dividend": round(annual_div, 2) if annual_div else 0,
+                    "ex_dividend_date": ex_date if ex_date else None,
+                    "composite": matched["composite"] if matched else 0,
+                    "probability": matched["probability"] if matched else 0,
+                    "daily_change": matched["daily_change"] if matched else 0,
+                    "sentiment": matched.get("sentiment", "Neutral") if matched else "Neutral",
+                    "regime": matched.get("regime", "Choppy") if matched else "Choppy",
+                    "sys1_score": matched.get("sys1_score", 0) if matched else 0,
+                    "sys2_score": matched.get("sys2_score", 0) if matched else 0,
+                    "sys3_score": matched.get("sys3_score", 0) if matched else 0,
+                    "sys4_score": matched.get("sys4_score", 0) if matched else 0,
+                    "momentum_phase": matched.get("momentum_phase", "Neutral") if matched else "Neutral",
+                    "return_20d": matched.get("return_20d", 0) if matched else 0,
+                    "vol_spike": matched.get("vol_spike", 1.0) if matched else 1.0,
+                }
+                yield_data.append(entry)
+            except Exception as e:
+                print(f"    ⚠ Yield fetch failed for {ticker}: {e}")
+                continue
+        return yield_data
+
+    etf_yield_data = _fetch_yield_info(cfg.HIGH_YIELD_ETFS, "ETF")
+    etf_yield_data.sort(key=lambda x: x["dividend_yield"], reverse=True)
+    print(f"    ✓ Fetched yield for {len(etf_yield_data)} ETFs")
+
+    div_stock_data = _fetch_yield_info(cfg.HIGH_DIVIDEND_STOCKS, "Stock")
+    div_stock_data.sort(key=lambda x: x["dividend_yield"], reverse=True)
+    print(f"    ✓ Fetched yield for {len(div_stock_data)} dividend stocks")
+
+    def slim(recs):
+        return [{k: v for k, v in r.items() if k not in ("charts", "sys1", "sys2", "sys3", "sys4")} for r in recs]
+
+    _PIPELINE_STATUS = {"state": "done", "message": "Pipeline complete"}
+
+    return {
+        "quote": quote,
+        "summary": {
+            "total_screened": len(results),
+            "total_universe": len(cfg.ALL_TICKERS),
+            "bullish": n_bull,
+            "bearish": n_bear,
+            "neutral": n_neutral,
+            "avg_probability": round(avg_prob, 1),
+            "avg_composite": round(float(np.mean(composites)), 2) if composites else 0,
+            "top_bull": top_bull["ticker"] if top_bull else "—",
+            "top_bear": top_bear["ticker"] if top_bear else "—",
+        },
+        "signals": signals_table,
+        "charts": chart_data,
+        "strategies": actionable,
+        "sector_regimes": sec_regimes,
+        "sector_sentiment": sector_sentiment,
+        "all_quotes": cfg.QUOTES,
+        "db_stats": db_stats,
+        "fresh_momentum": slim(fresh_momentum),
+        "exhausting_momentum": slim(exhausting_momentum),
+        "rotation_ideas": slim(rotation_ideas),
+        "shock_signals": slim(shock_signals),
+        "gamma_signals": slim(gamma_signals),
+        "smart_money": slim(smart_money_signals),
+        "continuation": slim(continuation_signals),
+        "momentum_clusters": slim(momentum_clusters),
+        "shock_clusters": slim(shock_clusters),
+        "hidden_gems": slim(hidden_gems),
+        "high_yield_etfs": etf_yield_data,
+        "dividend_stocks": div_stock_data,
+    }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  BACKGROUND PIPELINE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_CACHED_DASHBOARD_DATA: dict | None = None
+
+def _run_pipeline_background():
+    global _PIPELINE_STATUS, _CACHED_DASHBOARD_DATA
+    try:
+        data = build_dashboard_data()
+        # Serialise once for all caches
+        serialised = json.loads(json.dumps(data, cls=NumpyEncoder))
+
+        # 1. In-memory cache
+        _CACHED_DASHBOARD_DATA = serialised
+
+        # 2. Redis cache (primary read layer for sub-50ms reads)
+        cache = get_cache()
+        cache.set_dashboard(serialised)
+        # Cache per-ticker chart data granularly
+        charts = serialised.get("charts", {})
+        if charts:
+            stored = cache.set_charts_bulk(charts)
+            print(f"  ✓ Cached {stored} ticker charts in Redis")
+
+        # 3. File fallback
+        out_path = PIPELINES_DIR / "momentum_data.json"
+        with open(out_path, "w") as f:
+            json.dump(data, f, cls=NumpyEncoder)
+        print(f"\n✓ Data written to {out_path.name}")
+
+        _PIPELINE_STATUS = {"state": "done", "message": "Pipeline complete — data refreshed"}
+        cache.set_pipeline_status(_PIPELINE_STATUS)
+
+        # 4. Fire webhooks to invalidate frontend cache
+        _dispatch_webhooks(serialised)
+
+    except Exception as e:
+        traceback.print_exc()
+        _PIPELINE_STATUS = {"state": "error", "message": str(e)}
+        try:
+            get_cache().set_pipeline_status(_PIPELINE_STATUS)
+        except Exception:
+            pass
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  DAILY AUTO-REFRESH SCHEDULER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import datetime as _dt
+
+# Configurable: run daily at 17:00 ET (after US market close)
+_SCHEDULE_HOUR = int(os.environ.get("PIPELINE_SCHEDULE_HOUR", "17"))
+_SCHEDULE_MINUTE = int(os.environ.get("PIPELINE_SCHEDULE_MINUTE", "0"))
+_SCHEDULE_TZ = os.environ.get("PIPELINE_SCHEDULE_TZ", "America/New_York")
+_scheduler_timer: Optional[threading.Timer] = None
+_last_pipeline_run: Optional[str] = None
+_next_pipeline_run: Optional[str] = None
+
+
+def _seconds_until_next_run() -> float:
+    """Calculate seconds until the next scheduled run time."""
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo(_SCHEDULE_TZ)
+        now = _dt.datetime.now(tz)
+    except Exception:
+        # Fallback: use local time
+        now = _dt.datetime.now()
+
+    target = now.replace(hour=_SCHEDULE_HOUR, minute=_SCHEDULE_MINUTE, second=0, microsecond=0)
+    if target <= now:
+        target += _dt.timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+def _scheduled_pipeline_run():
+    """Called by the scheduler timer to re-run the pipeline."""
+    global _last_pipeline_run, _PIPELINE_STATUS, _DATA_CACHE
+    print("\n" + "═" * 64)
+    print("  ⏰ SCHEDULED DAILY REFRESH — Starting pipeline …")
+    print("═" * 64)
+
+    # Clear in-memory data cache so we fetch fresh market data
+    with _CACHE_LOCK:
+        _DATA_CACHE.clear()
+    print("  ✓ Cleared stale data cache")
+
+    _last_pipeline_run = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _run_pipeline_background()
+
+    # Schedule the next run
+    _schedule_next_run()
+
+
+def _schedule_next_run():
+    """Schedule the next daily pipeline run."""
+    global _scheduler_timer, _next_pipeline_run
+    delay = _seconds_until_next_run()
+    hours = delay / 3600
+
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo(_SCHEDULE_TZ)
+        next_time = _dt.datetime.now(tz) + _dt.timedelta(seconds=delay)
+        _next_pipeline_run = next_time.strftime("%Y-%m-%d %H:%M %Z")
+    except Exception:
+        next_time = _dt.datetime.now() + _dt.timedelta(seconds=delay)
+        _next_pipeline_run = next_time.strftime("%Y-%m-%d %H:%M (local)")
+
+    print(f"  📅 Next scheduled pipeline run: {_next_pipeline_run} ({hours:.1f}h from now)")
+
+    _scheduler_timer = threading.Timer(delay, _scheduled_pipeline_run)
+    _scheduler_timer.daemon = True
+    _scheduler_timer.start()
+
+
+def _dispatch_webhooks(data: dict) -> None:
+    """POST to all registered webhook URLs when pipeline completes."""
+    import urllib.request
+    with _WEBHOOK_LOCK:
+        urls = list(_WEBHOOK_URLS)
+    if not urls:
+        return
+
+    payload = json.dumps({
+        "event": "pipeline_complete",
+        "timestamp": int(__import__("time").time()),
+        "summary": data.get("summary", {}),
+    }).encode()
+
+    for url in urls:
+        try:
+            req = urllib.request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+            print(f"  ✓ Webhook dispatched → {url}")
+        except Exception as e:
+            print(f"  ⚠ Webhook failed → {url}: {e}")
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  FASTAPI APP
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+app = FastAPI(
+    title="MOMENTUM API",
+    description="Quantitative Trading Screener — FastAPI Backend",
+    version="2.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+@app.on_event("startup")
+def startup():
+    """Init DB, Redis, start background pipeline, and schedule daily refresh."""
+    # Set CWD for DB path resolution
+    os.chdir(PIPELINES_DIR)
+    db.init_db()
+
+    # Initialise Redis cache (fails gracefully if unavailable)
+    cache = get_cache()
+    print(f"  Cache backend: {cache.stats()['backend']}")
+
+    # Start background pipeline (initial run)
+    pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
+    pipeline_thread.start()
+
+    # Schedule daily auto-refresh
+    _schedule_next_run()
+    print(f"  ⏰ Daily auto-refresh enabled: every day at {_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}")
+
+
+# ── Dashboard Data ──
+
+@app.get("/momentum_data.json")
+async def get_momentum_data():
+    """Return cached dashboard data. Priority: Redis → in-memory → file."""
+    global _CACHED_DASHBOARD_DATA
+    # 1. Redis (sub-50ms)
+    cache = get_cache()
+    redis_data = cache.get_dashboard()
+    if redis_data:
+        return JSONResponse(content=redis_data)
+    # 2. In-memory fallback
+    if _CACHED_DASHBOARD_DATA:
+        return JSONResponse(content=_CACHED_DASHBOARD_DATA)
+    # 3. File fallback
+    path = PIPELINES_DIR / "momentum_data.json"
+    if path.exists():
+        return FileResponse(path, media_type="application/json")
+    return JSONResponse(content={"error": "Pipeline not yet complete. Please wait..."}, status_code=202)
+
+
+@app.get("/api/screen")
+async def run_screen():
+    try:
+        data = build_dashboard_data()
+        return encode_response(data)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pipeline/status")
+async def pipeline_status():
+    cache = get_cache()
+    cached_status = cache.get_pipeline_status()
+    status = cached_status if cached_status else _PIPELINE_STATUS
+    return {**status, "next_run": _next_pipeline_run, "last_run": _last_pipeline_run}
+
+
+@app.post("/api/pipeline/trigger")
+async def pipeline_trigger():
+    """Manually trigger a full pipeline refresh."""
+    if _PIPELINE_STATUS.get("state") == "running":
+        return JSONResponse(content={"error": "Pipeline already running"}, status_code=409)
+    t = threading.Thread(target=_scheduled_pipeline_run, daemon=True)
+    t.start()
+    return {"message": "Pipeline refresh triggered", "state": "running"}
+
+
+@app.get("/api/pipeline/schedule")
+async def pipeline_schedule():
+    """Return the current auto-refresh schedule."""
+    return {
+        "enabled": True,
+        "schedule": f"{_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}",
+        "next_run": _next_pipeline_run,
+        "last_run": _last_pipeline_run,
+        "config": {
+            "hour": _SCHEDULE_HOUR,
+            "minute": _SCHEDULE_MINUTE,
+            "timezone": _SCHEDULE_TZ,
+        },
+    }
+
+# ── Webhook Management ──
+
+@app.post("/api/webhook/register")
+async def webhook_register(request: Request):
+    """Register a URL to receive POST when pipeline completes."""
+    body = await request.json()
+    url = body.get("url", "")
+    if not url:
+        return JSONResponse(content={"error": "url required"}, status_code=400)
+    with _WEBHOOK_LOCK:
+        if url not in _WEBHOOK_URLS:
+            _WEBHOOK_URLS.append(url)
+    return {"registered": url, "total_hooks": len(_WEBHOOK_URLS)}
+
+
+@app.post("/api/webhook/unregister")
+async def webhook_unregister(request: Request):
+    """Remove a registered webhook URL."""
+    body = await request.json()
+    url = body.get("url", "")
+    with _WEBHOOK_LOCK:
+        if url in _WEBHOOK_URLS:
+            _WEBHOOK_URLS.remove(url)
+    return {"unregistered": url, "total_hooks": len(_WEBHOOK_URLS)}
+
+
+@app.get("/api/cache/stats")
+async def cache_stats():
+    """Return cache backend diagnostics."""
+    return get_cache().stats()
+
+
+@app.get("/api/data/status")
+async def data_status():
+    try:
+        stats = db.get_db_stats()
+        return encode_response({"stats": stats})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/data/sync")
+async def data_sync(period: str = "1y", start: Optional[str] = None, end: Optional[str] = None):
+    try:
+        ohlcv = smart_fetch(period=period, start=start, end=end, progress=True)
+        stats = db.get_db_stats()
+        return encode_response({"synced": len(ohlcv), "stats": stats})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Backtesting ──
+
+@app.post("/api/backtest")
+async def run_backtest_endpoint(request: Request):
+    try:
+        params = await request.json()
+        _CANCEL_EVENT.clear()
+
+        systems = params.get("systems", [1, 2, 3, 4])
+        holding = params.get("holding_period", 5)
+        threshold = params.get("entry_threshold", 0.5)
+        ensemble_k = params.get("ensemble_k", None)
+        period = params.get("period", "1y")
+        start = params.get("start", None)
+        end = params.get("end", None)
+        ticker = params.get("ticker", None)
+        top_n = params.get("top_n", 20)
+        initial_capital = params.get("initial_capital", 100000.0)
+
+        if ticker:
+            ohlcv = _cached_fetch(tickers=[ticker], period=period, start=start, end=end, progress=True)
+        else:
+            ohlcv = _cached_fetch(period=period, start=start, end=end, progress=True)
+
+        if not ohlcv:
+            return JSONResponse(content={"error": "No data available"}, status_code=400)
+
+        if ticker and ticker in ohlcv:
+            result = run_backtest(
+                ticker, ohlcv[ticker],
+                systems=systems, holding_period=holding,
+                entry_threshold=threshold, ensemble_k=ensemble_k,
+                initial_capital=initial_capital, cancel_event=_CANCEL_EVENT,
+            )
+            if _CANCEL_EVENT.is_set():
+                return {"cancelled": True, "message": "Backtest cancelled by user"}
+            bt_id = db.save_backtest(params, result, result["summary"])
+            result["backtest_id"] = bt_id
+            return encode_response(result)
+        else:
+            result = backtest_universe(
+                ohlcv, systems=systems, holding_period=holding,
+                entry_threshold=threshold, ensemble_k=ensemble_k,
+                top_n=top_n, progress=True, initial_capital=initial_capital,
+                cancel_event=_CANCEL_EVENT,
+            )
+            if _CANCEL_EVENT.is_set():
+                return {"cancelled": True, "message": "Backtest cancelled by user"}
+            bt_id = db.save_backtest(params, {"aggregate": result["aggregate"]}, result["aggregate"])
+            result["backtest_id"] = bt_id
+            return encode_response(result)
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/backtest/cancel")
+async def cancel_backtest():
+    _CANCEL_EVENT.set()
+    return {"cancelled": True, "message": "Cancel signal sent"}
+
+
+@app.get("/api/backtest/history")
+async def backtest_history(limit: int = 20):
+    try:
+        history = db.list_backtests(limit)
+        return encode_response({"history": history})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/backtest/{bt_id}")
+async def load_backtest(bt_id: int):
+    try:
+        result = db.load_backtest(bt_id)
+        if result is None:
+            return JSONResponse(content={"error": "Backtest not found"}, status_code=404)
+        return encode_response(result)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/compare")
+async def compare_endpoint(request: Request):
+    try:
+        params = await request.json()
+        ticker = params.get("ticker", "AAPL")
+        holding = params.get("holding_period", 5)
+        threshold = params.get("entry_threshold", 0.5)
+        period = params.get("period", "1y")
+        start = params.get("start", None)
+        end = params.get("end", None)
+
+        ohlcv = _cached_fetch(tickers=[ticker], period=period, start=start, end=end, progress=True)
+        if ticker not in ohlcv:
+            return JSONResponse(content={"error": f"No data for {ticker}"}, status_code=400)
+
+        result = compare_systems(ticker, ohlcv[ticker], holding_period=holding, entry_threshold=threshold)
+        return encode_response(result)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Strategy Engine ──
+
+@app.get("/api/indicators")
+async def get_indicators():
+    return encode_response({"indicators": get_indicator_catalog()})
+
+
+@app.post("/api/strategy/backtest")
+async def strategy_backtest(request: Request):
+    try:
+        params = await request.json()
+        _CANCEL_EVENT.clear()
+        ticker = params.get("ticker", "AAPL")
+        period = params.get("period", "1y")
+        start = params.get("start", None)
+        end = params.get("end", None)
+
+        ohlcv = _fetch_ticker_data(ticker, period, start, end)
+        if ohlcv is None:
+            return JSONResponse(content={"error": f"No data for {ticker}"}, status_code=400)
+
+        result = run_strategy_backtest(
+            ohlcv,
+            entry_conditions=params.get("entry_conditions", []),
+            exit_conditions=params.get("exit_conditions", []),
+            entry_logic=params.get("entry_logic", "AND"),
+            exit_logic=params.get("exit_logic", "OR"),
+            direction=params.get("direction", "long"),
+            initial_capital=float(params.get("initial_capital", 100000)),
+            position_size_pct=float(params.get("position_size_pct", 10)),
+            stop_loss_pct=float(params["stop_loss_pct"]) if params.get("stop_loss_pct") else None,
+            take_profit_pct=float(params["take_profit_pct"]) if params.get("take_profit_pct") else None,
+            max_holding_days=int(params["max_holding_days"]) if params.get("max_holding_days") else None,
+            cancel_event=_CANCEL_EVENT,
+        )
+        if _CANCEL_EVENT.is_set():
+            return {"cancelled": True}
+        bt_id = db.save_backtest(params, {"trades": result.get("trades", [])[:50]}, result["summary"])
+        result["backtest_id"] = bt_id
+        return encode_response(result)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/strategy/code")
+async def strategy_code(request: Request):
+    try:
+        params = await request.json()
+        _CANCEL_EVENT.clear()
+        ticker = params.get("ticker", "AAPL")
+        code = params.get("code", "")
+        period = params.get("period", "1y")
+
+        if not code.strip():
+            return JSONResponse(content={"error": "No strategy code provided"}, status_code=400)
+
+        ohlcv = _fetch_ticker_data(ticker, period)
+        if ohlcv is None:
+            return JSONResponse(content={"error": f"No data for {ticker}"}, status_code=400)
+
+        result = run_code_strategy(
+            ohlcv, code,
+            initial_capital=float(params.get("initial_capital", 100000)),
+            position_size_pct=float(params.get("position_size_pct", 10)),
+            stop_loss_pct=float(params["stop_loss_pct"]) if params.get("stop_loss_pct") else None,
+            take_profit_pct=float(params["take_profit_pct"]) if params.get("take_profit_pct") else None,
+            max_holding_days=int(params["max_holding_days"]) if params.get("max_holding_days") else None,
+            cancel_event=_CANCEL_EVENT,
+        )
+        if "error" in result:
+            return JSONResponse(content=result, status_code=400)
+        bt_id = db.save_backtest(
+            {"ticker": ticker, "type": "code"},
+            {"trades": result.get("trades", [])[:50]},
+            result["summary"],
+        )
+        result["backtest_id"] = bt_id
+        return encode_response(result)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/strategy/save")
+async def save_strategy(request: Request):
+    try:
+        params = await request.json()
+        sid = db.save_strategy(
+            name=params.get("name", "Untitled"),
+            stype=params.get("type", "visual"),
+            config=params.get("config"),
+            code=params.get("code", ""),
+            description=params.get("description", ""),
+            strategy_id=params.get("id"),
+        )
+        return {"id": sid, "saved": True}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/strategy/list")
+async def list_strategies():
+    try:
+        strategies = db.list_strategies()
+        return encode_response({"strategies": strategies})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/strategy/{sid}")
+async def load_strategy(sid: int):
+    try:
+        s = db.load_strategy(sid)
+        if s is None:
+            return JSONResponse(content={"error": "Strategy not found"}, status_code=404)
+        return encode_response(s)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/strategy/{sid}/delete")
+async def delete_strategy(sid: int):
+    try:
+        db.delete_strategy(sid)
+        return {"deleted": True}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/strategy/compare")
+async def compare_strategies(request: Request):
+    try:
+        params = await request.json()
+        results = params.get("results", [])
+        comparison = compare_strategy_results(results)
+        return encode_response(comparison)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Ticker Search & Add ──
+
+@app.get("/api/ticker/search")
+async def search_ticker(q: str = ""):
+    try:
+        import yfinance as yf
+        q = q.upper().strip()
+        if not q:
+            return {"results": []}
+
+        results = []
+        with db.db_session() as conn:
+            rows = conn.execute(
+                "SELECT ticker, name, sector FROM tickers WHERE ticker LIKE ? OR name LIKE ? LIMIT 20",
+                (f"%{q}%", f"%{q}%"),
+            ).fetchall()
+            for r in rows:
+                results.append({"ticker": r["ticker"], "name": r["name"] or "", "sector": r["sector"] or "", "source": "db"})
+
+        if len(results) < 5:
+            try:
+                tk = yf.Ticker(q)
+                info = tk.info or {}
+                if info.get("symbol"):
+                    exists = any(r["ticker"] == info["symbol"] for r in results)
+                    if not exists:
+                        results.insert(0, {
+                            "ticker": info.get("symbol", q),
+                            "name": info.get("shortName", info.get("longName", "")),
+                            "sector": info.get("sector", ""),
+                            "source": "yfinance",
+                        })
+            except Exception:
+                pass
+
+        return {"results": results}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/ticker/add")
+async def add_ticker(request: Request):
+    try:
+        params = await request.json()
+        tickers = params.get("tickers", [])
+        if isinstance(tickers, str):
+            tickers = [t.strip().upper() for t in tickers.split(",")]
+        period = params.get("period", "2y")
+
+        fetched = []
+        for ticker in tickers[:20]:
+            ohlcv = _fetch_ticker_data(ticker, period)
+            if ohlcv is not None:
+                fetched.append(ticker)
+                try:
+                    import yfinance as yf
+                    tk = yf.Ticker(ticker)
+                    info = tk.info
+                    name = info.get("shortName", info.get("longName", ticker))
+                    sector = info.get("sector", "Custom")
+                except Exception:
+                    name = ticker
+                    sector = "Custom"
+                db.upsert_ticker(ticker, sector, name)
+
+        return {"added": fetched, "count": len(fetched)}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Receipts ──
+
+@app.get("/api/receipts")
+async def get_receipts(limit: int = 50):
+    try:
+        history = db.list_backtests(limit)
+
+        receipts = []
+        pnl_curve = []
+        equity = 100000.0
+        wins = 0
+        all_returns = []
+        all_sharpes = []
+
+        for h in history:
+            p = h.get("params") or {}
+            s = h.get("summary") or {}
+            ret = float(s.get("total_return_pct") or s.get("avg_return_pct") or 0)
+            pnl = float(s.get("total_return") or 0)
+            sharpe = float(s.get("sharpe_ratio") or s.get("avg_sharpe") or 0)
+            win = ret > 0
+
+            ticker = p.get("ticker") or "Universe"
+            systems = p.get("systems", [])
+            sig_type = "S" + "+S".join(str(x) for x in systems) + " Backtest" if systems else "Backtest"
+
+            receipt = {
+                "id": h.get("id"),
+                "date": (h.get("run_time") or "").replace("T", " ")[:16],
+                "ticker": ticker,
+                "return_pct": round(ret, 2),
+                "pnl": round(pnl, 2),
+                "signal_type": sig_type,
+                "result": "WIN" if win else ("LOSS" if ret < 0 else "OPEN"),
+                "trades": int(s.get("total_trades") or 0),
+                "sharpe": round(sharpe, 2),
+                "holding": int(p.get("holding_period") or 5),
+                "note": "Win rate: {:.0f}% · Sharpe: {:.2f} · {} trades".format(
+                    s.get("win_rate", 0), sharpe, s.get("total_trades", 0)
+                ),
+            }
+            receipts.append(receipt)
+            all_returns.append(ret)
+            all_sharpes.append(sharpe)
+            if win:
+                wins += 1
+
+            equity = equity * (1 + ret / 100)
+            pnl_curve.append({"date": receipt["date"], "equity": round(equity)})
+
+        total = len(receipts)
+        win_rate = round(wins / total * 100) if total else 0
+        avg_return = round(sum(all_returns) / len(all_returns), 2) if all_returns else 0
+        best = round(max(all_returns), 2) if all_returns else 0
+        worst = round(min(all_returns), 2) if all_returns else 0
+        avg_sharpe = round(sum(all_sharpes) / len(all_sharpes), 2) if all_sharpes else 0
+
+        return encode_response({
+            "receipts": receipts,
+            "pnl_curve": pnl_curve,
+            "win_rate": win_rate,
+            "avg_return": avg_return,
+            "best_call": f"+{best:.1f}%" if best > 0 else f"{best:.1f}%",
+            "worst_call": f"{worst:.1f}%",
+            "total_calls": total,
+            "sharpe": avg_sharpe,
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Root redirect ──
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "MOMENTUM API v2.0 — Use /docs for API explorer"}
