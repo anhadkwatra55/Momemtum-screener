@@ -279,8 +279,8 @@ export const SHADOWS = {
 };
 
 // Card / Layout
-export const CARD_BORDER_RADIUS = "1.8rem";
-export const CARD_BORDER_RADIUS_REM = 1.8;
+export const CARD_BORDER_RADIUS = "1.2rem";
+export const CARD_BORDER_RADIUS_REM = 1.2;
 export const Z_INDEX_GLOW = 0;
 export const Z_INDEX_CONTENT = 1;
 export const CHART_MIN_HEIGHT = 300;
@@ -365,10 +365,10 @@ export const GLOW_SHADOW_ROSE = "0 0 16px -2px rgba(244,63,94,0.35)";
 
 // ── Button Dimension Constants ──────────────────────────────────────────────
 
-export const MIN_BUTTON_HEIGHT_PX = 44;
-export const BUTTON_HEIGHT_LG_PX = 52;
-export const BUTTON_ICON_SIZE_PX = 40;
-export const BUTTON_ICON_SIZE_LG_PX = 48;
+export const MIN_BUTTON_HEIGHT_PX = 36;
+export const BUTTON_HEIGHT_LG_PX = 42;
+export const BUTTON_ICON_SIZE_PX = 32;
+export const BUTTON_ICON_SIZE_LG_PX = 40;
 export const BUTTON_TEXT_LETTER_SPACING_TIGHT = "-0.02em";
 export const BUTTON_TEXT_LETTER_SPACING_NORMAL = "-0.01em";
 export const FOCUS_NEUTRAL_COLOR_KEY = "slate";

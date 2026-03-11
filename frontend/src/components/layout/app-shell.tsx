@@ -56,7 +56,7 @@ export function AppShell({ children, dbStats }: AppShellProps) {
       {/* Mobile Sidebar (Sheet) — Only visible on small screens when triggered */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <motion.button
-          className={`fixed top-3 left-3 z-50 md:hidden w-11 h-11 flex items-center justify-center rounded-2xl bg-card/80 glass cursor-pointer`}
+          className={`fixed top-2 left-2 z-50 md:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-card/80 glass cursor-pointer`}
           aria-label="Open menu"
           onClick={() => setSidebarOpen(true)}
           initial={hamburgerInitial}
@@ -66,7 +66,7 @@ export function AppShell({ children, dbStats }: AppShellProps) {
         >
           <SFIcon name="line.horizontal.3" className="text-foreground" />
         </motion.button>
-        <SheetContent side="left" className="p-0 bg-transparent border-none w-[240px]">
+        <SheetContent side="left" className="p-0 bg-transparent border-none w-[220px]">
           {/* Sidebar content for mobile, rendered inside the Sheet.
               The Sidebar component itself is expected to apply its glassmorphic background and styling. */}
           <Sidebar
@@ -80,7 +80,7 @@ export function AppShell({ children, dbStats }: AppShellProps) {
       </Sheet>
 
       {/* Main content — collapses margin on mobile, takes sidebar space on desktop */}
-      <main className="ml-0 md:ml-[240px] flex-1 min-w-0 overflow-x-hidden p-4 md:p-6 min-h-screen relative z-[1] pt-16 md:pt-6">
+      <main className="ml-0 md:ml-[220px] flex-1 min-w-0 overflow-x-hidden p-3 md:p-4 min-h-screen relative z-[1] pt-14 md:pt-4">
         {children(activePage, setActivePage)}
       </main>
     </div>

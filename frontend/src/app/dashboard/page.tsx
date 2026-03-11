@@ -265,11 +265,11 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="intelligence"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-                  <h1 className={cn("text-4xl font-extrabold md:text-5xl flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="bolt.fill" size="text-5xl md:text-6xl" className="text-cyan-400" />
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h1 className={cn("text-2xl font-extrabold md:text-3xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                    <SFIcon name="bolt.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
                     Momentum Intelligence
                   </h1>
                   <div className="flex items-center gap-3">
@@ -286,7 +286,7 @@ const DashboardPage = memo(() => {
 
                 {/* Quote — instant, always available */}
                 {data.all_quotes?.length > 0 && (
-                  <Card className="mb-8 p-4">
+                  <Card className="mb-4 p-3">
                     <QuoteRotator quotes={data.all_quotes} />
                   </Card>
                 )}
@@ -295,7 +295,7 @@ const DashboardPage = memo(() => {
                 <DataReveal
                   loading={tierLoading.summary && kpiStripItems.length === 0}
                   skeleton={<KPISkeleton />}
-                  className="mb-8"
+                  className="mb-4"
                 >
                   <KPIStrip className="" items={kpiStripItems} />
                 </DataReveal>
@@ -303,11 +303,11 @@ const DashboardPage = memo(() => {
                 {/* Leaderboard + Top Signals — Tier 2 progressive reveal */}
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
-                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
-                  className="mb-8"
+                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
+                  className="mb-4"
                   delay={100}
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
                     <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
                   </div>
@@ -316,11 +316,11 @@ const DashboardPage = memo(() => {
                 {/* Fresh + Exhausting mini-cards — staggered reveal */}
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
-                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
-                  className="mb-8"
+                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
+                  className="mb-4"
                   delay={200}
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
                     <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
                   </div>
@@ -330,13 +330,13 @@ const DashboardPage = memo(() => {
                 {(data.hidden_gems || []).length > 0 && (
                   <CardReveal
                     loading={false}
-                    className="mb-8"
+                    className="mb-4"
                     delay={300}
                   >
-                    <Card className="p-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <h2 className={cn("text-xl font-bold md:text-2xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                          <SFIcon name="diamond.fill" size="text-2xl" className="text-cyan-400" /> Hidden Gems — Underrated Picks
+                    <Card className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                          <SFIcon name="diamond.fill" size="text-lg" className="text-cyan-400" /> Hidden Gems — Underrated Picks
                         </h2>
                         <AppleButton
                           variant="ghost"
@@ -386,9 +386,9 @@ const DashboardPage = memo(() => {
 
                 {/* Sector Regime Heatmap */}
                 <CardReveal loading={!data.sector_regimes} delay={400}>
-                  <Card className="p-5">
-                    <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                      <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
+                  <Card className="p-3">
+                    <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                      <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
                     </h2>
                     <LazySectorHeatmap
                       sectors={data.sector_regimes}
@@ -404,17 +404,17 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="signals"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24 overflow-x-hidden"
+                className="pt-4 md:pt-6 pb-8 md:pb-12 overflow-x-hidden"
               >
-                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="radar.fill" size="text-5xl md:text-6xl" className="text-cyan-400" />
+                <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                  <SFIcon name="radar.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
                   Signals & Strategies
                 </h1>
 
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
                   skeleton={<SectionSkeleton rows={10} />}
-                  className="mb-8"
+                  className="mb-4"
                 >
                   <LazySignalTable
                     signals={sortedSignals}
@@ -426,14 +426,14 @@ const DashboardPage = memo(() => {
                   />
                 </DataReveal>
 
-                <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="chess.piece.queen.fill" size="text-2xl" className="text-cyan-400" /> Trading Strategies
+                <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                  <SFIcon name="chess.piece.queen.fill" size="text-lg" className="text-cyan-400" /> Trading Strategies
                 </h2>
                 <DataReveal
                   loading={!data.strategies?.length}
-                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{Array.from({length: 6}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
+                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{Array.from({length: 6}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                     {data.strategies.map((s) => (
                       <LazyStrategyCard key={s.ticker} strategy={s} />
                     ))}
@@ -447,17 +447,17 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="sector-intel"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="antenna.radiowaves.left.and.right" size="text-5xl md:text-6xl" className="text-cyan-400" />
+                <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                  <SFIcon name="antenna.radiowaves.left.and.right" size="text-3xl md:text-4xl" className="text-cyan-400" />
                   Sector Intelligence
                 </h1>
-                <CardReveal loading={!data.sector_regimes} className="mb-8">
-                  <Card className="border-cyan-500/20 shadow-lg shadow-cyan-500/5 p-5">
-                    <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                      <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
-                      <span className="text-sm text-muted-foreground font-normal tracking-normal ml-3">— Real-time regime classification</span>
+                <CardReveal loading={!data.sector_regimes} className="mb-4">
+                  <Card className="border-cyan-500/20 shadow-lg shadow-cyan-500/5 p-3">
+                    <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                      <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
+                      <span className="text-xs text-muted-foreground font-normal tracking-normal ml-2">— Real-time regime classification</span>
                     </h2>
                     <LazySectorHeatmap
                       sectors={data.sector_regimes}
@@ -465,7 +465,7 @@ const DashboardPage = memo(() => {
                     />
                   </Card>
                 </CardReveal>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   <LazyTrendingSectors sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
                   <LazyRotationSignals rotationIdeas={data.rotation_ideas || []} />
                 </div>
@@ -477,12 +477,12 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="ticker-detail"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-                  <h1 className={cn("text-4xl font-extrabold md:text-5xl flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="chart.bar.fill" size="text-5xl md:text-6xl" className="text-cyan-400" /> Ticker Detail
-                    {selectedTicker && <span className="text-cyan-400 font-mono-data text-4xl md:text-5xl tracking-normal ml-2">— {selectedTicker}</span>}
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h1 className={cn("text-2xl font-extrabold md:text-3xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                    <SFIcon name="chart.bar.fill" size="text-3xl md:text-4xl" className="text-cyan-400" /> Ticker Detail
+                    {selectedTicker && <span className="text-cyan-400 font-mono-data text-2xl md:text-3xl tracking-normal ml-1">— {selectedTicker}</span>}
                   </h1>
                   <div className="flex items-center gap-3">
                     <LazyTickerSearch
@@ -625,7 +625,7 @@ const DashboardPage = memo(() => {
               <motion.div
                 key={activePage}
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
                   <LazyScreenerTable
@@ -643,7 +643,7 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="yield-etfs"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <DataReveal loading={!data.high_yield_etfs?.length} skeleton={<SectionSkeleton rows={8} />}>
                   <LazyYieldTable
@@ -661,7 +661,7 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="dividend-stocks"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <DataReveal loading={!data.dividend_stocks?.length} skeleton={<SectionSkeleton rows={8} />}>
                   <LazyYieldTable
@@ -679,7 +679,7 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="portfolio-intel"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <LazyPortfolioIntelligence
                   signalTickers={sortedSignals?.map((s: { ticker: string }) => s.ticker) || []}
@@ -692,7 +692,7 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="strategy"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <LazyStrategyBuilder />
               </motion.div>
@@ -703,12 +703,12 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="vector-map"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <Card className="p-12 text-center">
-                  <SFIcon name="hand.wave.fill" size="text-6xl" className="text-cyan-400 mb-3" />
-                  <p className={cn("text-muted-foreground text-xl font-semibold", TRACKING_HEADING_CLASS)}>Coming soon — a visual map of momentum vectors.</p>
-                  <p className="text-muted-foreground/60 text-sm mt-2 max-w-lg mx-auto">
+                <Card className="p-6 text-center">
+                  <SFIcon name="hand.wave.fill" size="text-4xl" className="text-cyan-400 mb-2" />
+                  <p className={cn("text-muted-foreground text-base font-semibold", TRACKING_HEADING_CLASS)}>Coming soon — a visual map of momentum vectors.</p>
+                  <p className="text-muted-foreground/60 text-xs mt-1.5 max-w-lg mx-auto">
                     Our team is meticulously crafting an immersive and insightful market visualization. Stay tuned!
                   </p>
                 </Card>

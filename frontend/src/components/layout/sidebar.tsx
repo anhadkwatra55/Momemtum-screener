@@ -39,9 +39,9 @@ const SidebarNavItem = React.memo(function SidebarNavItem({
       {showSectionHeader && (
         <div
           className={cn(
-            "px-5 pb-2 text-xs font-bold uppercase tracking-[0.1em] text-sidebar-foreground/60",
-            itemIndex === 0 ? "pt-6" : "pt-4",
-            "sticky top-0 z-[var(--z-sticky-header)] bg-background/80 backdrop-blur-sm" // Use semantic z-index
+            "px-4 pb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-sidebar-foreground/60",
+            itemIndex === 0 ? "pt-4" : "pt-3",
+            "sticky top-0 z-[var(--z-sticky-header)] bg-background/80 backdrop-blur-sm"
           )}
         >
           {item.section}
@@ -49,8 +49,8 @@ const SidebarNavItem = React.memo(function SidebarNavItem({
       )}
       <motion.button
         className={cn(
-          "w-full flex items-center gap-3 px-5 py-3 text-base text-left group min-h-[48px]",
-          "rounded-[var(--radius-2xl)]", // Ensures 1rem+ border-radius
+          "w-full flex items-center gap-2.5 px-4 py-1.5 text-sm text-left group min-h-[34px]",
+          "rounded-[var(--radius-xl)]",
           "transition-colors duration-200",
           isActive
             ? "bg-sidebar-accent text-sidebar-primary font-semibold"
@@ -66,10 +66,10 @@ const SidebarNavItem = React.memo(function SidebarNavItem({
         aria-current={isActive ? "page" : undefined}
       >
         <SFIcon
-          name={item.icon as SFSymbolName} // Cast to SFSymbolName as it's now a defined type
-          size={20}
+          name={item.icon as SFSymbolName}
+          size={16}
           className={cn(
-            "w-6 text-center flex-shrink-0 transition-transform duration-200",
+            "w-5 text-center flex-shrink-0 transition-transform duration-200",
             isActive ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:scale-105 group-hover:text-sidebar-foreground"
           )}
         />
@@ -124,23 +124,23 @@ export const Sidebar = React.memo(function Sidebar({
     >
       {/* Logo and Close Button for Mobile */}
       <Link href={ROUTES.home} passHref className="group">
-        <div className="flex items-center gap-3 px-5 pt-2 pb-4 min-h-[44px]"> {/* Ensure touch target */}
+        <div className="flex items-center gap-2.5 px-4 pt-2 pb-3 min-h-[36px]">
           <motion.div
             className={cn(
-              "w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-extrabold text-white flex-shrink-0",
-              "bg-gradient-to-br from-cyan-500 to-cyan-700" // Uses primary accent shades
+              "w-9 h-9 rounded-xl flex items-center justify-center text-sm font-extrabold text-white flex-shrink-0",
+              "bg-gradient-to-br from-cyan-500 to-cyan-700"
             )}
             initial={false}
-            whileHover={{ scale: 1.05, boxShadow: `0 0 0 3px ${COLORS.cyan}, var(--shadow-soft)` }} // Subtle border glow on hover
+            whileHover={{ scale: 1.05, boxShadow: `0 0 0 3px ${COLORS.cyan}, var(--shadow-soft)` }}
             whileTap={TAP_TRANSITION}
             transition={SPRING_TRANSITION}
           >
             M
           </motion.div>
           <div className="min-w-0">
-            <h2 className="text-xl font-bold [letter-spacing:-0.03em]">MOMENTUM</h2>
-            <p className="text-sm text-sidebar-foreground/70 truncate">
-              Intelligence for the Modern Trader.
+            <h2 className="text-base font-bold [letter-spacing:-0.03em]">MOMENTUM</h2>
+            <p className="text-xs text-sidebar-foreground/70 truncate">
+              Intelligence for the Mo...
             </p>
           </div>
           {onClose && (
@@ -167,7 +167,7 @@ export const Sidebar = React.memo(function Sidebar({
       </Link>
 
       {/* Nav Items - Removed `pr-3` to rely on `custom-scrollbar` for visual consistency */}
-      <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-0.5 custom-scrollbar">
         {SIDEBAR_NAV.reduce((acc: JSX.Element[], item, index) => {
           const showSection = index === 0 || item.section !== SIDEBAR_NAV[index - 1].section;
           acc.push(
@@ -185,15 +185,14 @@ export const Sidebar = React.memo(function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-4 bg-background/50 backdrop-blur-sm rounded-b-[var(--radius-3xl)] md:rounded-b-none border-t border-background/20">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          {/* Status indicator uses primary accent (cyan) for UI status */}
-          <div className={cn("w-2 h-2 rounded-full animate-pulse-glow flex-shrink-0", getBackgroundColorClass('cyan', '400'))} />
+      <div className="px-4 py-2.5 bg-background/50 backdrop-blur-sm rounded-b-[var(--radius-2xl)] md:rounded-b-none border-t border-background/20">
+        <div className="flex items-center gap-2 text-xs font-medium">
+          <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse-glow flex-shrink-0", getBackgroundColorClass('cyan', '400'))} />
           <span className={getTextColorClass('cyan', '400')}>Pipeline Active</span>
         </div>
         {dbStats && (
-          <div className="text-xs text-sidebar-foreground/60 mt-2 font-mono-data">
-            <SFIcon name="database" size={12} className="mr-1 inline-block opacity-60" />{dbStats}
+          <div className="text-[10px] text-sidebar-foreground/60 mt-1.5 font-mono-data">
+            <SFIcon name="database" size={10} className="mr-1 inline-block opacity-60" />{dbStats}
           </div>
         )}
       </div>
@@ -203,7 +202,7 @@ export const Sidebar = React.memo(function Sidebar({
   return (
     <>
       {/* Desktop: Always visible, fixed position on the left */}
-      <div className="hidden md:block fixed top-0 bottom-0 left-0 w-[260px] z-[var(--z-sidebar)] overflow-hidden apple-card rounded-r-[var(--radius-3xl)]"> {/* Use semantic z-index */}
+      <div className="hidden md:block fixed top-0 bottom-0 left-0 w-[220px] z-[var(--z-sidebar)] overflow-hidden apple-card rounded-r-[var(--radius-2xl)]"> {/* Use semantic z-index */}
         {sidebarContent}
       </div>
 
@@ -221,7 +220,7 @@ export const Sidebar = React.memo(function Sidebar({
               aria-label="Close sidebar"
             />
             <motion.div
-              className="fixed top-0 bottom-0 left-0 w-[260px] md:hidden z-[var(--z-sidebar)] apple-card rounded-r-[var(--radius-3xl)]" // Use semantic z-index
+              className="fixed top-0 bottom-0 left-0 w-[220px] md:hidden z-[var(--z-sidebar)] apple-card rounded-r-[var(--radius-2xl)]" // Use semantic z-index
               initial={{ x: -260 }}
               animate={{ x: 0 }}
               exit={{ x: -260 }}
