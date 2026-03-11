@@ -13,6 +13,9 @@ import type {
   IndicatorMeta,
   SavedStrategy,
   DBStats,
+  Signal,
+  KPISummary,
+  TickerChartData,
 } from "@/types/momentum";
 import {
   API_BASE,
@@ -30,6 +33,9 @@ import {
 
 // Simple in-memory cache for GET requests. In a larger app, this would be a dedicated library (e.g., SWR, React Query).
 const requestCache = new Map<string, { data: unknown; timestamp: number }>();
+
+// ETag store — maps URL to { etag, cachedData } for conditional 304 responses
+const etagStore = new Map<string, { etag: string; data: unknown }>();
 
 // ── Centralized Telemetry & Error Logging Utility ──
 // A production-grade telemetry service would integrate here to capture errors,
@@ -146,10 +152,28 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
   // ── Retry Logic ──
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // Build headers — inject ETag If-None-Match for conditional requests
+      const requestHeaders: Record<string, string> = { ...(currentHeaders as Record<string, string>) };
+      if (method === "GET") {
+        const stored = etagStore.get(url);
+        if (stored?.etag) {
+          requestHeaders["If-None-Match"] = `"${stored.etag}"`;
+        }
+      }
+
       const res = await fetch(url, {
         ...fetchOptions,
-        headers: currentHeaders,
+        headers: requestHeaders,
       });
+
+      // ── ETag 304 Not Modified — return cached data instantly ──
+      if (res.status === 304) {
+        const stored = etagStore.get(url);
+        if (stored?.data) {
+          logTelemetry('debug', `[API Service] ETag 304 cache hit for ${url}`);
+          return stored.data as T;
+        }
+      }
 
       if (!res.ok) {
         let errorBody: unknown;
@@ -191,6 +215,12 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
       }
 
       const data = await res.json();
+
+      // Store ETag for future conditional requests
+      const responseEtag = res.headers.get("etag")?.replace(/"/g, "");
+      if (method === "GET" && responseEtag) {
+        etagStore.set(url, { etag: responseEtag, data });
+      }
 
       // Store in cache for GET requests
       if (method === "GET" && cache) {
@@ -743,6 +773,36 @@ export const realtimeService = new RealtimeService({ url: WS_BASE });
  */
 export async function fetchDashboardData(): Promise<DashboardData> {
   return apiFetch<DashboardData>("/momentum_data.json", { cache: true });
+}
+
+// ── Segmented Endpoints (progressive loading — avoid 10MB monolithic fetch) ──
+
+/**
+ * Fetches only the dashboard summary stats (~1KB). Tier 1 — instant render.
+ */
+export async function fetchSummary(): Promise<{ summary: KPISummary }> {
+  return apiFetch<{ summary: KPISummary }>("/api/summary", { cache: true, cacheTTLSeconds: 60 });
+}
+
+/**
+ * Fetches only the signals table (~1MB). Tier 2 — fast table render.
+ */
+export async function fetchSignals(): Promise<{ signals: Signal[] }> {
+  return apiFetch<{ signals: Signal[] }>("/api/signals", { cache: true, cacheTTLSeconds: 60 });
+}
+
+/**
+ * Fetches chart data for a single ticker on demand (~50KB). Tier 4 — lazy.
+ */
+export async function fetchTickerChart(ticker: string): Promise<{ ticker: string; charts: TickerChartData }> {
+  return apiFetch<{ ticker: string; charts: TickerChartData }>(`/api/charts/${ticker.toUpperCase()}`, { cache: true, cacheTTLSeconds: 120 });
+}
+
+/**
+ * Fetches derived signal lists (hidden gems, clusters, etc., ~500KB). Tier 3 — on demand.
+ */
+export async function fetchDerived(): Promise<Record<string, Signal[]>> {
+  return apiFetch<Record<string, Signal[]>>("/api/derived", { cache: true, cacheTTLSeconds: 60 });
 }
 
 /**

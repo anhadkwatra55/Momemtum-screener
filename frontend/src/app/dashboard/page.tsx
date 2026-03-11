@@ -1,12 +1,14 @@
 "use client";
 
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { AppShell } from "@/components/layout/app-shell";
 import { KPIStrip } from "@/components/momentum/kpi-strip";
 import { QuoteRotator } from "@/components/momentum/quote-rotator";
-import { useSignals } from "@/hooks/use-signals";
+import { useProgressiveData } from "@/hooks/use-progressive-data";
+import { usePipelineStatus } from "@/hooks/use-pipeline-status";
+import { DataReveal, CardReveal } from "@/components/ui/data-reveal";
 import { SFIcon } from "@/components/ui/sf-icon";
 import {
   COLORS,
@@ -76,6 +78,38 @@ const ChartSkeleton = memo(() => (
 ));
 ChartSkeleton.displayName = "ChartSkeleton";
 
+// ── KPI Skeleton ──
+const KPISkeleton = memo(() => (
+  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+    {Array.from({ length: 6 }).map((_, i) => (
+      <motion.div
+        key={i}
+        className="h-20 rounded-2xl bg-card animate-pulse"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: i * 0.05 }}
+      />
+    ))}
+  </div>
+));
+KPISkeleton.displayName = "KPISkeleton";
+
+// ── Section Skeleton ──
+const SectionSkeleton = memo(({ rows = 4 }: { rows?: number }) => (
+  <div className="space-y-2">
+    {Array.from({ length: rows }).map((_, i) => (
+      <motion.div
+        key={i}
+        className="h-14 rounded-xl bg-white/[0.02] animate-pulse"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: i * 0.06 }}
+      />
+    ))}
+  </div>
+));
+SectionSkeleton.displayName = "SectionSkeleton";
+
 // Lazy load chart components for performance
 const LazyPriceChart = dynamic(() => import('@/components/charts/price-chart').then(mod => ({ default: mod.PriceChart })), {
   ssr: false,
@@ -100,6 +134,7 @@ interface StatItem {
 const DashboardPage = memo(() => {
   const {
     data,
+    tierLoading,
     loading,
     error,
     selectedTicker,
@@ -109,7 +144,13 @@ const DashboardPage = memo(() => {
     sortAsc,
     setSortBy,
     refresh,
-  } = useSignals();
+    fetchChart,
+    chartCache,
+    chartLoading,
+  } = useProgressiveData();
+
+  // Pipeline status — auto-refresh when pipeline completes
+  const pipeline = usePipelineStatus(refresh);
 
   const handleSelectTicker = useCallback((ticker: string) => {
     setSelectedTicker(ticker);
@@ -128,10 +169,19 @@ const DashboardPage = memo(() => {
     () => data?.signals?.find((s) => s.ticker === selectedTicker),
     [data?.signals, selectedTicker]
   );
+
+  // On-demand chart loading for selected ticker
   const selectedChart = useMemo(
-    () => (selectedTicker ? data?.charts?.[selectedTicker] : null),
-    [data?.charts, selectedTicker]
+    () => (selectedTicker ? chartCache[selectedTicker] ?? null : null),
+    [chartCache, selectedTicker]
   );
+
+  // Trigger chart fetch when ticker detail page is active and chart not cached
+  useEffect(() => {
+    if (selectedTicker && !chartCache[selectedTicker]) {
+      fetchChart(selectedTicker);
+    }
+  }, [selectedTicker, chartCache, fetchChart]);
 
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
@@ -149,6 +199,7 @@ const DashboardPage = memo(() => {
     handleSelectTicker(ticker);
   }, [handleSelectTicker]);
 
+  // ── Initial full-page loading state ──
   if (loading) {
     return (
       <motion.div
@@ -166,14 +217,9 @@ const DashboardPage = memo(() => {
           className="w-16 h-16 border-[4px] border-white/10 border-t-cyan-400 rounded-full mb-6"
         />
         <p className={cn("mt-4 text-muted-foreground text-lg font-semibold", TRACKING_HEADING_CLASS)}>Crafting your premium experience...</p>
-        {/* Enhanced Skeleton preview */}
         <div className="w-full max-w-4xl mt-12 space-y-6">
           <div className="skeleton h-14 w-full rounded-2xl bg-card animate-pulse" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="skeleton h-20 rounded-2xl bg-card animate-pulse" />
-            ))}
-          </div>
+          <KPISkeleton />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="skeleton h-60 rounded-2xl bg-card animate-pulse" />
             <div className="skeleton h-60 rounded-2xl bg-card animate-pulse" />
@@ -218,9 +264,9 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="intelligence"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24" // Generous vertical padding for the whole page section
+                className="pt-8 md:pt-12 pb-16 md:pb-24"
               >
-                <div className="flex items-center justify-between mb-8 flex-wrap gap-3"> {/* Increased mb-6 to mb-8 */}
+                <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
                   <h1 className={cn("text-4xl font-extrabold md:text-5xl flex items-center gap-4", TRACKING_HEADING_CLASS)}>
                     <SFIcon name="bolt.fill" size="text-5xl md:text-6xl" className="text-cyan-400" />
                     Momentum Intelligence
@@ -232,90 +278,123 @@ const DashboardPage = memo(() => {
                     />
                     <div className="flex items-center gap-3 bg-cyan-500/10 border border-cyan-500/25 rounded-full px-3 py-1 text-cyan-400 text-xs font-semibold tracking-[0.1em] uppercase">
                       <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse-glow" />
-                      Live
+                      {pipeline.connected ? "Live" : "Offline"}
                     </div>
                   </div>
                 </div>
 
+                {/* Quote — instant, always available */}
                 {data.all_quotes?.length > 0 && (
-                  <Card className="mb-8 p-4"> {/* Increased mb-5 to mb-8 */}
+                  <Card className="mb-8 p-4">
                     <QuoteRotator quotes={data.all_quotes} />
                   </Card>
                 )}
 
-                <KPIStrip className="mb-8" items={kpiStripItems} /> {/* Increased mb-5 to mb-8 */}
+                {/* KPI Strip — Tier 1 progressive reveal */}
+                <DataReveal
+                  loading={tierLoading.summary && kpiStripItems.length === 0}
+                  skeleton={<KPISkeleton />}
+                  className="mb-8"
+                >
+                  <KPIStrip className="" items={kpiStripItems} />
+                </DataReveal>
 
-                {/* Leaderboard + Top Signals */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8"> {/* Increased mb-5 to mb-8 */}
-                  <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                  <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                </div>
+                {/* Leaderboard + Top Signals — Tier 2 progressive reveal */}
+                <DataReveal
+                  loading={tierLoading.signals && !data.signals?.length}
+                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
+                  className="mb-8"
+                  delay={100}
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                    <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                  </div>
+                </DataReveal>
 
-                {/* Fresh + Exhausting mini-cards */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8"> {/* Increased mb-5 to mb-8 */}
-                  <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                  <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                </div>
+                {/* Fresh + Exhausting mini-cards — staggered reveal */}
+                <DataReveal
+                  loading={tierLoading.signals && !data.signals?.length}
+                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
+                  className="mb-8"
+                  delay={200}
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
+                    <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
+                  </div>
+                </DataReveal>
 
                 {/* Hidden Gems Preview */}
                 {(data.hidden_gems || []).length > 0 && (
-                  <Card className="p-5 mb-8"> {/* Increased mb-5 to mb-8 */}
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className={cn("text-xl font-bold md:text-2xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                        <SFIcon name="diamond.fill" size="text-2xl" className="text-cyan-400" /> Hidden Gems — Underrated Picks
-                      </h2>
-                      <AppleButton
-                        variant="ghost"
-                        size="sm"
-                        className="text-cyan-400 hover:text-cyan-300"
-                        onClick={() => setActivePage("hidden-gems")}
-                        glowColor="cyan"
-                      >
-                        View All <span className="ml-1 text-sm font-semibold">→</span>
-                      </AppleButton>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4 text-balance"> {/* Increased mb-3 to mb-4 */}
-                      Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
-                    </p>
-                    <div className="space-y-1"> {/* Increased space-y-0 to space-y-1 for subtle separation */}
-                      {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0]) => (
-                        <motion.div
-                          key={s.ticker}
-                          // Removed border-b. Increased py-2 to py-3. Added hover:bg-white/5 for subtle background tint.
-                          className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
-                          onClick={() => handlePageTickerSelect(s.ticker)}
-                          whileHover={LIST_ITEM_HOVER_MOTION_PROPS} // This should apply boxShadow from constants
-                          transition={SPRING_TRANSITION_PROPS}
+                  <CardReveal
+                    loading={false}
+                    className="mb-8"
+                    delay={300}
+                  >
+                    <Card className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className={cn("text-xl font-bold md:text-2xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                          <SFIcon name="diamond.fill" size="text-2xl" className="text-cyan-400" /> Hidden Gems — Underrated Picks
+                        </h2>
+                        <AppleButton
+                          variant="ghost"
+                          size="sm"
+                          className="text-cyan-400 hover:text-cyan-300"
+                          onClick={() => setActivePage("hidden-gems")}
+                          glowColor="cyan"
                         >
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
-                            <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
-                            <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>
-                              {s.probability}%
-                            </span>
-                            <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>
-                              {s.daily_change > 0 ? '+' : ''}{s.daily_change}%
-                            </span>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </Card>
+                          View All <span className="ml-1 text-sm font-semibold">→</span>
+                        </AppleButton>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4 text-balance">
+                        Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
+                      </p>
+                      <div className="space-y-1">
+                        {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0], i: number) => (
+                          <motion.div
+                            key={s.ticker}
+                            className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
+                            onClick={() => handlePageTickerSelect(s.ticker)}
+                            whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
+                            transition={SPRING_TRANSITION_PROPS}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            // @ts-expect-error framer-motion transition accepts delay
+                            transitionDelay={`${i * 60}ms`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
+                              <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
+                              <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>
+                                {s.probability}%
+                              </span>
+                              <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>
+                                {s.daily_change > 0 ? '+' : ''}{s.daily_change}%
+                              </span>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </Card>
+                  </CardReveal>
                 )}
 
                 {/* Sector Regime Heatmap */}
-                <Card className="p-5">
-                  <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
-                  </h2>
-                  <LazySectorHeatmap
-                    sectors={data.sector_regimes}
-                    sentiment={data.sector_sentiment}
-                  />
-                </Card>
+                <CardReveal loading={!data.sector_regimes} delay={400}>
+                  <Card className="p-5">
+                    <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                      <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
+                    </h2>
+                    <LazySectorHeatmap
+                      sectors={data.sector_regimes}
+                      sentiment={data.sector_sentiment}
+                    />
+                  </Card>
+                </CardReveal>
               </motion.div>
             )}
 
@@ -326,12 +405,16 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-8 md:pt-12 pb-16 md:pb-24 overflow-x-hidden"
               >
-                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}> {/* Increased mb-6 to mb-8 */}
+                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}>
                   <SFIcon name="radar.fill" size="text-5xl md:text-6xl" className="text-cyan-400" />
                   Signals & Strategies
                 </h1>
 
-                <div className="mb-8"> {/* Increased mb-6 to mb-8 */}
+                <DataReveal
+                  loading={tierLoading.signals && !data.signals?.length}
+                  skeleton={<SectionSkeleton rows={10} />}
+                  className="mb-8"
+                >
                   <LazySignalTable
                     signals={sortedSignals}
                     sortBy={sortBy}
@@ -340,16 +423,21 @@ const DashboardPage = memo(() => {
                     onSelectTicker={handlePageTickerSelect}
                     selectedTicker={selectedTicker}
                   />
-                </div>
+                </DataReveal>
 
                 <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
                   <SFIcon name="chess.piece.queen.fill" size="text-2xl" className="text-cyan-400" /> Trading Strategies
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {data.strategies.map((s) => (
-                    <LazyStrategyCard key={s.ticker} strategy={s} />
-                  ))}
-                </div>
+                <DataReveal
+                  loading={!data.strategies?.length}
+                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{Array.from({length: 6}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {data.strategies.map((s) => (
+                      <LazyStrategyCard key={s.ticker} strategy={s} />
+                    ))}
+                  </div>
+                </DataReveal>
               </motion.div>
             )}
 
@@ -360,20 +448,22 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-8 md:pt-12 pb-16 md:pb-24"
               >
-                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}> {/* Increased mb-6 to mb-8 */}
+                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}>
                   <SFIcon name="antenna.radiowaves.left.and.right" size="text-5xl md:text-6xl" className="text-cyan-400" />
                   Sector Intelligence
                 </h1>
-                <Card className="border-cyan-500/20 shadow-lg shadow-cyan-500/5 mb-8 p-5"> {/* Increased mb-5 to mb-8 */}
-                  <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
-                    <span className="text-sm text-muted-foreground font-normal tracking-normal ml-3">— Real-time regime classification</span>
-                  </h2>
-                  <LazySectorHeatmap
-                    sectors={data.sector_regimes}
-                    sentiment={data.sector_sentiment}
-                  />
-                </Card>
+                <CardReveal loading={!data.sector_regimes} className="mb-8">
+                  <Card className="border-cyan-500/20 shadow-lg shadow-cyan-500/5 p-5">
+                    <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                      <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
+                      <span className="text-sm text-muted-foreground font-normal tracking-normal ml-3">— Real-time regime classification</span>
+                    </h2>
+                    <LazySectorHeatmap
+                      sectors={data.sector_regimes}
+                      sentiment={data.sector_sentiment}
+                    />
+                  </Card>
+                </CardReveal>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <LazyTrendingSectors sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
                   <LazyRotationSignals rotationIdeas={data.rotation_ideas || []} />
@@ -388,7 +478,7 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-8 md:pt-12 pb-16 md:pb-24"
               >
-                <div className="flex items-center justify-between mb-8 flex-wrap gap-3"> {/* Increased mb-6 to mb-8 */}
+                <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
                   <h1 className={cn("text-4xl font-extrabold md:text-5xl flex items-center gap-4", TRACKING_HEADING_CLASS)}>
                     <SFIcon name="chart.bar.fill" size="text-5xl md:text-6xl" className="text-cyan-400" /> Ticker Detail
                     {selectedTicker && <span className="text-cyan-400 font-mono-data text-4xl md:text-5xl tracking-normal ml-2">— {selectedTicker}</span>}
@@ -414,99 +504,117 @@ const DashboardPage = memo(() => {
                 </div>
 
                 {selectedSignal && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-3 mb-8"> {/* Increased mb-5 to mb-8 */}
-                    {([
-                      { label: "Price", value: `$${selectedSignal.price.toFixed(2)}`, color: "cyan", font: "font-mono-data" },
-                      { label: "Composite", value: selectedSignal.composite.toFixed(2), color: selectedSignal.composite > 0 ? "emerald" : "rose", font: "font-mono-data" },
-                      { label: "Probability", value: `${selectedSignal.probability}%`, color: "amber", font: "font-mono-data" },
-                      { label: "S1", value: selectedSignal.sys1_score.toFixed(1), color: selectedSignal.sys1_score > 0 ? "emerald" : selectedSignal.sys1_score < 0 ? "rose" : "slate", font: "font-mono-data" },
-                      { label: "S2", value: selectedSignal.sys2_score.toFixed(1), color: selectedSignal.sys2_score > 0 ? "emerald" : selectedSignal.sys2_score < 0 ? "rose" : "slate", font: "font-mono-data" },
-                      { label: "S3", value: selectedSignal.sys3_score.toFixed(1), color: selectedSignal.sys3_score > 0 ? "emerald" : selectedSignal.sys3_score < 0 ? "rose" : "slate", font: "font-mono-data" },
-                      { label: "S4", value: selectedSignal.sys4_score.toFixed(1), color: selectedSignal.sys4_score > 0 ? "emerald" : selectedSignal.sys4_score < 0 ? "rose" : "slate", font: "font-mono-data" },
-                      { label: "Regime", value: selectedSignal.regime, color: selectedSignal.regime === "Trending" ? "cyan" : "violet", font: "font-inter" },
-                      { label: "Δ Day", value: `${selectedSignal.daily_change > 0 ? "+" : ""}${selectedSignal.daily_change}%`, color: selectedSignal.daily_change > 0 ? "emerald" : "rose", font: "font-mono-data" },
-                      { label: "Sector", value: selectedSignal.sector, color: "slate", font: "font-inter" },
-                    ] as StatItem[]).map((stat) => (
-                      <Card
-                        key={stat.label}
-                        className="flex flex-col justify-center items-center text-center px-3 py-2 border border-transparent"
-                        whileHover={CARD_HOVER_MOTION_PROPS}
-                        transition={SPRING_TRANSITION_PROPS}
-                      >
-                        <div className={cn("text-base font-bold", stat.font, getTextColorClass(stat.color))}>
-                          {stat.value}
-                        </div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-[0.1em] mt-0.5 whitespace-nowrap">{stat.label}</div>
-                      </Card>
-                    ))}
-                  </div>
+                  <DataReveal loading={false} className="mb-8">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-3">
+                      {([
+                        { label: "Price", value: `$${selectedSignal.price.toFixed(2)}`, color: "cyan", font: "font-mono-data" },
+                        { label: "Composite", value: selectedSignal.composite.toFixed(2), color: selectedSignal.composite > 0 ? "emerald" : "rose", font: "font-mono-data" },
+                        { label: "Probability", value: `${selectedSignal.probability}%`, color: "amber", font: "font-mono-data" },
+                        { label: "S1", value: selectedSignal.sys1_score.toFixed(1), color: selectedSignal.sys1_score > 0 ? "emerald" : selectedSignal.sys1_score < 0 ? "rose" : "slate", font: "font-mono-data" },
+                        { label: "S2", value: selectedSignal.sys2_score.toFixed(1), color: selectedSignal.sys2_score > 0 ? "emerald" : selectedSignal.sys2_score < 0 ? "rose" : "slate", font: "font-mono-data" },
+                        { label: "S3", value: selectedSignal.sys3_score.toFixed(1), color: selectedSignal.sys3_score > 0 ? "emerald" : selectedSignal.sys3_score < 0 ? "rose" : "slate", font: "font-mono-data" },
+                        { label: "S4", value: selectedSignal.sys4_score.toFixed(1), color: selectedSignal.sys4_score > 0 ? "emerald" : selectedSignal.sys4_score < 0 ? "rose" : "slate", font: "font-mono-data" },
+                        { label: "Regime", value: selectedSignal.regime, color: selectedSignal.regime === "Trending" ? "cyan" : "violet", font: "font-inter" },
+                        { label: "Δ Day", value: `${selectedSignal.daily_change > 0 ? "+" : ""}${selectedSignal.daily_change}%`, color: selectedSignal.daily_change > 0 ? "emerald" : "rose", font: "font-mono-data" },
+                        { label: "Sector", value: selectedSignal.sector, color: "slate", font: "font-inter" },
+                      ] as StatItem[]).map((stat) => (
+                        <Card
+                          key={stat.label}
+                          className="flex flex-col justify-center items-center text-center px-3 py-2 border border-transparent"
+                          whileHover={CARD_HOVER_MOTION_PROPS}
+                          transition={SPRING_TRANSITION_PROPS}
+                        >
+                          <div className={cn("text-base font-bold", stat.font, getTextColorClass(stat.color))}>
+                            {stat.value}
+                          </div>
+                          <div className="text-xs text-muted-foreground uppercase tracking-[0.1em] mt-0.5 whitespace-nowrap">{stat.label}</div>
+                        </Card>
+                      ))}
+                    </div>
+                  </DataReveal>
                 )}
 
-                {selectedChart && selectedTicker && (
-                  <div className="space-y-6"> {/* Increased space-y-4 to space-y-6 */}
-                    {/* Price + HMA */}
-                    <Card className="p-5">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Price + Hull MA</h3>
-                      <LazyPriceChart ticker={selectedTicker} data={selectedChart} className="h-[280px]" />
-                    </Card>
+                {/* Charts — loaded on-demand per ticker */}
+                {selectedTicker && (
+                  <DataReveal
+                    loading={chartLoading === selectedTicker || (!selectedChart && !!selectedTicker)}
+                    skeleton={
+                      <div className="space-y-6">
+                        <ChartSkeleton />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <ChartSkeleton />
+                          <ChartSkeleton />
+                        </div>
+                      </div>
+                    }
+                  >
+                    {selectedChart && (
+                      <div className="space-y-6">
+                        {/* Price + HMA */}
+                        <Card className="p-5">
+                          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Price + Hull MA</h3>
+                          <LazyPriceChart ticker={selectedTicker} data={selectedChart} className="h-[280px]" />
+                        </Card>
 
-                    {/* ADX + Stochastics row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <Card className="p-5">
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">ADX / +DI / −DI</h3>
-                        <LazyIndicatorChart
-                          dates={selectedChart.dates}
-                          lines={[
-                            { label: "ADX", data: selectedChart.adx, color: COLORS.amber, width: 1.5 },
-                            { label: "+DI", data: selectedChart.plus_di, color: COLORS.emerald, width: 1 },
-                            { label: "−DI", data: selectedChart.minus_di, color: COLORS.rose, width: 1 },
-                          ]}
-                          horizontalLines={[{ value: 25, color: "rgba(148,163,184,0.2)" }]}
-                          className="h-[260px]"
-                        />
-                      </Card>
-                      <Card className="p-5">
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Full Stochastics</h3>
-                        <LazyIndicatorChart
-                          dates={selectedChart.dates}
-                          lines={[
-                            { label: "%K", data: selectedChart.stoch_k, color: COLORS.cyan, width: 1.5 },
-                            { label: "%D", data: selectedChart.stoch_d, color: COLORS.orange, width: 1.5, dash: true },
-                          ]}
-                          horizontalLines={[
-                            { value: 80, color: "rgba(244,63,94,0.2)" },
-                            { value: 20, color: "rgba(16,185,129,0.2)" },
-                          ]}
-                          className="h-[260px]"
-                        />
-                      </Card>
-                    </div>
+                        {/* ADX + Stochastics row */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <Card className="p-5">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">ADX / +DI / −DI</h3>
+                            <LazyIndicatorChart
+                              dates={selectedChart.dates}
+                              lines={[
+                                { label: "ADX", data: selectedChart.adx, color: COLORS.amber, width: 1.5 },
+                                { label: "+DI", data: selectedChart.plus_di, color: COLORS.emerald, width: 1 },
+                                { label: "−DI", data: selectedChart.minus_di, color: COLORS.rose, width: 1 },
+                              ]}
+                              horizontalLines={[{ value: 25, color: "rgba(148,163,184,0.2)" }]}
+                              className="h-[260px]"
+                            />
+                          </Card>
+                          <Card className="p-5">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Full Stochastics</h3>
+                            <LazyIndicatorChart
+                              dates={selectedChart.dates}
+                              lines={[
+                                { label: "%K", data: selectedChart.stoch_k, color: COLORS.cyan, width: 1.5 },
+                                { label: "%D", data: selectedChart.stoch_d, color: COLORS.orange, width: 1.5, dash: true },
+                              ]}
+                              horizontalLines={[
+                                { value: 80, color: "rgba(244,63,94,0.2)" },
+                                { value: 20, color: "rgba(16,185,129,0.2)" },
+                              ]}
+                              className="h-[260px]"
+                            />
+                          </Card>
+                        </div>
 
-                    {/* Elder Impulse + TRIX row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <Card className="p-5">
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Elder Impulse</h3>
-                        <LazyElderChart
-                          dates={selectedChart.dates}
-                          macdHist={selectedChart.macd_hist}
-                          elderColors={selectedChart.elder_colors}
-                          className="h-[260px]"
-                        />
-                      </Card>
-                      <Card className="p-5">
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">TRIX</h3>
-                        <LazyIndicatorChart
-                          dates={selectedChart.dates}
-                          lines={[
-                            { label: "TRIX", data: selectedChart.trix, color: COLORS.violet, width: 1.5 },
-                            { label: "Signal", data: selectedChart.trix_signal, color: COLORS.amber, width: 1.5, dash: true },
-                          ]}
-                          horizontalLines={[{ value: 0, color: "rgba(148,163,184,0.2)" }]}
-                          className="h-[260px]"
-                        />
-                      </Card>
-                    </div>
-                  </div>
+                        {/* Elder Impulse + TRIX row */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <Card className="p-5">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Elder Impulse</h3>
+                            <LazyElderChart
+                              dates={selectedChart.dates}
+                              macdHist={selectedChart.macd_hist}
+                              elderColors={selectedChart.elder_colors}
+                              className="h-[260px]"
+                            />
+                          </Card>
+                          <Card className="p-5">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">TRIX</h3>
+                            <LazyIndicatorChart
+                              dates={selectedChart.dates}
+                              lines={[
+                                { label: "TRIX", data: selectedChart.trix, color: COLORS.violet, width: 1.5 },
+                                { label: "Signal", data: selectedChart.trix_signal, color: COLORS.amber, width: 1.5, dash: true },
+                              ]}
+                              horizontalLines={[{ value: 0, color: "rgba(148,163,184,0.2)" }]}
+                              className="h-[260px]"
+                            />
+                          </Card>
+                        </div>
+                      </div>
+                    )}
+                  </DataReveal>
                 )}
               </motion.div>
             )}
@@ -518,12 +626,14 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-8 md:pt-12 pb-16 md:pb-24"
               >
-                <LazyScreenerTable
-                  data={(data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || []}
-                  title={SCREENER_MAP[activePage].title}
-                  icon={SCREENER_MAP[activePage].icon}
-                  onSelectTicker={handlePageTickerSelect}
-                />
+                <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
+                  <LazyScreenerTable
+                    data={(data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || []}
+                    title={SCREENER_MAP[activePage].title}
+                    icon={SCREENER_MAP[activePage].icon}
+                    onSelectTicker={handlePageTickerSelect}
+                  />
+                </DataReveal>
               </motion.div>
             )}
 
@@ -534,12 +644,14 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-8 md:pt-12 pb-16 md:pb-24"
               >
-                <LazyYieldTable
-                  data={data.high_yield_etfs || []}
-                  title="High Yield ETFs"
-                  icon="chart.line.uptrend.rectangle.fill"
-                  onSelectTicker={handlePageTickerSelect}
-                />
+                <DataReveal loading={!data.high_yield_etfs?.length} skeleton={<SectionSkeleton rows={8} />}>
+                  <LazyYieldTable
+                    data={data.high_yield_etfs || []}
+                    title="High Yield ETFs"
+                    icon="chart.line.uptrend.rectangle.fill"
+                    onSelectTicker={handlePageTickerSelect}
+                  />
+                </DataReveal>
               </motion.div>
             )}
 
@@ -550,12 +662,14 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-8 md:pt-12 pb-16 md:pb-24"
               >
-                <LazyYieldTable
-                  data={data.dividend_stocks || []}
-                  title="Dividend Stocks — Aristocrats & Kings"
-                  icon="dollarsign.square.fill"
-                  onSelectTicker={handlePageTickerSelect}
-                />
+                <DataReveal loading={!data.dividend_stocks?.length} skeleton={<SectionSkeleton rows={8} />}>
+                  <LazyYieldTable
+                    data={data.dividend_stocks || []}
+                    title="Dividend Stocks — Aristocrats & Kings"
+                    icon="dollarsign.square.fill"
+                    onSelectTicker={handlePageTickerSelect}
+                  />
+                </DataReveal>
               </motion.div>
             )}
 

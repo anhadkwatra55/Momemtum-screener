@@ -1,31 +1,47 @@
 #!/usr/bin/env python3
 """
-MOMENTUM — FastAPI Backend Server
-==================================
-Wraps the existing Python quant pipeline (from legacy/) into a modern
-FastAPI microservice. All endpoint logic is directly reused from the
-original momentum_dashboard.py handler methods.
+MOMENTUM — FastAPI Backend Server (v3.0 — Parallel Engine)
+============================================================
+High-performance async serving layer for the MOMENTUM quantitative
+trading screener. Uses the parallel pipeline engine for CPU-bound
+indicator math and I/O-bound data fetching.
+
+Key upgrades over v2:
+  - ProcessPoolExecutor for 4-system screening (bypasses GIL)
+  - Segmented Redis cache (don't deserialize full 10MB payload)
+  - ETag conditional responses (sub-1ms 304 Not Modified)
+  - WebSocket endpoint for real-time pipeline status push
+  - orjson for 3-5x faster JSON serialization
 
 Run:  cd backend && uvicorn main:app --host 0.0.0.0 --port 8060 --reload
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
 import threading
 import traceback
 import warnings
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
+
+# Try orjson for fast serialization; fall back to stdlib json
+try:
+    import orjson
+    HAS_ORJSON = True
+except ImportError:
+    HAS_ORJSON = False
 
 warnings.filterwarnings("ignore")
 
@@ -33,7 +49,7 @@ warnings.filterwarnings("ignore")
 PIPELINES_DIR = Path(__file__).parent / "pipelines"
 sys.path.insert(0, str(PIPELINES_DIR))
 
-# ── Legacy pipeline imports (unchanged) ──
+# ── Pipeline imports ──
 import momentum_config as cfg
 import db
 from backtester import backtest_universe, compare_systems, run_backtest
@@ -46,8 +62,9 @@ from strategy_engine import (
 )
 from redis_cache import get_cache, RedisCache
 from validators import validate_universe, validate_ohlcv_dataframe
+from engine import run_pipeline_sync, pipeline_status as _engine_status
 
-# ── JSON Encoder for numpy types ──
+# ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -65,8 +82,28 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def encode_response(data: Any) -> JSONResponse:
-    """Return JSON with numpy-safe encoding."""
+def _orjson_default(obj: Any) -> Any:
+    """Custom serializer for orjson — handles remaining edge cases."""
+    if isinstance(obj, (np.floating,)):
+        v = float(obj)
+        return None if (np.isnan(v) or np.isinf(v)) else v
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, pd.Timestamp):
+        return obj.strftime("%Y-%m-%d")
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def encode_response(data: Any) -> Response:
+    """Return JSON with fast encoding. Uses orjson if available."""
+    if HAS_ORJSON:
+        body = orjson.dumps(data, default=_orjson_default,
+                           option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY)
+        return Response(content=body, media_type="application/json")
     body = json.loads(json.dumps(data, cls=NumpyEncoder))
     return JSONResponse(content=body)
 
@@ -77,7 +114,6 @@ _DATA_CACHE: dict[str, dict[str, pd.DataFrame]] = {}
 _CACHE_LOCK = threading.Lock()
 _CANCEL_EVENT = threading.Event()
 _BACKTEST_LOCK = threading.Lock()
-_PIPELINE_STATUS = {"state": "idle", "message": ""}
 
 # ── Webhook registry ──
 _WEBHOOK_URLS: list[str] = []
@@ -125,53 +161,46 @@ def _fetch_ticker_data(ticker, period="1y", start=None, end=None):
     return None
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  DASHBOARD DATA BUILDER (from legacy)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  DASHBOARD DATA BUILDER (legacy — kept for /api/screen)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def build_dashboard_data() -> dict:
     """Full pipeline: fetch → validate → screen → strategise → package for JSON."""
-    global _PIPELINE_STATUS
+    _ps = _engine_status  # shorthand
     import random
 
     cache = get_cache()
-    _PIPELINE_STATUS = {"state": "running", "message": "Fetching data..."}
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "Fetching data...")
     print("=" * 64)
     print("  MOMENTUM TRADING SCREENER — Pipeline")
     print("=" * 64)
 
     print("\n[1/5] Fetching data (DB-backed incremental sync) …")
-    _PIPELINE_STATUS["message"] = "[1/5] Fetching data (DB-backed)…"
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "[1/5] Fetching data (DB-backed)…")
     ohlcv = smart_fetch(progress=True)
     if not ohlcv:
-        _PIPELINE_STATUS = {"state": "error", "message": "No data fetched"}
-        cache.set_pipeline_status(_PIPELINE_STATUS)
+        _ps.update("error", "No data fetched")
         raise RuntimeError("No data fetched")
 
     print("\n[2/5] Validating OHLCV data (Pydantic) …")
-    _PIPELINE_STATUS["message"] = "[2/5] Validating data…"
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "[2/5] Validating data…")
     ohlcv, diags = validate_universe(ohlcv, progress=True)
     invalid_tickers = [d.ticker for d in diags if not d.is_valid]
     if invalid_tickers:
         print(f"    ⚠ Dropped {len(invalid_tickers)} invalid tickers: {invalid_tickers[:5]}…")
 
     print("\n[3/5] Running 4-system momentum screen …")
-    _PIPELINE_STATUS["message"] = "[3/5] Running 4-system screen…"
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "[3/5] Running 4-system screen…")
     results = screen_universe(ohlcv, progress=True)
 
     print("\n[4/5] Computing sector regimes & strategies …")
-    _PIPELINE_STATUS["message"] = "[4/5] Computing strategies…"
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "[4/5] Computing strategies…")
     sec_regimes = sector_regimes(results)
     strategies = generate_all_strategies(results)
 
     print("\n[5/5] Packaging dashboard data …")
-    _PIPELINE_STATUS["message"] = "[5/5] Packaging data…"
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "[5/5] Packaging data…")
 
     composites = [r["composite"] for r in results]
     n_bull = sum(1 for r in results if r["composite"] > 0.1)
@@ -283,8 +312,7 @@ def build_dashboard_data() -> dict:
 
     # ── High-Yield ETFs & Dividend Stocks ──
     print("\n[5.5/5] Fetching yield data for ETFs & dividend stocks …")
-    _PIPELINE_STATUS["message"] = "[5.5/5] Fetching yield data…"
-    cache.set_pipeline_status(_PIPELINE_STATUS)
+    _ps.update("running", "[5.5/5] Fetching yield data…")
 
     def _fetch_yield_info(ticker_list, label=""):
         """Fetch dividend yield info for a list of tickers via yfinance."""
@@ -344,7 +372,7 @@ def build_dashboard_data() -> dict:
     def slim(recs):
         return [{k: v for k, v in r.items() if k not in ("charts", "sys1", "sys2", "sys3", "sys4")} for r in recs]
 
-    _PIPELINE_STATUS = {"state": "done", "message": "Pipeline complete"}
+    _ps.update("done", "Pipeline complete")
 
     return {
         "quote": quote,
@@ -382,24 +410,33 @@ def build_dashboard_data() -> dict:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  BACKGROUND PIPELINE
+#  BACKGROUND PIPELINE (v3 — Engine-based)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 _CACHED_DASHBOARD_DATA: dict | None = None
 
+
 def _run_pipeline_background():
-    global _PIPELINE_STATUS, _CACHED_DASHBOARD_DATA
+    """Run the parallel pipeline engine and cache results across all layers."""
+    global _CACHED_DASHBOARD_DATA
     try:
-        data = build_dashboard_data()
+        data = run_pipeline_sync(use_parallel=True)
+
         # Serialise once for all caches
-        serialised = json.loads(json.dumps(data, cls=NumpyEncoder))
+        if HAS_ORJSON:
+            raw = orjson.dumps(data, default=_orjson_default,
+                              option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY)
+            serialised = orjson.loads(raw)
+        else:
+            serialised = json.loads(json.dumps(data, cls=NumpyEncoder))
 
         # 1. In-memory cache
         _CACHED_DASHBOARD_DATA = serialised
 
-        # 2. Redis cache (primary read layer for sub-50ms reads)
+        # 2. Redis cache (primary read layer + segmented keys)
         cache = get_cache()
         cache.set_dashboard(serialised)
+
         # Cache per-ticker chart data granularly
         charts = serialised.get("charts", {})
         if charts:
@@ -408,23 +445,22 @@ def _run_pipeline_background():
 
         # 3. File fallback
         out_path = PIPELINES_DIR / "momentum_data.json"
-        with open(out_path, "w") as f:
-            json.dump(data, f, cls=NumpyEncoder)
+        if HAS_ORJSON:
+            with open(out_path, "wb") as f:
+                f.write(orjson.dumps(data, default=_orjson_default,
+                                    option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
+                                           | orjson.OPT_INDENT_2))
+        else:
+            with open(out_path, "w") as f:
+                json.dump(data, f, cls=NumpyEncoder)
         print(f"\n✓ Data written to {out_path.name}")
-
-        _PIPELINE_STATUS = {"state": "done", "message": "Pipeline complete — data refreshed"}
-        cache.set_pipeline_status(_PIPELINE_STATUS)
 
         # 4. Fire webhooks to invalidate frontend cache
         _dispatch_webhooks(serialised)
 
     except Exception as e:
         traceback.print_exc()
-        _PIPELINE_STATUS = {"state": "error", "message": str(e)}
-        try:
-            get_cache().set_pipeline_status(_PIPELINE_STATUS)
-        except Exception:
-            pass
+        _engine_status.update("error", str(e))
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -449,7 +485,6 @@ def _seconds_until_next_run() -> float:
         tz = zoneinfo.ZoneInfo(_SCHEDULE_TZ)
         now = _dt.datetime.now(tz)
     except Exception:
-        # Fallback: use local time
         now = _dt.datetime.now()
 
     target = now.replace(hour=_SCHEDULE_HOUR, minute=_SCHEDULE_MINUTE, second=0, microsecond=0)
@@ -460,12 +495,11 @@ def _seconds_until_next_run() -> float:
 
 def _scheduled_pipeline_run():
     """Called by the scheduler timer to re-run the pipeline."""
-    global _last_pipeline_run, _PIPELINE_STATUS, _DATA_CACHE
+    global _last_pipeline_run, _DATA_CACHE
     print("\n" + "═" * 64)
     print("  ⏰ SCHEDULED DAILY REFRESH — Starting pipeline …")
     print("═" * 64)
 
-    # Clear in-memory data cache so we fetch fresh market data
     with _CACHE_LOCK:
         _DATA_CACHE.clear()
     print("  ✓ Cleared stale data cache")
@@ -473,7 +507,6 @@ def _scheduled_pipeline_run():
     _last_pipeline_run = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _run_pipeline_background()
 
-    # Schedule the next run
     _schedule_next_run()
 
 
@@ -527,13 +560,40 @@ def _dispatch_webhooks(data: dict) -> None:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  FASTAPI APP
+#  FASTAPI APP (v3 — async + lifespan)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern lifespan handler — replaces deprecated @app.on_event."""
+    # ── Startup ──
+    os.chdir(PIPELINES_DIR)
+    db.init_db()
+
+    cache = get_cache()
+    print(f"  Cache backend: {cache.stats()['backend']}")
+
+    # Start background pipeline in thread (engine handles its own parallelism)
+    pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
+    pipeline_thread.start()
+
+    # Schedule daily auto-refresh
+    _schedule_next_run()
+    print(f"  ⏰ Daily auto-refresh enabled: every day at {_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}")
+
+    yield  # ← App runs here
+
+    # ── Shutdown ──
+    if _scheduler_timer:
+        _scheduler_timer.cancel()
+    print("  ⏹ Scheduler stopped.")
+
 
 app = FastAPI(
     title="MOMENTUM API",
-    description="Quantitative Trading Screener — FastAPI Backend",
-    version="2.0.0",
+    description="Quantitative Trading Screener — FastAPI Backend (v3 Parallel Engine)",
+    version="3.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -546,45 +606,121 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
-@app.on_event("startup")
-def startup():
-    """Init DB, Redis, start background pipeline, and schedule daily refresh."""
-    # Set CWD for DB path resolution
-    os.chdir(PIPELINES_DIR)
-    db.init_db()
-
-    # Initialise Redis cache (fails gracefully if unavailable)
-    cache = get_cache()
-    print(f"  Cache backend: {cache.stats()['backend']}")
-
-    # Start background pipeline (initial run)
-    pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
-    pipeline_thread.start()
-
-    # Schedule daily auto-refresh
-    _schedule_next_run()
-    print(f"  ⏰ Daily auto-refresh enabled: every day at {_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}")
-
-
 # ── Dashboard Data ──
 
 @app.get("/momentum_data.json")
-async def get_momentum_data():
-    """Return cached dashboard data. Priority: Redis → in-memory → file."""
+async def get_momentum_data(request: Request):
+    """Return cached dashboard data. Priority: Redis → in-memory → file.
+    Supports ETag conditional responses for sub-1ms 304 Not Modified."""
     global _CACHED_DASHBOARD_DATA
-    # 1. Redis (sub-50ms)
+
+    # ETag check — if client has current data, return 304 instantly
     cache = get_cache()
+    etag = cache.get_etag()
+    if etag:
+        client_etag = request.headers.get("if-none-match", "").strip('"')
+        if client_etag == etag:
+            return Response(status_code=304)
+
+    # 1. Redis (sub-50ms)
     redis_data = cache.get_dashboard()
     if redis_data:
-        return JSONResponse(content=redis_data)
+        resp = JSONResponse(content=redis_data)
+        if etag:
+            resp.headers["ETag"] = f'"{etag}"'
+            resp.headers["Cache-Control"] = "private, max-age=60, stale-while-revalidate=300"
+        return resp
     # 2. In-memory fallback
     if _CACHED_DASHBOARD_DATA:
-        return JSONResponse(content=_CACHED_DASHBOARD_DATA)
+        resp = JSONResponse(content=_CACHED_DASHBOARD_DATA)
+        if etag:
+            resp.headers["ETag"] = f'"{etag}"'
+        return resp
     # 3. File fallback
     path = PIPELINES_DIR / "momentum_data.json"
     if path.exists():
         return FileResponse(path, media_type="application/json")
     return JSONResponse(content={"error": "Pipeline not yet complete. Please wait..."}, status_code=202)
+
+
+# ── Segmented Endpoints (avoid deserializing full 10MB payload) ──
+
+@app.get("/api/signals")
+async def get_signals():
+    """Return only the signals table from cached data."""
+    cache = get_cache()
+    data = cache.get_segment(RedisCache.KEY_SIGNALS)
+    if data:
+        return encode_response({"signals": data})
+    # Fallback: extract from full cache
+    if _CACHED_DASHBOARD_DATA:
+        return encode_response({"signals": _CACHED_DASHBOARD_DATA.get("signals", [])})
+    return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
+
+
+@app.get("/api/summary")
+async def get_summary():
+    """Return only the dashboard summary statistics."""
+    cache = get_cache()
+    data = cache.get_segment(RedisCache.KEY_SUMMARY)
+    if data:
+        return encode_response({"summary": data})
+    if _CACHED_DASHBOARD_DATA:
+        return encode_response({"summary": _CACHED_DASHBOARD_DATA.get("summary", {})})
+    return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
+
+
+@app.get("/api/charts/{ticker}")
+async def get_ticker_chart(ticker: str):
+    """Return chart data for a specific ticker (cached individually)."""
+    cache = get_cache()
+    chart = cache.get_chart(ticker.upper())
+    if chart:
+        return encode_response({"ticker": ticker.upper(), "charts": chart})
+    # Fallback: extract from full cache
+    if _CACHED_DASHBOARD_DATA:
+        charts = _CACHED_DASHBOARD_DATA.get("charts", {})
+        if ticker.upper() in charts:
+            return encode_response({"ticker": ticker.upper(), "charts": charts[ticker.upper()]})
+    return JSONResponse(content={"error": f"No chart data for {ticker}"}, status_code=404)
+
+
+@app.get("/api/derived")
+async def get_derived():
+    """Return derived signal lists (hidden gems, momentum clusters, etc)."""
+    cache = get_cache()
+    data = cache.get_segment(RedisCache.KEY_DERIVED)
+    if data:
+        return encode_response(data)
+    if _CACHED_DASHBOARD_DATA:
+        keys = ["fresh_momentum", "exhausting_momentum", "rotation_ideas",
+                "shock_signals", "gamma_signals", "smart_money",
+                "continuation", "momentum_clusters", "shock_clusters", "hidden_gems"]
+        return encode_response({k: _CACHED_DASHBOARD_DATA.get(k, []) for k in keys})
+    return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
+
+
+# ── WebSocket for real-time pipeline status ──
+
+@app.websocket("/ws/pipeline")
+async def ws_pipeline(websocket: WebSocket):
+    """WebSocket endpoint for real-time pipeline status push."""
+    await websocket.accept()
+    queue = _engine_status.subscribe()
+    try:
+        # Send current status immediately
+        await websocket.send_json(_engine_status.to_dict())
+        while True:
+            try:
+                status = await asyncio.wait_for(queue.get(), timeout=30.0)
+                await websocket.send_json(status)
+            except asyncio.TimeoutError:
+                # Send heartbeat to keep connection alive
+                await websocket.send_json({"heartbeat": True, **_engine_status.to_dict()})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _engine_status.unsubscribe(queue)
 
 
 @app.get("/api/screen")
@@ -600,14 +736,14 @@ async def run_screen():
 async def pipeline_status():
     cache = get_cache()
     cached_status = cache.get_pipeline_status()
-    status = cached_status if cached_status else _PIPELINE_STATUS
+    status = cached_status if cached_status else _engine_status.to_dict()
     return {**status, "next_run": _next_pipeline_run, "last_run": _last_pipeline_run}
 
 
 @app.post("/api/pipeline/trigger")
 async def pipeline_trigger():
     """Manually trigger a full pipeline refresh."""
-    if _PIPELINE_STATUS.get("state") == "running":
+    if _engine_status.state == "running":
         return JSONResponse(content={"error": "Pipeline already running"}, status_code=409)
     t = threading.Thread(target=_scheduled_pipeline_run, daemon=True)
     t.start()
@@ -1072,4 +1208,4 @@ async def get_receipts(limit: int = 50):
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "MOMENTUM API v2.0 — Use /docs for API explorer"}
+    return {"status": "ok", "message": "MOMENTUM API v3.0 — Use /docs for API explorer"}

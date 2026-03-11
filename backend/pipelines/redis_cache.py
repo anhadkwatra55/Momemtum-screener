@@ -20,6 +20,7 @@ Key structure:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import warnings
@@ -47,8 +48,19 @@ class RedisCache:
     KEY_PIPELINE = "momentum:pipeline:status"
     KEY_CHART_PREFIX = "momentum:chart:"
 
+    # Segmented cache keys (independently cacheable slices)
+    KEY_SIGNALS = "momentum:seg:signals"
+    KEY_SUMMARY = "momentum:seg:summary"
+    KEY_STRATEGIES = "momentum:seg:strategies"
+    KEY_SECTORS = "momentum:seg:sectors"
+    KEY_DERIVED = "momentum:seg:derived"
+    KEY_YIELD_ETFS = "momentum:seg:yield_etfs"
+    KEY_YIELD_STOCKS = "momentum:seg:yield_stocks"
+    KEY_ETAG = "momentum:etag"
+
     # TTLs (seconds)
     TTL_DASHBOARD = 300     # 5 minutes
+    TTL_SEGMENT = 300       # 5 minutes (same as dashboard)
     TTL_CHART = 600         # 10 minutes
     TTL_PIPELINE = 60       # 1 minute
 
@@ -157,9 +169,14 @@ class RedisCache:
     # ── Dashboard-specific methods ──
 
     def set_dashboard(self, data: dict) -> bool:
-        """Store full dashboard data with TTL."""
+        """Store full dashboard data with TTL + compute ETag."""
         version = str(int(time.time()))
         self.set(self.KEY_VERSION, version)
+        # Compute ETag from version for conditional responses
+        etag = hashlib.md5(version.encode()).hexdigest()
+        self.set(self.KEY_ETAG, etag)
+        # Also store segments for granular reads
+        self._store_segments(data)
         return self.set_json(self.KEY_DASHBOARD, data, ttl=self.TTL_DASHBOARD)
 
     def get_dashboard(self) -> Optional[dict]:
@@ -169,6 +186,41 @@ class RedisCache:
     def get_dashboard_version(self) -> Optional[str]:
         """Get the pipeline run timestamp."""
         return self.get(self.KEY_VERSION)
+
+    def get_etag(self) -> Optional[str]:
+        """Get the current data ETag for conditional responses."""
+        return self.get(self.KEY_ETAG)
+
+    # ── Segmented cache methods ──
+
+    def _store_segments(self, data: dict) -> None:
+        """Break dashboard data into independently-cacheable segments."""
+        seg_map = {
+            self.KEY_SIGNALS: data.get("signals"),
+            self.KEY_SUMMARY: data.get("summary"),
+            self.KEY_STRATEGIES: data.get("strategies"),
+            self.KEY_SECTORS: {
+                "sector_regimes": data.get("sector_regimes"),
+                "sector_sentiment": data.get("sector_sentiment"),
+            },
+            self.KEY_DERIVED: {
+                k: data.get(k) for k in (
+                    "fresh_momentum", "exhausting_momentum", "rotation_ideas",
+                    "shock_signals", "gamma_signals", "smart_money",
+                    "continuation", "momentum_clusters", "shock_clusters",
+                    "hidden_gems",
+                )
+            },
+            self.KEY_YIELD_ETFS: data.get("high_yield_etfs"),
+            self.KEY_YIELD_STOCKS: data.get("dividend_stocks"),
+        }
+        for key, value in seg_map.items():
+            if value is not None:
+                self.set_json(key, value, ttl=self.TTL_SEGMENT)
+
+    def get_segment(self, segment_key: str) -> Optional[dict]:
+        """Get a single cached segment."""
+        return self.get_json(segment_key)
 
     # ── Chart data (granular per-ticker) ──
 

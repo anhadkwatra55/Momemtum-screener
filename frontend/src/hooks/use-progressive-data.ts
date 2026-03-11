@@ -1,0 +1,263 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { DashboardData, Signal, KPISummary, TickerChartData } from "@/types/momentum";
+import {
+  fetchDashboardData,
+  fetchSummary,
+  fetchSignals,
+  fetchTickerChart,
+  fetchDerived,
+} from "@/services/api";
+import { SORTABLE_SIGNAL_KEYS, ValidSignalSortKey, DEFAULT_SIGNAL_REFRESH_INTERVAL_MS } from "@/lib/constants";
+
+// ── Loading state per data tier ──
+interface TierLoadingState {
+  summary: boolean;
+  signals: boolean;
+  derived: boolean;
+  full: boolean;
+}
+
+interface AppError {
+  message: string;
+  code?: string | number;
+  details?: unknown;
+}
+
+export interface UseProgressiveDataReturn {
+  // Full dashboard data (merged from all tiers)
+  data: DashboardData | null;
+  // Per-tier loading states for progressive UI
+  tierLoading: TierLoadingState;
+  // Overall loading (true only on very first load)
+  loading: boolean;
+  error: AppError | null;
+  refresh: () => Promise<void>;
+  // Chart data fetched on demand
+  fetchChart: (ticker: string) => Promise<TickerChartData | null>;
+  chartCache: Record<string, TickerChartData>;
+  chartLoading: string | null; // ticker currently loading, or null
+  // Signal sorting
+  selectedTicker: string | null;
+  setSelectedTicker: (ticker: string | null) => void;
+  sortedSignals: Signal[];
+  sortBy: ValidSignalSortKey;
+  sortAsc: boolean;
+  setSortBy: (col: ValidSignalSortKey) => void;
+  initialLoadComplete: boolean;
+}
+
+/**
+ * Progressive data loading hook — fetches data in priority tiers:
+ *  Tier 1: Summary (~1KB) → instant KPI render
+ *  Tier 2: Signals (~1MB) → signal tables
+ *  Tier 3: Derived (on-demand) → screener pages
+ *  Tier 4: Charts (on-demand) → ticker detail
+ * 
+ * Falls back to full monolithic fetch if segmented endpoints fail.
+ */
+export function useProgressiveData(options?: { refreshInterval?: number }): UseProgressiveDataReturn {
+  const { refreshInterval = DEFAULT_SIGNAL_REFRESH_INTERVAL_MS } = options || {};
+
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [tierLoading, setTierLoading] = useState<TierLoadingState>({
+    summary: true,
+    signals: true,
+    derived: true,
+    full: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<AppError | null>(null);
+  const [selectedTickerState, setSelectedTickerState] = useState<string | null>(null);
+  const [sortBy, setSortByState] = useState<ValidSignalSortKey>("probability");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [chartCache, setChartCache] = useState<Record<string, TickerChartData>>({});
+  const [chartLoading, setChartLoading] = useState<string | null>(null);
+  const hasFetchedOnce = useRef(false);
+
+  const setSelectedTicker = useCallback((ticker: string | null) => {
+    setSelectedTickerState(ticker);
+  }, []);
+
+  // ── Progressive fetch: summary → signals → (derived on-demand) ──
+  const loadProgressively = useCallback(async () => {
+    try {
+      if (!hasFetchedOnce.current) {
+        setLoading(true);
+      }
+      setError(null);
+
+      // Tier 1: Summary (instant ~1KB)
+      setTierLoading(prev => ({ ...prev, summary: true }));
+      let summaryData: KPISummary | null = null;
+      try {
+        const res = await fetchSummary();
+        summaryData = res.summary;
+        // Partially update data with just summary
+        setData(prev => prev
+          ? { ...prev, summary: summaryData! }
+          : { summary: summaryData! } as DashboardData
+        );
+        setTierLoading(prev => ({ ...prev, summary: false }));
+      } catch {
+        // Summary endpoint failed — will fall back to full fetch
+      }
+
+      // Tier 2: Signals (~1MB)
+      setTierLoading(prev => ({ ...prev, signals: true }));
+      let signalsData: Signal[] | null = null;
+      try {
+        const res = await fetchSignals();
+        signalsData = res.signals;
+        setData(prev => prev
+          ? { ...prev, signals: signalsData! }
+          : { signals: signalsData!, summary: summaryData! } as DashboardData
+        );
+        setTierLoading(prev => ({ ...prev, signals: false }));
+      } catch {
+        // Signals endpoint failed — will fall back to full fetch
+      }
+
+      // Tier 3: Full data (keeps everything in sync: charts, strategies, etc.)
+      setTierLoading(prev => ({ ...prev, full: true }));
+      const fullData = await fetchDashboardData();
+      setData(fullData);
+      // Merge any chart data into cache
+      if (fullData.charts) {
+        setChartCache(prev => ({ ...prev, ...fullData.charts }));
+      }
+      setTierLoading({ summary: false, signals: false, derived: false, full: false });
+      hasFetchedOnce.current = true;
+    } catch (e) {
+      console.error("Failed to load dashboard data", e);
+      if (!hasFetchedOnce.current) {
+        setError({
+          message: "An unexpected error occurred while fetching data. Please try refreshing.",
+          details: e,
+        });
+        setData(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ── On-demand chart fetch (Tier 4) ──
+  const fetchChart = useCallback(async (ticker: string): Promise<TickerChartData | null> => {
+    const upper = ticker.toUpperCase();
+    // Return from cache if available
+    if (chartCache[upper]) return chartCache[upper];
+
+    setChartLoading(upper);
+    try {
+      const res = await fetchTickerChart(upper);
+      const chart = res.charts;
+      setChartCache(prev => ({ ...prev, [upper]: chart }));
+      // Also merge into main data object
+      setData(prev => prev ? {
+        ...prev,
+        charts: { ...prev.charts, [upper]: chart },
+      } : prev);
+      return chart;
+    } catch (e) {
+      console.error(`Failed to fetch chart for ${upper}`, e);
+      return null;
+    } finally {
+      setChartLoading(null);
+    }
+  }, [chartCache]);
+
+  // Initial load
+  useEffect(() => {
+    const performInitialLoad = async () => {
+      await loadProgressively();
+      setInitialLoadComplete(true);
+    };
+    performInitialLoad();
+  }, [loadProgressively]);
+
+  // Background refresh — no loading spinner, silent update
+  useEffect(() => {
+    if (refreshInterval && refreshInterval > 0) {
+      const intervalId = setInterval(() => {
+        loadProgressively();
+      }, refreshInterval);
+      return () => clearInterval(intervalId);
+    }
+    return undefined;
+  }, [refreshInterval, loadProgressively]);
+
+  // Auto-select first ticker when signals load
+  useEffect(() => {
+    if (!data?.signals) {
+      setSelectedTickerState(null);
+      return;
+    }
+    const signals = data.signals;
+    const tickersInCurrentData = new Set(signals.map(s => s.ticker));
+
+    setSelectedTickerState(prevSelectedTicker => {
+      if (!prevSelectedTicker && signals.length > 0) {
+        return signals[0].ticker;
+      }
+      if (prevSelectedTicker && !tickersInCurrentData.has(prevSelectedTicker)) {
+        return signals.length > 0 ? signals[0].ticker : null;
+      }
+      return prevSelectedTicker;
+    });
+  }, [data?.signals]);
+
+  const setSortBy = useCallback(
+    (col: ValidSignalSortKey) => {
+      if (sortBy === col) {
+        setSortAsc((prev) => !prev);
+      } else {
+        setSortByState(col);
+        setSortAsc(false);
+      }
+    },
+    [sortBy],
+  );
+
+  const sortedSignals = useMemo(() => {
+    if (!data?.signals || data.signals.length === 0) return [];
+    const sigs = [...data.signals];
+    sigs.sort((a, b) => {
+      const valA = a[sortBy];
+      const valB = b[sortBy];
+      const aIsNullish = valA === undefined || valA === null;
+      const bIsNullish = valB === undefined || valB === null;
+      if (aIsNullish && bIsNullish) return 0;
+      if (aIsNullish) return 1;
+      if (bIsNullish) return -1;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortAsc ? valA - valB : valB - valA;
+      }
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return 0;
+    });
+    return sigs;
+  }, [data?.signals, sortBy, sortAsc]);
+
+  return {
+    data,
+    tierLoading,
+    loading,
+    error,
+    refresh: loadProgressively,
+    fetchChart,
+    chartCache,
+    chartLoading,
+    selectedTicker: selectedTickerState,
+    setSelectedTicker,
+    sortedSignals,
+    sortBy,
+    sortAsc,
+    setSortBy,
+    initialLoadComplete,
+  };
+}
