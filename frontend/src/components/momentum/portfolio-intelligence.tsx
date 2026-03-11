@@ -328,47 +328,107 @@ SectorExposureBar.displayName = "SectorExposureBar";
 
 // ── Missing Sectors Cards ──
 
-const MissingSectorCard = memo(({ sector, i }: { sector: MissingSector; i: number }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 8 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: i * 0.06, ...SPRING_TRANSITION_PROPS }}
-  >
-    <Card className="p-4 hover:border-cyan-500/20 transition-colors" whileHover={CARD_HOVER_MOTION_PROPS}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <SFIcon name="exclamationmark.triangle.fill" size="text-sm" className={cn(
-            sector.priority === "high" ? "text-amber-400" : sector.priority === "medium" ? "text-orange-400" : "text-muted-foreground/40"
-          )} />
-          <span className="font-semibold text-sm">{sector.sector}</span>
-        </div>
-        <span className={cn(
-          "text-xs px-2 py-0.5 rounded-lg font-semibold uppercase tracking-[0.1em]",
-          sector.priority === "high" ? "bg-amber-500/10 text-amber-400" :
-          sector.priority === "medium" ? "bg-orange-500/10 text-orange-400" :
-          "bg-white/[0.04] text-muted-foreground/60"
-        )}>
-          {sector.priority}
-        </span>
+const QuickAddForm = memo(({ ticker, onAdd, onCancel }: { ticker: string; onAdd: (t: string, s: number, c: number) => void; onCancel: () => void }) => {
+  const [shares, setShares] = useState("");
+  const [avgCost, setAvgCost] = useState("");
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      className="mt-2 pt-2 border-t border-white/5"
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground/60 font-mono-data">{ticker}</span>
+        <input
+          type="number"
+          placeholder="Shares"
+          value={shares}
+          onChange={e => setShares(e.target.value)}
+          className="w-20 text-xs px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-foreground outline-none focus:border-cyan-500/40"
+        />
+        <input
+          type="number"
+          placeholder="Avg Cost"
+          value={avgCost}
+          onChange={e => setAvgCost(e.target.value)}
+          className="w-24 text-xs px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-foreground outline-none focus:border-cyan-500/40"
+        />
+        <AppleButton
+          size="sm"
+          variant="primary"
+          onClick={() => {
+            const s = parseFloat(shares);
+            const c = parseFloat(avgCost);
+            if (s > 0 && c > 0) { onAdd(ticker, s, c); onCancel(); }
+          }}
+          disabled={!shares || !avgCost}
+        >
+          Add
+        </AppleButton>
+        <AppleButton size="sm" variant="ghost" onClick={onCancel}>✕</AppleButton>
       </div>
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          Regime: <span className={cn("font-semibold", sector.regime === "Trending" ? "text-emerald-400" : "text-muted-foreground")}>{sector.regime}</span>
-        </span>
-        {sector.top_pick && (
-          <span className="text-xs">
-            Top: <span className="font-mono-data font-bold text-cyan-400">{sector.top_pick}</span>
-            {sector.top_pick_composite !== null && (
-              <span className={cn("ml-1 font-mono-data", sector.top_pick_composite > 0 ? "text-emerald-400" : "text-rose-400")}>
-                {sector.top_pick_composite.toFixed(2)}
-              </span>
+    </motion.div>
+  );
+});
+QuickAddForm.displayName = "QuickAddForm";
+
+const MissingSectorCard = memo(({ sector, i, onAddHolding }: { sector: MissingSector; i: number; onAddHolding: (t: string, s: number, c: number) => void }) => {
+  const [showAdd, setShowAdd] = useState(false);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.06, ...SPRING_TRANSITION_PROPS }}
+    >
+      <Card className="p-4 hover:border-cyan-500/20 transition-colors" whileHover={CARD_HOVER_MOTION_PROPS}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <SFIcon name="exclamationmark.triangle.fill" size="text-sm" className={cn(
+              sector.priority === "high" ? "text-amber-400" : sector.priority === "medium" ? "text-orange-400" : "text-muted-foreground/40"
+            )} />
+            <span className="font-semibold text-sm">{sector.sector}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {sector.top_pick && !showAdd && (
+              <AppleButton size="sm" variant="ghost" onClick={() => setShowAdd(true)} className="!min-h-0 !py-0.5 !px-2 text-[10px]">
+                + Add {sector.top_pick}
+              </AppleButton>
             )}
+            <span className={cn(
+              "text-xs px-2 py-0.5 rounded-lg font-semibold uppercase tracking-[0.1em]",
+              sector.priority === "high" ? "bg-amber-500/10 text-amber-400" :
+              sector.priority === "medium" ? "bg-orange-500/10 text-orange-400" :
+              "bg-white/[0.04] text-muted-foreground/60"
+            )}>
+              {sector.priority}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            Regime: <span className={cn("font-semibold", sector.regime === "Trending" ? "text-emerald-400" : "text-muted-foreground")}>{sector.regime}</span>
           </span>
-        )}
-      </div>
-    </Card>
-  </motion.div>
-));
+          {sector.top_pick && (
+            <span className="text-xs">
+              Top: <span className="font-mono-data font-bold text-cyan-400">{sector.top_pick}</span>
+              {sector.top_pick_composite !== null && (
+                <span className={cn("ml-1 font-mono-data", sector.top_pick_composite > 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {sector.top_pick_composite.toFixed(2)}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+        <AnimatePresence>
+          {showAdd && sector.top_pick && (
+            <QuickAddForm ticker={sector.top_pick} onAdd={onAddHolding} onCancel={() => setShowAdd(false)} />
+          )}
+        </AnimatePresence>
+      </Card>
+    </motion.div>
+  );
+});
 MissingSectorCard.displayName = "MissingSectorCard";
 
 // ── Alpha Alert Card ──
@@ -409,39 +469,53 @@ AlertCard.displayName = "AlertCard";
 
 // ── Rotation Suggestion Card ──
 
-const RotationCard = memo(({ suggestion, i }: { suggestion: RotationSuggestion; i: number }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 8 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: i * 0.08, ...SPRING_TRANSITION_PROPS }}
-  >
-    <Card className="p-4">
-      <div className="flex items-center gap-3 mb-2">
-        {/* Sell side */}
-        <div className="flex items-center gap-1.5 flex-1">
-          <span className="text-rose-400">
-            <SFIcon name="arrow.down.circle.fill" size="text-base" />
-          </span>
-          <span className="font-mono-data font-bold text-rose-400">{suggestion.sell_ticker}</span>
-          <span className="text-xs text-muted-foreground/60">({suggestion.sell_sentiment})</span>
+const RotationCard = memo(({ suggestion, i, onAddHolding }: { suggestion: RotationSuggestion; i: number; onAddHolding: (t: string, s: number, c: number) => void }) => {
+  const [showAdd, setShowAdd] = useState(false);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.08, ...SPRING_TRANSITION_PROPS }}
+    >
+      <Card className="p-4">
+        <div className="flex items-center gap-3 mb-2">
+          {/* Sell side */}
+          <div className="flex items-center gap-1.5 flex-1">
+            <span className="text-rose-400">
+              <SFIcon name="arrow.down.circle.fill" size="text-base" />
+            </span>
+            <span className="font-mono-data font-bold text-rose-400">{suggestion.sell_ticker}</span>
+            <span className="text-xs text-muted-foreground/60">({suggestion.sell_sentiment})</span>
+          </div>
+          {/* Arrow */}
+          <div className="text-muted-foreground/40">
+            <SFIcon name="arrow.right" size="text-base" />
+          </div>
+          {/* Buy side */}
+          <div className="flex items-center gap-1.5 flex-1">
+            <span className="text-emerald-400">
+              <SFIcon name="arrow.up.circle.fill" size="text-base" />
+            </span>
+            <span className="font-mono-data font-bold text-emerald-400">{suggestion.buy_ticker}</span>
+            <span className="text-xs text-muted-foreground/60">({suggestion.buy_sentiment})</span>
+          </div>
+          {/* Add button */}
+          {!showAdd && (
+            <AppleButton size="sm" variant="ghost" onClick={() => setShowAdd(true)} className="!min-h-0 !py-0.5 !px-2 text-[10px] flex-shrink-0">
+              + Add {suggestion.buy_ticker}
+            </AppleButton>
+          )}
         </div>
-        {/* Arrow */}
-        <div className="text-muted-foreground/40">
-          <SFIcon name="arrow.right" size="text-base" />
-        </div>
-        {/* Buy side */}
-        <div className="flex items-center gap-1.5 flex-1">
-          <span className="text-emerald-400">
-            <SFIcon name="arrow.up.circle.fill" size="text-base" />
-          </span>
-          <span className="font-mono-data font-bold text-emerald-400">{suggestion.buy_ticker}</span>
-          <span className="text-xs text-muted-foreground/60">({suggestion.buy_sentiment})</span>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground/70">{suggestion.rationale}</p>
-    </Card>
-  </motion.div>
-));
+        <p className="text-xs text-muted-foreground/70">{suggestion.rationale}</p>
+        <AnimatePresence>
+          {showAdd && (
+            <QuickAddForm ticker={suggestion.buy_ticker} onAdd={onAddHolding} onCancel={() => setShowAdd(false)} />
+          )}
+        </AnimatePresence>
+      </Card>
+    </motion.div>
+  );
+});
 RotationCard.displayName = "RotationCard";
 
 // ── Empty State ──
@@ -603,7 +677,7 @@ export const PortfolioIntelligence = memo(({ signalTickers = [] }: PortfolioInte
                     {analysis.missing_sectors.length > 0 ? (
                       <div className="space-y-3">
                         {analysis.missing_sectors.map((s, i) => (
-                          <MissingSectorCard key={s.sector} sector={s} i={i} />
+                          <MissingSectorCard key={s.sector} sector={s} i={i} onAddHolding={addHolding} />
                         ))}
                       </div>
                     ) : (
@@ -647,7 +721,7 @@ export const PortfolioIntelligence = memo(({ signalTickers = [] }: PortfolioInte
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {analysis.rotation_suggestions.map((s, i) => (
-                      <RotationCard key={`${s.sell_ticker}-${s.buy_ticker}`} suggestion={s} i={i} />
+                      <RotationCard key={`${s.sell_ticker}-${s.buy_ticker}`} suggestion={s} i={i} onAddHolding={addHolding} />
                     ))}
                   </div>
                 </Card>

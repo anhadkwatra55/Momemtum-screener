@@ -356,7 +356,7 @@ export function TickerSearch({ onSelectTicker, onDataRefresh }: TickerSearchProp
                 setFocusedIndex(-1);
                 setIsInputFocused(false);
               }
-            }, 100);
+            }, 250);
           }}
           onKeyDown={handleKeyDown}
           role="combobox"
@@ -399,17 +399,18 @@ export function TickerSearch({ onSelectTicker, onDataRefresh }: TickerSearchProp
             exit="exit"
             variants={dropdownVariants}
             className={cn(
-              "absolute top-[calc(100%+1rem)] left-0 right-0",
+              "absolute top-[calc(100%+0.5rem)] left-0 right-0",
               "bg-[var(--card)] glass-heavy",
-              "rounded-2xl",
+              "rounded-xl",
               "max-h-72 overflow-y-auto",
-              `z-[${Z_INDEX_DROPDOWN_OVERLAY}]`, // Using semantic z-index constant
+              `z-[${Z_INDEX_DROPDOWN_OVERLAY}]`,
               "shadow-elevated",
               "p-2"
             )}
             role="listbox"
             id="ticker-search-list"
             ref={resultsRef}
+            onMouseDown={(e) => e.preventDefault()}
           >
             {renderResults}
           </motion.div>

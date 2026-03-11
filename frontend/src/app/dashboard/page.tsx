@@ -45,6 +45,7 @@ const LazyStrategyBuilder = dynamic(() => import('@/components/momentum/strategy
 const LazyYieldTable = dynamic(() => import('@/components/momentum/yield-table').then(m => ({ default: m.YieldTable })), { ssr: false });
 const LazySectorHeatmap = dynamic(() => import('@/components/momentum/sector-heatmap').then(m => ({ default: m.SectorHeatmap })), { ssr: false });
 const LazyPortfolioIntelligence = dynamic(() => import('@/components/momentum/portfolio-intelligence').then(m => ({ default: m.PortfolioIntelligence })), { ssr: false });
+const LazyCandlestickChart = dynamic(() => import('@/components/charts/candlestick-chart').then(m => ({ default: m.CandlestickChart })), { ssr: false });
 
 const SCREENER_MAP: Record<string, { key: string; title: string; icon: string }> = {
   fresh: { key: "fresh_momentum", title: "Fresh Momentum", icon: "leaf.fill" },
@@ -551,11 +552,17 @@ const DashboardPage = memo(() => {
                   >
                     {selectedChart && (
                       <div className="space-y-6">
-                        {/* Price + HMA */}
-                        <Card className="p-5">
-                          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Price + Hull MA</h3>
-                          <LazyPriceChart ticker={selectedTicker} data={selectedChart} className="h-[280px]" />
-                        </Card>
+                        {/* Price + HMA + Candlestick */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <Card className="p-3">
+                            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-2">Price + Hull MA</h3>
+                            <LazyPriceChart ticker={selectedTicker} data={selectedChart} className="h-[260px]" />
+                          </Card>
+                          <Card className="p-3">
+                            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-2">6M Candlestick</h3>
+                            <LazyCandlestickChart ticker={selectedTicker} data={selectedChart} className="h-[260px]" />
+                          </Card>
+                        </div>
 
                         {/* ADX + Stochastics row */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

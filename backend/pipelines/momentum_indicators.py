@@ -606,6 +606,9 @@ def extract_chart_data(df: pd.DataFrame, n_points: int = 120) -> dict:
 
     return {
         "dates": dates,
+        "open": _c(sub["Open"]),
+        "high": _c(sub["High"]),
+        "low": _c(sub["Low"]),
         "close": _c(sub["Close"]),
         "volume": [int(v) if not np.isnan(v) else 0 for v in sub["Volume"]],
         "adx": _c(adx_df["ADX"]),
