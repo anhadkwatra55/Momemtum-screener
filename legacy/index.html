@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOMENTUM — Command Center</title>
+  <meta name="description" content="MOMENTUM Trading Screener — Command Center. Real-time momentum signals, sector analysis, and backtesting.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg-base:#050a12;--bg-primary:#0b1120;--bg-secondary:#111827;
+      --bg-card:rgba(15,23,42,.6);--bg-card-hover:rgba(15,23,42,.88);
+      --border:rgba(148,163,184,.08);--border-light:rgba(148,163,184,.15);
+      --text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;
+      --cyan:#06b6d4;--emerald:#10b981;--amber:#f59e0b;--rose:#f43f5e;
+      --violet:#8b5cf6;--blue:#3b82f6;--lime:#84cc16;--orange:#f97316;
+      --radius:16px;--radius-sm:10px;--font:'Inter',-apple-system,system-ui,sans-serif;
+      --mono:'JetBrains Mono',monospace;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:var(--font);background:var(--bg-base);color:var(--text-primary);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+    /* Animated background */
+    body::before{content:'';position:fixed;inset:0;
+      background:
+        radial-gradient(ellipse 90% 60% at 20% -10%,rgba(6,182,212,.09),transparent),
+        radial-gradient(ellipse 70% 50% at 80% 110%,rgba(139,92,246,.08),transparent),
+        radial-gradient(ellipse 50% 40% at 50% 50%,rgba(245,158,11,.03),transparent);
+      pointer-events:none;z-index:0;animation:bgPulse 12s ease-in-out infinite}
+    @keyframes bgPulse{0%,100%{opacity:1}50%{opacity:.7}}
+
+    /* Grid overlay */
+    body::after{content:'';position:fixed;inset:0;
+      background-image:linear-gradient(rgba(6,182,212,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(6,182,212,.025) 1px,transparent 1px);
+      background-size:60px 60px;pointer-events:none;z-index:0}
+
+    .container{max-width:1400px;margin:0 auto;padding:0 32px;position:relative;z-index:1}
+
+    /* ── TOP NAV ── */
+    .topnav{position:fixed;top:0;left:0;right:0;z-index:100;
+      background:rgba(5,10,18,.85);backdrop-filter:blur(20px) saturate(1.5);
+      border-bottom:1px solid var(--border);padding:0 32px;
+      display:flex;align-items:center;justify-content:space-between;height:56px}
+    .nav-logo{display:flex;align-items:center;gap:10px}
+    .nav-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--cyan),var(--blue));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;box-shadow:0 0 20px rgba(6,182,212,.3)}
+    .nav-logo h1{font-size:1rem;font-weight:800;letter-spacing:.1em;background:linear-gradient(135deg,var(--cyan),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .nav-logo p{font-size:.58rem;color:var(--text-muted);margin-top:-2px;-webkit-text-fill-color:var(--text-muted)}
+    .nav-right{display:flex;align-items:center;gap:12px}
+    .status-badge{display:flex;align-items:center;gap:6px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:20px;padding:4px 12px;font-size:.7rem;font-weight:600;color:var(--emerald)}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:var(--emerald);animation:pulse 2s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .nav-link{color:var(--text-secondary);font-size:.78rem;font-weight:500;text-decoration:none;padding:4px 10px;border-radius:6px;transition:all .2s}
+    .nav-link:hover{color:var(--text-primary);background:rgba(255,255,255,.05)}
+
+    /* ── HERO ── */
+    .hero{padding:100px 0 50px;text-align:center}
+    .hero-eyebrow{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--cyan);margin-bottom:16px;opacity:.8}
+    .hero-headline{font-size:clamp(2.5rem,6vw,5rem);font-weight:900;letter-spacing:-.04em;line-height:1.05;margin-bottom:20px}
+    .hero-headline .grad{background:linear-gradient(135deg,var(--cyan) 0%,var(--blue) 40%,var(--violet) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .hero-sub{font-size:1rem;color:var(--text-secondary);max-width:540px;margin:0 auto 36px;line-height:1.7}
+    .hero-cta{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+    .btn-primary{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:linear-gradient(135deg,var(--cyan),var(--blue));color:#fff;font-family:var(--font);font-size:.88rem;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;text-decoration:none;transition:all .25s;box-shadow:0 4px 24px rgba(6,182,212,.25)}
+    .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(6,182,212,.4)}
+    .btn-ghost{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:rgba(255,255,255,.04);color:var(--text-secondary);font-family:var(--font);font-size:.88rem;font-weight:600;border:1px solid var(--border-light);border-radius:var(--radius-sm);cursor:pointer;text-decoration:none;transition:all .25s}
+    .btn-ghost:hover{background:rgba(255,255,255,.08);color:var(--text-primary);border-color:rgba(148,163,184,.3)}
+
+    /* ── KPI STRIP ── */
+    .kpi-strip{display:flex;align-items:stretch;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:40px 0}
+    .kpi-item{flex:1;background:var(--bg-card);padding:20px 24px;text-align:center;transition:background .2s}
+    .kpi-item:hover{background:var(--bg-card-hover)}
+    .kpi-value{font-size:2rem;font-weight:800;letter-spacing:-.03em;font-family:var(--mono);line-height:1}
+    .kpi-label{font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-top:6px;font-weight:600}
+
+    /* ── MAIN CHARACTER HERO ── */
+    .main-char{background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid rgba(6,182,212,.2);border-radius:var(--radius);padding:32px;margin-bottom:24px;position:relative;overflow:hidden;transition:all .3s}
+    .main-char::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 0% 50%,rgba(6,182,212,.06),transparent);pointer-events:none}
+    .main-char:hover{border-color:rgba(6,182,212,.35);box-shadow:0 0 48px rgba(6,182,212,.08)}
+    .char-tag{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--amber);display:flex;align-items:center;gap:6px;margin-bottom:16px}
+    .char-content{display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+    .char-ticker-block{background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:16px 24px;text-align:center;min-width:120px;flex-shrink:0}
+    .char-ticker{font-size:2.2rem;font-weight:900;font-family:var(--mono);color:var(--cyan);line-height:1;text-shadow:0 0 24px rgba(6,182,212,.4)}
+    .char-price{font-size:.82rem;color:var(--text-muted);font-family:var(--mono);margin-top:4px}
+    .char-info{flex:1;min-width:200px}
+    .char-name{font-size:1rem;font-weight:700;margin-bottom:8px}
+    .char-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    .char-badge{font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:20px}
+    .badge-bull{background:rgba(16,185,129,.15);color:var(--emerald);border:1px solid rgba(16,185,129,.3)}
+    .badge-aura{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+    .badge-fresh{background:rgba(6,182,212,.12);color:var(--cyan);border:1px solid rgba(6,182,212,.25)}
+    .char-stat-row{display:flex;gap:20px;flex-wrap:wrap}
+    .char-stat{text-align:center}
+    .char-stat-val{font-size:1.1rem;font-weight:800;font-family:var(--mono)}
+    .char-stat-lbl{font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+    .char-cta{margin-left:auto;display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0}
+
+    /* ── SECTION TITLES ── */
+    .section-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .section-title .sep{flex:1;height:1px;background:var(--border)}
+
+    /* ── MARKET HEAT ── */
+    .market-heat{margin-bottom:32px}
+    .heat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+    .heat-cell{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+    .heat-cell:hover{transform:translateY(-2px);border-color:var(--border-light);background:var(--bg-card-hover)}
+    .heat-cell.trending{border-color:rgba(6,182,212,.2)}
+    .heat-cell.aura-sector{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.03)}
+    .heat-cell.aura-sector::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at top left,rgba(245,158,11,.06),transparent);pointer-events:none}
+    .heat-name{font-weight:700;font-size:.78rem;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+    .heat-aura{font-size:.55rem;background:rgba(245,158,11,.15);color:var(--amber);padding:1px 5px;border-radius:8px;font-weight:700;letter-spacing:.04em}
+    .heat-bar{display:flex;height:4px;border-radius:2px;overflow:hidden;margin:6px 0}
+    .heat-bar .bull{background:var(--emerald)}.heat-bar .neut{background:rgba(148,163,184,.3)}.heat-bar .bear{background:var(--rose)}
+    .heat-stats{font-size:.62rem;color:var(--text-muted);font-family:var(--mono)}
+    .heat-regime{display:inline-block;font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:8px;margin-bottom:4px}
+    .regime-trending{background:rgba(6,182,212,.12);color:var(--cyan)}
+    .regime-meanrev{background:rgba(139,92,246,.12);color:var(--violet)}
+    .regime-choppy{background:rgba(148,163,184,.1);color:var(--text-muted)}
+    .heat-cta{margin-top:6px;font-size:.62rem;color:var(--cyan);font-weight:600;display:flex;align-items:center;gap:3px;opacity:0;transition:opacity .2s}
+    .heat-cell:hover .heat-cta{opacity:1}
+
+    /* ── DASHBOARD CARDS ── */
+    .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:32px}
+    .dash-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:28px;cursor:pointer;text-decoration:none;color:inherit;transition:all .3s;position:relative;overflow:hidden;display:block}
+    .dash-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;pointer-events:none}
+    .dash-card:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(0,0,0,.3)}
+    .dash-card.cyan::before{background:radial-gradient(ellipse at top right,rgba(6,182,212,.1),transparent)}
+    .dash-card.violet::before{background:radial-gradient(ellipse at top right,rgba(139,92,246,.1),transparent)}
+    .dash-card.emerald::before{background:radial-gradient(ellipse at top right,rgba(16,185,129,.1),transparent)}
+    .dash-card.amber::before{background:radial-gradient(ellipse at top right,rgba(245,158,11,.1),transparent)}
+    .dash-card:hover::before{opacity:1}
+    .dash-card.cyan:hover{border-color:rgba(6,182,212,.3)}
+    .dash-card.violet:hover{border-color:rgba(139,92,246,.3)}
+    .dash-card.emerald:hover{border-color:rgba(16,185,129,.3)}
+    .dash-card.amber:hover{border-color:rgba(245,158,11,.3)}
+    .dash-icon{font-size:2rem;margin-bottom:14px;display:block}
+    .dash-title{font-size:1.05rem;font-weight:700;margin-bottom:6px}
+    .dash-desc{font-size:.75rem;color:var(--text-muted);line-height:1.7;margin-bottom:16px}
+    .dash-stats{display:flex;gap:16px}
+    .dash-stat-val{font-size:1rem;font-weight:700;font-family:var(--mono)}
+    .dash-stat-lbl{font-size:.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+    .dash-arrow{position:absolute;top:28px;right:28px;font-size:1.1rem;color:var(--text-muted);transition:all .3s}
+    .dash-card:hover .dash-arrow{transform:translate(3px,-3px)}
+    .dash-card.cyan:hover .dash-arrow{color:var(--cyan)}
+    .dash-card.violet:hover .dash-arrow{color:var(--violet)}
+    .dash-card.emerald:hover .dash-arrow{color:var(--emerald)}
+    .dash-card.amber:hover .dash-arrow{color:var(--amber)}
+    .dash-tag{display:inline-block;font-size:.58rem;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+
+    /* ── TICKER TABLE (mini) ── */
+    .ticker-mini{margin-bottom:32px}
+    .ticker-mini table{width:100%;border-collapse:collapse;font-size:.76rem}
+    .ticker-mini thead th{text-align:left;padding:8px 10px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border-light)}
+    .ticker-mini tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+    .ticker-mini tbody tr:hover{background:rgba(6,182,212,.04)}
+    .ticker-mini tbody td{padding:8px 10px;font-family:var(--mono);font-size:.74rem}
+
+    /* ── QUOTE ── */
+    .quote-bar{text-align:center;padding:40px 20px;border-top:1px solid var(--border);margin-top:20px}
+    .quote-text{font-size:1rem;font-style:italic;color:var(--text-secondary);max-width:780px;margin:0 auto;line-height:1.7}
+    .quote-auth{margin-top:10px;font-size:.78rem;color:var(--cyan);font-weight:600}
+
+    /* ── FOOTER ── */
+    footer{padding:24px 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+    footer p{font-size:.7rem;color:var(--text-muted)}
+    footer a{color:var(--cyan);text-decoration:none}
+
+    /* ── LOADING ── */
+    #loader{position:fixed;inset:0;background:var(--bg-base);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+    #loader.done{opacity:0;pointer-events:none}
+    .spin{width:40px;height:40px;border:3px solid rgba(148,163,184,.15);border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #loader p{margin-top:14px;color:var(--text-muted);font-size:.8rem}
+
+    /* ── PAGE WRAPPER ── */
+    #app{opacity:0;transition:opacity .5s;padding-top:56px;min-height:100vh}
+    #app.ready{opacity:1}
+
+    /* ── ANIMATIONS ── */
+    .fade-up{opacity:0;transform:translateY(20px);animation:fadeUp .5s ease forwards}
+    @keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+    .delay-1{animation-delay:.1s}.delay-2{animation-delay:.2s}.delay-3{animation-delay:.3s}
+
+    .badge{display:inline-block;padding:2px 9px;border-radius:6px;font-size:.65rem;font-weight:600;letter-spacing:.02em}
+    .b-strong-bull{background:rgba(16,185,129,.18);color:var(--emerald);border:1px solid rgba(16,185,129,.35)}
+    .b-bull{background:rgba(132,204,22,.15);color:#84cc16;border:1px solid rgba(132,204,22,.3)}
+    .b-neutral{background:rgba(148,163,184,.1);color:var(--text-secondary);border:1px solid rgba(148,163,184,.2)}
+    .b-bear{background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)}
+    .prob-bar{width:100%;height:4px;background:rgba(148,163,184,.1);border-radius:2px;overflow:hidden;margin-top:4px}
+    .prob-fill{height:100%;border-radius:2px}
+
+    @media(max-width:768px){
+      .container{padding:0 16px}
+      .kpi-strip{flex-direction:column;gap:0}
+      .char-content{flex-direction:column}
+      .char-cta{margin-left:0;flex-direction:row;width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div id="loader"><div class="spin"></div><p id="loaderMsg">Initializing MOMENTUM…</p></div>
+
+  <nav class="topnav">
+    <div class="nav-logo">
+      <div class="nav-logo-icon">M</div>
+      <div>
+        <h1>MOMENTUM</h1>
+        <p>Command Center</p>
+      </div>
+    </div>
+    <div class="nav-right">
+      <a href="momentum_dashboard.html" class="nav-link">⚡ Intelligence</a>
+      <a href="receipts.html" class="nav-link">🧾 Receipts</a>
+      <div class="status-badge"><div class="status-dot"></div><span id="pipelineStatus">Live</span></div>
+    </div>
+  </nav>
+
+  <div id="app">
+    <div class="container">
+
+      <!-- HERO -->
+      <div class="hero fade-up">
+        <div class="hero-eyebrow">🧠 4-System Momentum Analysis · SQLite-Backed · Strategy Backtesting</div>
+        <h2 class="hero-headline">Your <span class="grad">Alpha Edge</span><br>Starts Here</h2>
+        <p class="hero-sub">Real-time momentum screening across 400+ tickers. Triple-Threat signals, Sector Rotation Intelligence, and full backtesting — all in one command center.</p>
+        <div class="hero-cta">
+          <a href="momentum_dashboard.html" class="btn-primary">⚡ Open Intelligence Dashboard →</a>
+          <a href="receipts.html" class="btn-ghost">🧾 View Receipts Ledger</a>
+        </div>
+      </div>
+
+      <!-- KPI STRIP -->
+      <div class="kpi-strip fade-up delay-1">
+        <div class="kpi-item"><div class="kpi-value" id="kvUniverse" style="color:var(--cyan)">—</div><div class="kpi-label">Universe Screened</div></div>
+        <div class="kpi-item"><div class="kpi-value" id="kvBullish" style="color:var(--emerald)">—</div><div class="kpi-label">Bullish Signals</div></div>
+        <div class="kpi-item"><div class="kpi-value" id="kvBearish" style="color:var(--rose)">—</div><div class="kpi-label">Bearish Signals</div></div>
+        <div class="kpi-item"><div class="kpi-value" id="kvProb" style="color:var(--amber)">—</div><div class="kpi-label">Avg Confidence</div></div>
+        <div class="kpi-item"><div class="kpi-value" id="kvTopBull" style="color:var(--emerald);font-size:1.4rem">—</div><div class="kpi-label">Top Bull Signal</div></div>
+        <div class="kpi-item"><div class="kpi-value" id="kvTopBear" style="color:var(--rose);font-size:1.4rem">—</div><div class="kpi-label">Top Bear Signal</div></div>
+      </div>
+
+      <!-- MAIN CHARACTER — TODAY'S TOP TRIPLE THREAT -->
+      <div class="section-title fade-up delay-2"><span>🏆 Main Character — Top Triple Threat</span><div class="sep"></div></div>
+      <div class="main-char fade-up delay-2" id="mainChar">
+        <div class="char-tag">⚡ Today's #1 Signal — Highest Composite Score</div>
+        <div class="char-content">
+          <div class="char-ticker-block">
+            <div class="char-ticker" id="charTicker">—</div>
+            <div class="char-price" id="charPrice">Loading…</div>
+          </div>
+          <div class="char-info">
+            <div class="char-name" id="charName">—</div>
+            <div class="char-badges" id="charBadges"></div>
+            <div class="char-stat-row" id="charStats"></div>
+          </div>
+          <div class="char-cta">
+            <a id="charLink" href="momentum_dashboard.html" class="btn-primary" style="font-size:.8rem;padding:10px 18px">
+              ⚡ See Full Signal →
+            </a>
+            <a href="momentum_dashboard.html#scrFresh" class="btn-ghost" style="font-size:.75rem;padding:8px 16px">
+              🌱 Fresh Momentum
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- MARKET HEAT -->
+      <div class="section-title fade-up delay-2"><span>🌡️ Market Heat — Sector Regime Status</span><div class="sep"></div><a href="momentum_dashboard.html" style="font-size:.68rem;color:var(--cyan);font-weight:600;text-decoration:none;white-space:nowrap">View Sector Intelligence →</a></div>
+      <div id="whaleAlert" style="display:none;margin-bottom:16px;padding:14px 20px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--radius-sm);font-size:.8rem">
+        <span style="color:var(--amber);font-weight:700">🐋 Whale Watch:</span>
+        <span id="whaleAlertText" style="color:var(--text-secondary);margin-left:8px"></span>
+      </div>
+      <div class="heat-grid market-heat fade-up delay-3" id="heatGrid"></div>
+
+      <!-- DASHBOARD NAVIGATION CARDS -->
+      <div class="section-title fade-up"><span>📡 Platform Modules</span><div class="sep"></div></div>
+      <div class="dash-grid fade-up">
+        <a href="momentum_dashboard.html" class="dash-card cyan">
+          <span class="dash-icon">⚡</span>
+          <div class="dash-tag" style="background:rgba(6,182,212,.12);color:var(--cyan)">Core</div>
+          <div class="dash-title">Momentum Intelligence</div>
+          <div class="dash-desc">Full 4-system analysis with leaderboard, bullish signals, and sector heatmap. The main screener platform.</div>
+          <div class="dash-stats">
+            <div><div class="dash-stat-val" id="dnBull" style="color:var(--emerald)">—</div><div class="dash-stat-lbl">Bullish</div></div>
+            <div><div class="dash-stat-val" id="dnBear" style="color:var(--rose)">—</div><div class="dash-stat-lbl">Bearish</div></div>
+            <div><div class="dash-stat-val" id="dnFresh" style="color:var(--cyan)">—</div><div class="dash-stat-lbl">Fresh Signals</div></div>
+          </div>
+          <span class="dash-arrow">↗</span>
+        </a>
+        <a href="momentum_dashboard.html" onclick="sessionStorage.setItem('goto','scrFresh')" class="dash-card emerald">
+          <span class="dash-icon">🌱</span>
+          <div class="dash-tag" style="background:rgba(16,185,129,.12);color:var(--emerald)">Screener</div>
+          <div class="dash-title">Fresh Momentum</div>
+          <div class="dash-desc">Early-stage momentum plays. Tickers where the move is just starting — maximum upside potential.</div>
+          <div class="dash-stats">
+            <div><div class="dash-stat-val" id="dnFreshCount" style="color:var(--emerald)">—</div><div class="dash-stat-lbl">Signals</div></div>
+            <div><div class="dash-stat-val" id="dnTopFresh" style="color:var(--text-primary);font-size:.85rem">—</div><div class="dash-stat-lbl">Top Pick</div></div>
+          </div>
+          <span class="dash-arrow">↗</span>
+        </a>
+        <a href="momentum_dashboard.html" onclick="sessionStorage.setItem('goto','pageSectorIntel')" class="dash-card violet">
+          <span class="dash-icon">📡</span>
+          <div class="dash-tag" style="background:rgba(139,92,246,.12);color:var(--violet)">Intelligence</div>
+          <div class="dash-title">Sector Intelligence</div>
+          <div class="dash-desc">Macro sector rotation analysis. Identify which sectors are in trending regimes before the crowd.</div>
+          <div class="dash-stats">
+            <div><div class="dash-stat-val" id="dnTrendSectors" style="color:var(--violet)">—</div><div class="dash-stat-lbl">Trending</div></div>
+            <div><div class="dash-stat-val" id="dnAuraSector" style="color:var(--amber);font-size:.85rem">—</div><div class="dash-stat-lbl">∞ Aura Sector</div></div>
+          </div>
+          <span class="dash-arrow">↗</span>
+        </a>
+        <a href="receipts.html" class="dash-card amber">
+          <span class="dash-icon">🧾</span>
+          <div class="dash-tag" style="background:rgba(245,158,11,.12);color:var(--amber)">History</div>
+          <div class="dash-title">Receipts Ledger</div>
+          <div class="dash-desc">30-day model performance history. See every call we made — wins and losses, with full P&L receipts.</div>
+          <div class="dash-stats">
+            <div><div class="dash-stat-val" id="dnWinRate" style="color:var(--emerald)">—</div><div class="dash-stat-lbl">Win Rate</div></div>
+            <div><div class="dash-stat-val" id="dnAvgReturn" style="color:var(--cyan)">—</div><div class="dash-stat-lbl">Avg Return</div></div>
+          </div>
+          <span class="dash-arrow">↗</span>
+        </a>
+      </div>
+
+      <!-- TOP SIGNALS TABLE (mini) -->
+      <div class="section-title fade-up"><span>⚡ Live Signal Feed — Top Aura Picks</span><div class="sep"></div><a href="momentum_dashboard.html" style="font-size:.68rem;color:var(--cyan);font-weight:600;text-decoration:none;white-space:nowrap">View All →</a></div>
+      <div class="ticker-mini fade-up" id="signalMini">
+        <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.8rem">Loading signals…</div>
+      </div>
+
+      <!-- QUOTE -->
+      <div class="quote-bar fade-up">
+        <div class="quote-text" id="quoteText"></div>
+        <div class="quote-auth" id="quoteAuthor"></div>
+      </div>
+
+      <footer>
+        <p>MOMENTUM Trading Screener · 4-System Analysis · SQLite-Backed</p>
+        <p style="font-size:.65rem">Data refreshes automatically · <a href="momentum_dashboard.html">Full Dashboard →</a></p>
+      </footer>
+
+    </div>
+  </div>
+
+  <script>
+  let D = null;
+  const C = {cyan:'#06b6d4',emerald:'#10b981',amber:'#f59e0b',rose:'#f43f5e',violet:'#8b5cf6',blue:'#3b82f6'};
+
+  // Handle cross-page navigation via sessionStorage
+  document.addEventListener('DOMContentLoaded', ()=>{
+    let goto = sessionStorage.getItem('goto');
+    if(goto){ sessionStorage.removeItem('goto'); /* already left index, no-op */ }
+  });
+
+  async function init(){
+    try{
+      let r = await fetch('momentum_data.json');
+      if(!r.ok) throw new Error(r.status);
+      D = await r.json();
+      render();
+      document.getElementById('loader').classList.add('done');
+      document.getElementById('app').classList.add('ready');
+    }catch(e){
+      document.getElementById('loaderMsg').textContent = 'Data not ready. Run the pipeline first.';
+      document.getElementById('loaderMsg').style.color = '#f59e0b';
+    }
+  }
+  init();
+
+  function anim(id, target, suffix=''){
+    let el = document.getElementById(id);
+    if(!el) return;
+    let c=0, step=Math.max(1, Math.ceil(target/30));
+    let iv = setInterval(()=>{
+      c = Math.min(c+step, target);
+      el.textContent = c + suffix;
+      if(c >= target) clearInterval(iv);
+    }, 30);
+  }
+
+  function render(){
+    if(!D) return;
+    let s = D.summary || {};
+
+    // KPIs
+    anim('kvUniverse', s.total_screened||0);
+    anim('kvBullish', s.bullish||0);
+    anim('kvBearish', s.bearish||0);
+    document.getElementById('kvProb').textContent = (s.avg_probability||0) + '%';
+    document.getElementById('kvTopBull').textContent = s.top_bull || '—';
+    document.getElementById('kvTopBear').textContent = s.top_bear || '—';
+
+    // Dashboard card stats
+    document.getElementById('dnBull').textContent = s.bullish||'—';
+    document.getElementById('dnBear').textContent = s.bearish||'—';
+    document.getElementById('dnFresh').textContent = (D.fresh_momentum||[]).length||'—';
+    document.getElementById('dnFreshCount').textContent = (D.fresh_momentum||[]).length||'—';
+    if(D.fresh_momentum && D.fresh_momentum.length) document.getElementById('dnTopFresh').textContent = D.fresh_momentum[0].ticker;
+
+    // Sector stats
+    let sr = D.sector_regimes || {};
+    let trending = Object.entries(sr).filter(([,v])=>v.regime==='Trending');
+    document.getElementById('dnTrendSectors').textContent = trending.length||'—';
+    let auraSec = trending.filter(([,v])=>v.avg_composite>0.1).sort((a,b)=>b[1].avg_composite-a[1].avg_composite)[0];
+    document.getElementById('dnAuraSector').textContent = auraSec ? auraSec[0].split(' ')[0] : '—';
+
+    // Receipts placeholder (would load from /api/receipts)
+    document.getElementById('dnWinRate').textContent = '—';
+    document.getElementById('dnAvgReturn').textContent = '—';
+    // Try to load receipts
+    fetch('/api/receipts').then(r=>r.json()).then(data=>{
+      if(data.win_rate) document.getElementById('dnWinRate').textContent = data.win_rate+'%';
+      if(data.avg_return) document.getElementById('dnAvgReturn').textContent = (data.avg_return>0?'+':'')+data.avg_return+'%';
+    }).catch(()=>{});
+
+    renderMainChar();
+    renderHeat();
+    renderSignalMini();
+    renderQuote();
+    renderWhaleAlert();
+  }
+
+  function renderMainChar(){
+    let signals = D.signals || [];
+    // Find the top bullish signal (highest composite that is bullish)
+    let top = [...signals].filter(s=>(s.sentiment||'').toLowerCase().includes('bull'))
+                          .sort((a,b)=>b.composite-a.composite)[0]
+          || signals.sort((a,b)=>b.composite-a.composite)[0];
+    if(!top) return;
+
+    document.getElementById('charTicker').textContent = top.ticker;
+    document.getElementById('charPrice').textContent = '$' + (top.price||0).toFixed(2);
+    document.getElementById('charName').textContent = top.company_name || top.sector || top.ticker;
+
+    let sent = (top.sentiment||'').toLowerCase();
+    let badges = [];
+    if(sent.includes('strong')) badges.push('<span class="char-badge badge-aura">⚡ STRONG BULL</span>');
+    else if(sent.includes('bull')) badges.push('<span class="char-badge badge-bull">🟢 BULLISH</span>');
+    if((top.probability||0) >= 70) badges.push('<span class="char-badge badge-aura">∞ AURA LEVEL</span>');
+    if(top.momentum_phase === 'Fresh') badges.push('<span class="char-badge badge-fresh">🌱 FRESH MO</span>');
+    document.getElementById('charBadges').innerHTML = badges.join('');
+
+    let dc = top.daily_change||0;
+    let ret20 = top.return_20d||0;
+    document.getElementById('charStats').innerHTML = `
+      <div class="char-stat"><div class="char-stat-val" style="color:var(--amber)">${(top.composite||0).toFixed(2)}</div><div class="char-stat-lbl">Composite</div></div>
+      <div class="char-stat"><div class="char-stat-val" style="color:var(--cyan)">${top.probability||0}%</div><div class="char-stat-lbl">Confidence</div></div>
+      <div class="char-stat"><div class="char-stat-val" style="color:${dc>0?C.emerald:dc<0?C.rose:'#64748b'}">${dc>0?'+':''}${dc}%</div><div class="char-stat-lbl">Day Change</div></div>
+      <div class="char-stat"><div class="char-stat-val" style="color:${ret20>0?C.emerald:ret20<0?C.rose:'#64748b'}">${ret20>0?'+':''}${ret20}%</div><div class="char-stat-lbl">20-Day Return</div></div>
+    `;
+
+    // Link directly to the full intelligence page
+    document.getElementById('charLink').href = 'momentum_dashboard.html';
+  }
+
+  function renderHeat(){
+    let sr = D.sector_regimes || {};
+    let ss = D.sector_sentiment || {};
+    let el = document.getElementById('heatGrid');
+    if(!el) return;
+
+    let sectors = Object.entries(sr).sort((a,b)=>{
+      // Sort: Trending first, then by composite descending
+      if(a[1].regime==='Trending' && b[1].regime!=='Trending') return -1;
+      if(b[1].regime==='Trending' && a[1].regime!=='Trending') return 1;
+      return b[1].avg_composite - a[1].avg_composite;
+    });
+
+    el.innerHTML = sectors.map(([sec, r])=>{
+      let s = ss[sec]||{bullish:0,bearish:0,neutral:0};
+      let total = s.bullish+s.bearish+s.neutral||1;
+      let bpct=s.bullish/total*100, rpct=s.bearish/total*100, npct=s.neutral/total*100;
+      let isTrending = r.regime === 'Trending';
+      let isAura = isTrending && r.avg_composite > 0.1;
+      let regimeClass = isTrending?'regime-trending':r.regime==='Mean-Reverting'?'regime-meanrev':'regime-choppy';
+      let cellClass = isAura?'heat-cell aura-sector':isTrending?'heat-cell trending':'heat-cell';
+      let score = Math.round(Math.min(100,Math.max(0,r.avg_composite*50+50)));
+      return `<div class="${cellClass}" onclick="window.location='momentum_dashboard.html'">
+        <div class="heat-name">${sec}${isAura?`<span class="heat-aura">∞ AURA</span>`:''}</div>
+        <div class="heat-regime ${regimeClass}">${r.regime}</div>
+        <div class="heat-bar"><div class="bull" style="width:${bpct}%"></div><div class="neut" style="width:${npct}%"></div><div class="bear" style="width:${rpct}%"></div></div>
+        <div class="heat-stats">Score: ${r.avg_composite} · ${r.count} tickers</div>
+        <div class="heat-cta">View Signals →</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderWhaleAlert(){
+    let sr = D.sector_regimes || {};
+    let ss = D.sector_sentiment || {};
+    // Find the top Aura sector
+    let aura = Object.entries(sr)
+      .filter(([,v])=>v.regime==='Trending' && v.avg_composite>0.1)
+      .sort((a,b)=>b[1].avg_composite-a[1].avg_composite)[0];
+    if(!aura) return;
+    let [sec, r] = aura;
+    let s = ss[sec]||{bullish:0};
+    document.getElementById('whaleAlertText').textContent =
+      `Whales are rotating into ${sec} — ${r.count} tickers trending · ${r.avg_probability}% avg confidence.`;
+    document.getElementById('whaleAlertText').innerHTML +=
+      ` <a href="momentum_dashboard.html" style="color:var(--amber);font-weight:700;text-decoration:none">→ See the Top Signals</a>`;
+    document.getElementById('whaleAlert').style.display = 'block';
+  }
+
+  function renderSignalMini(){
+    let signals = D.signals || [];
+    let top = [...signals]
+      .filter(s=>(s.sentiment||'').toLowerCase().includes('bull'))
+      .sort((a,b)=>b.composite-a.composite)
+      .slice(0,8);
+    let el = document.getElementById('signalMini');
+    if(!top.length){ el.innerHTML='<p style="color:var(--text-muted);font-size:.78rem;padding:20px;text-align:center">No bullish signals. Run the pipeline to refresh.</p>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>Ticker</th><th>Company</th><th>Sentiment</th><th>Composite</th><th>Confidence</th><th>Δ Day</th><th>20D</th><th>Price</th><th>Sector</th></tr></thead>
+      <tbody>
+      ${top.map(s=>{
+        let dc=s.daily_change||0, r20=s.return_20d||0;
+        let dCol=dc>0?C.emerald:dc<0?C.rose:'#64748b';
+        let rCol=r20>0?C.emerald:r20<0?C.rose:'#64748b';
+        let prob=s.probability||0;
+        let probCol=prob>=70?C.emerald:prob>=40?C.amber:C.rose;
+        let sent=(s.sentiment||'').toLowerCase();
+        let sentBadge=sent.includes('strong')?'b-strong-bull':'b-bull';
+        let aura=prob>=70?'⚡ ':'';
+        return `<tr onclick="window.location='momentum_dashboard.html'" style="cursor:pointer">
+          <td style="font-weight:700;color:var(--cyan)">${aura}${s.ticker}</td>
+          <td style="color:#94a3b8;font-size:.7rem">${s.company_name||''}</td>
+          <td><span class="badge ${sentBadge}">${s.sentiment}</span></td>
+          <td style="font-weight:700;color:${s.composite>0?C.emerald:C.rose}">${(s.composite||0).toFixed(2)}</td>
+          <td><div style="display:flex;align-items:center;gap:5px"><span style="color:${probCol};font-weight:600">${prob}%</span><div class="prob-bar" style="width:50px"><div class="prob-fill" style="width:${prob}%;background:${probCol}"></div></div></div></td>
+          <td style="color:${dCol};font-weight:600">${dc>0?'+':''}${dc}%</td>
+          <td style="color:${rCol}">${r20>0?'+':''}${r20}%</td>
+          <td style="color:var(--text-primary);font-weight:600">$${(s.price||0).toFixed(2)}</td>
+          <td style="color:#64748b;font-size:.68rem">${s.sector||''}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  let quoteIdx = 0;
+  function renderQuote(){
+    let quotes = D.all_quotes || [D.quote];
+    let q = quotes[quoteIdx];
+    if(!q) return;
+    document.getElementById('quoteText').textContent = `"${q.text}"`;
+    document.getElementById('quoteAuthor').textContent = `— ${q.author}`;
+    setInterval(()=>{
+      quoteIdx = (quoteIdx+1) % quotes.length;
+      let nq = quotes[quoteIdx];
+      document.getElementById('quoteText').textContent = `"${nq.text}"`;
+      document.getElementById('quoteAuthor').textContent = `— ${nq.author}`;
+    }, 15000);
+  }
+  </script>
+</body>
+</html>

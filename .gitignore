@@ -1,8 +1,21 @@
+# Python
 venv/
 __pycache__/
 *.pyc
+legacy/__pycache__/
+legacy/momentum_data.json
+
+# Next.js / Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+frontend/.env*.local
+
+# IDE
 .DS_Store
 .env
-momentum_data.json
+.vscode/
+*.swp
 
-# DO NOT block quant_screener.db, we want it committed so it can seed the cloud DB.
+# DB (keep quant_screener.db committed for seeding)

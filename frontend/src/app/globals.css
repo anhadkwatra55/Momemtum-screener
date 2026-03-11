@@ -1,0 +1,336 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: #050a12;
+  --color-foreground: #f0f2f5;
+  --color-card: rgba(15, 23, 42, 0.45);
+  --color-card-foreground: #f0f2f5;
+  --color-popover: rgba(12, 21, 38, 0.7);
+  --color-popover-foreground: #f0f2f5;
+  --color-primary: #06b6d4;
+  --color-primary-foreground: #050a12;
+  --color-secondary: #111827;
+  --color-secondary-foreground: #e2e8f0;
+  --color-muted: #1e293b;
+  --color-muted-foreground: #94a3b8;
+  --color-accent: #1e293b;
+  --color-accent-foreground: #f0f2f5;
+  --color-destructive: #f43f5e;
+  --color-border: rgba(148, 163, 184, 0.06);
+  --color-input: rgba(148, 163, 184, 0.12);
+  --color-ring: #06b6d4;
+  --color-chart-1: #06b6d4;
+  --color-chart-2: #10b981;
+  --color-chart-3: #f59e0b;
+  --color-chart-4: #f43f5e;
+  --color-chart-5: #8b5cf6;
+  --color-sidebar: #080e1a;
+  --color-sidebar-foreground: #e2e8f0;
+  --color-sidebar-primary: #06b6d4;
+  --color-sidebar-primary-foreground: #050a12;
+  --color-sidebar-accent: rgba(6, 182, 212, 0.06);
+  --color-sidebar-accent-foreground: #06b6d4;
+  --color-sidebar-border: rgba(148, 163, 184, 0.06);
+  --color-sidebar-ring: #06b6d4;
+  --radius-sm: 0.6rem;
+  --radius-md: 0.8rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.4rem;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOMENTUM — Apple-Class Design System
+   Deep dark aesthetic with premium glassmorphism & depth
+   ═══════════════════════════════════════════════════════ */
+
+/* ═══ Root Tokens — The foundational design system variables ═══ */
+:root {
+  /* Core Colors — Aligned with the global palette for a consistent look */
+  --background: #050a12; /* Near-black with a subtle blue tint, for the main canvas */
+  --foreground: #f0f2f5; /* Bright white for primary text, ensuring legibility */
+  --card: rgba(15, 23, 42, 0.45); /* Translucent dark slate, providing depth and glassmorphism */
+  --card-foreground: var(--foreground); /* Text on cards remains bright */
+  --popover: rgba(12, 21, 38, 0.7); /* Slightly darker and more opaque than card for layered elements */
+  --popover-foreground: var(--foreground); /* Text on popovers remains bright */
+
+  /* Semantic UI Colors — Mapped to core design system accents */
+  --primary: var(--color-mo-cyan); /* Primary interaction/accent color */
+  --primary-foreground: var(--background); /* High contrast foreground for primary elements */
+  --secondary: #111827; /* Muted dark background for secondary elements, e.g., tabs */
+  --secondary-foreground: #e2e8f0; /* Light text for secondary elements */
+  --muted: #1e293b; /* Subtle background for inactive or informational elements */
+  --muted-foreground: #94a3b8; /* Muted grey for supporting text */
+  --accent: #1e293b; /* General accent background, often similar to muted */
+  --accent-foreground: var(--foreground); /* Text on accent elements */
+  --destructive: var(--color-mo-rose); /* Warning/error color */
+
+  /* UI Borders & Rings — Minimal and subtle, relying on depth for hierarchy */
+  --border: rgba(148, 163, 184, 0.06); /* Nearly transparent grey border for subtle definition */
+  --input: rgba(148, 163, 184, 0.12); /* Slightly more visible input border */
+  --ring: var(--color-mo-cyan); /* Focus ring color, uses primary accent */
+
+  /* Chart Colors — A dedicated palette for data visualization */
+  --chart-1: var(--color-mo-cyan);
+  --chart-2: var(--color-mo-emerald);
+  --chart-3: var(--color-mo-amber);
+  --chart-4: var(--color-mo-rose);
+  --chart-5: var(--color-mo-violet);
+
+  /* Radius — Consistent rounded corners everywhere (1rem+) for a soft, premium feel */
+  --radius: 1rem; /* Base radius: 16px */
+  --radius-sm: calc(var(--radius) * 0.6); /* 9.6px */
+  --radius-md: calc(var(--radius) * 0.8); /* 12.8px */
+  --radius-lg: var(--radius); /* 16px */
+  --radius-xl: calc(var(--radius) * 1.4); /* 22.4px */
+  --radius-2xl: calc(var(--radius) * 1.8); /* 28.8px */
+  --radius-3xl: calc(var(--radius) * 2.2); /* 35.2px */
+  --radius-4xl: calc(var(--radius) * 2.6); /* 41.6px */
+
+  /* Sidebar Theming — A distinct, slightly lighter surface for navigation */
+  --sidebar: #080e1a; /* Darker than background, but lighter than card */
+  --sidebar-foreground: #e2e8f0; /* Light text for sidebar items */
+  --sidebar-primary: var(--color-mo-cyan); /* Active/highlighted sidebar item */
+  --sidebar-primary-foreground: var(--background); /* Text on active sidebar item */
+  --sidebar-accent: rgba(var(--color-mo-cyan-rgb), 0.06); /* Subtle background for hover/active states */
+  --sidebar-accent-foreground: var(--color-mo-cyan); /* Text color for accented sidebar items */
+  --sidebar-border: var(--border); /* Subtle border for sidebar elements */
+  --sidebar-ring: var(--color-mo-cyan); /* Focus ring for sidebar interactive elements */
+
+  /* Accent Colors (for JS usage — mirrors CSS tokens from globals.css) */
+  --color-mo-cyan: #06b6d4; --color-mo-cyan-rgb: 6, 182, 212;
+  --color-mo-emerald: #10b981; --color-mo-emerald-rgb: 16, 185, 129;
+  --color-mo-amber: #f59e0b; --color-mo-amber-rgb: 245, 158, 11;
+  --color-mo-rose: #f43f5e; --color-mo-rose-rgb: 244, 63, 94;
+  --color-mo-violet: #8b5cf6; --color-mo-violet-rgb: 139, 92, 246;
+  --color-mo-blue: #3b82f6; --color-mo-blue-rgb: 59, 130, 246;
+  --color-mo-lime: #84cc16; --color-mo-lime-rgb: 132, 204, 22;
+  --color-mo-orange: #f97316; --color-mo-orange-rgb: 249, 115, 22;
+  --color-mo-slate: #64748b; --color-mo-slate-rgb: 100, 116, 139;
+
+  /* Apple-style shadows — Providing depth and elevation without heavy borders */
+  --shadow-soft: 0 2px 8px -2px rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3); /* For smaller elements like tooltips */
+  --shadow-card: 0 4px 24px -4px rgba(0, 0, 0, 0.5), 0 2px 8px -2px rgba(0, 0, 0, 0.3); /* Standard card elevation */
+  --shadow-elevated:
+    0 8px 40px -6px rgba(0, 0, 0, 0.6),
+    0 4px 16px -4px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.03); /* Prominent elevation with subtle white border for pop */
+
+  /* Border Glows — Dynamic visual feedback for interactive elements */
+  --shadow-glow-cyan: 0 0 0 1px rgba(var(--color-mo-cyan-rgb), 0.2), 0 4px 24px -4px rgba(var(--color-mo-cyan-rgb), 0.15);
+  --shadow-glow-emerald: 0 0 0 1px rgba(var(--color-mo-emerald-rgb), 0.2), 0 4px 24px -4px rgba(var(--color-mo-emerald-rgb), 0.15);
+  --shadow-glow-rose: 0 0 0 1px rgba(var(--color-mo-rose-rgb), 0.15), 0 4px 24px -4px rgba(var(--color-mo-rose-rgb), 0.12);
+  --shadow-glow-amber: 0 0 0 1px rgba(var(--color-mo-amber-rgb), 0.15), 0 4px 24px -4px rgba(var(--color-mo-amber-rgb), 0.12);
+
+  /* Font Mono for data/numbers - JetBrains Mono (defined in app/layout.tsx via next/font) */
+  --font-mono: 'JetBrains Mono';
+}
+
+/* ═══ Base Layer — Global styles for body and HTML ═══ */
+@layer base {
+  body {
+    /* Responsive padding: tighter on mobile, spacious on desktop */
+    @apply bg-background text-foreground leading-normal p-3 md:p-6 lg:p-8;
+    -webkit-font-smoothing: antialiased; /* Smoother text rendering */
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; /* Typographic enhancements for legibility */
+  }
+  html {
+    /* Responsive font sizes: smaller on mobile, scale up with breakpoints */
+    @apply font-sans text-xs sm:text-sm md:text-base;
+    scroll-behavior: smooth; /* Smooth scrolling for anchor links */
+  }
+  /* Global letter-spacing for headings as per design philosophy */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.03em;
+  }
+  /* Utility class for JetBrains Mono, to be used for data/numbers ("Numbers are art!") */
+  .font-mono-data {
+    font-family: var(--font-mono);
+  }
+}
+
+/* ═══ Typography Helpers — Consistent styling for specific text types ═══ */
+/* Utility for uppercase labels with specific letter-spacing */
+.text-label-uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ═══ Background — Layered ambient glow (monochrome with one dominant accent) ═══ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(var(--color-mo-cyan-rgb), 0.08), transparent), /* Cyan - dominant primary accent */
+    radial-gradient(ellipse 50% 30% at 85% 100%, rgba(var(--color-mo-violet-rgb), 0.015), transparent); /* Violet - very subtle secondary hint for depth */
+  pointer-events: none; /* Allows interaction with elements beneath */
+  z-index: 0; /* Ensures it stays in the background */
+}
+
+/* ═══ Glass Surfaces — Translucency with backdrop-blur for depth and vibrancy ═══ */
+.glass {
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+
+.glass-subtle {
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+}
+
+.glass-heavy {
+  backdrop-filter: blur(40px) saturate(1.6);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+}
+
+/* ═══ Apple-style Card Surface — The primary container aesthetic ═══ */
+.apple-card {
+  background: var(--card); /* Uses the harmonized --card value for base */
+  border: 1px solid var(--border); /* Consolidate border definition, minimal by design */
+  border-radius: var(--radius-2xl); /* Adheres to 1rem+ rounded corners (28.8px) */
+  box-shadow: var(--shadow-card); /* Depth, not just flat, for elevation */
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  /* Framer Motion will handle hover animations for transform, shadow, and border */
+}
+
+/* ═══ Standardized Popover, Dialog, Tooltip Surfaces — Consistent layering ═══ */
+.popover-surface,
+.dialog-content-surface,
+.tooltip-surface {
+  background: var(--popover); /* Use translucent popover background */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md); /* Consistent rounded corners */
+  box-shadow: var(--shadow-soft); /* Subtle elevation */
+  backdrop-filter: blur(16px) saturate(1.2); /* Medium glass effect */
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+
+
+/* ═══ Bento Grid — Responsive layout adapting gracefully from mobile to desktop ═══ */
+.bento-grid {
+  display: grid;
+  gap: 0.75rem; /* Tighter gap on mobile */
+  grid-template-columns: 1fr; /* Single column on mobile (375px) */
+  grid-auto-rows: auto; /* Allow rows to size naturally on mobile */
+}
+
+@media (min-width: 641px) { /* Small devices / sm breakpoint */
+  .bento-grid {
+    gap: 1.25rem; /* Medium gap for tablets/small desktops */
+    grid-template-columns: repeat(2, 1fr); /* Two columns */
+    grid-auto-rows: minmax(160px, auto); /* Restore minmax height for multi-column */
+  }
+}
+
+@media (min-width: 1025px) { /* Large devices / lg breakpoint */
+  .bento-grid {
+    gap: 1.5rem; /* Spacious gap on desktop */
+    grid-template-columns: repeat(4, 1fr); /* Four columns */
+  }
+}
+
+/* Reset all span overrides on mobile (up to 640px) so items stack naturally */
+@media (max-width: 640px) {
+  .bento-grid > * {
+    grid-column: span 1 !important;
+  }
+}
+
+/* ═══ Scrollbar — Nearly invisible, elegant scroll indication ═══ */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+/* ═══ Animations — Shimmer for optimistic loading, Framer Motion for interactivity ═══ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ═══ iOS Safe Area — Ensuring content is never cut off on mobile devices ═══ */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ═══ Skeleton Loading — Optimistic UI states with consistent styling ═══ */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.04) 25%,
+    rgba(148, 163, 184, 0.08) 50%,
+    rgba(148, 163, 184, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite; /* Uses the dedicated shimmer keyframe */
+  border-radius: var(--radius-lg); /* Consistent 1rem+ rounded corners for loading states */
+}
+
+/* ═══ Mobile Utilities — Ensuring data tables and complex elements scroll horizontally on smaller screens ═══ */
+/* Applies smooth scrolling and horizontal overflow specifically for smaller screens */
+.overflow-x-auto-mobile {
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  @media (max-width: 768px) {
+    overflow-x: auto;
+  }
+}
+
+/* ═══ Tailwind Custom Utilities — Shadow & Focus Glow System ═══ */
+/* Exposing CSS variables as Tailwind utilities for consistent application of depth and interactivity feedback */
+@layer utilities {
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+  .shadow-glow-cyan {
+    box-shadow: var(--shadow-glow-cyan);
+  }
+  .shadow-glow-emerald {
+    box-shadow: var(--shadow-glow-emerald);
+  }
+  .shadow-glow-rose {
+    box-shadow: var(--shadow-glow-rose);
+  }
+  .shadow-glow-amber {
+    box-shadow: var(--shadow-glow-amber);
+  }
+
+  /* Specific focus-visible utilities for a premium, non-default outline */
+  .focus-glow-primary:focus-visible {
+    outline: none; /* Remove default outline */
+    box-shadow: var(--shadow-glow-cyan), var(--shadow-card); /* Cyan glow over card shadow */
+    transition: box-shadow 0.2s ease-out;
+  }
+
+  .focus-inset-input:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px rgba(var(--color-mo-cyan-rgb), 0.5), 0 0 0 1px rgba(var(--color-mo-cyan-rgb), 0.2), var(--shadow-soft);
+    transition: box-shadow 0.2s ease-out;
+  }
+}
