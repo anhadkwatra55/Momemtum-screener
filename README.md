@@ -29,66 +29,109 @@ A full-stack quantitative momentum screening platform that screens **507 US equi
 
 ---
 
-## Quick Start
+## Developer Quickstart
+
+> **For AI agents / new developers**: This section tells you everything you need to run the entire stack locally in under 5 minutes. Read this first.
 
 ### Prerequisites
 
-- **Python 3.11+** (backend)
-- **Node.js 18+** (frontend)
-- **pip** (or a virtual environment manager)
+| Tool | Version | Check |
+|------|---------|-------|
+| Python | 3.11+ | `python3 --version` |
+| Node.js | 18+ | `node --version` |
+| npm | 9+ | `npm --version` |
+| pip | Latest | `pip --version` |
+| Git | Any | `git --version` |
 
-### 1. Backend (FastAPI)
+**Optional**: Redis (falls back to in-memory dict if unavailable)
+
+### Step 1: Clone & Navigate
 
 ```bash
-cd quant_screener/backend
+git clone https://github.com/anhadkwatra55/Momemtum-screener.git
+cd Momemtum-screener
+```
+
+### Step 2: Start the Backend (FastAPI — Port 8060)
+
+```bash
+cd backend
 
 # Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
+python3 -m venv venv
+source venv/bin/activate          # macOS/Linux
+# venv\Scripts\activate           # Windows
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Start the backend (port 8060)
-uvicorn main:app --host 0.0.0.0 --port 8060 --reload
+# Start the API server
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --reload
 ```
 
-### 2. Frontend (Next.js)
+**What happens on first run**: The backend fetches ~507 tickers from yfinance (takes ~60s). Subsequent runs load instantly from the SQLite cache at `backend/pipelines/quant_screener.db`.
+
+**Verify**: Open `http://localhost:8060/docs` → you should see the Swagger API explorer.
+
+### Step 3: Start the Frontend (Next.js — Port 3000)
 
 ```bash
-cd quant_screener/frontend
-npm install
-npm run dev
+# In a NEW terminal
+cd frontend
+
+npm install       # First time only
+npm run dev       # Starts dev server on http://localhost:3000
 ```
 
-Frontend runs on **`http://localhost:3000`**, proxying API calls to the backend on port 8060.
+**Verify**: Open `http://localhost:3000` → you should see the Command Center.
 
-### 3. Run Tests
+### Step 4: Run Tests
 
 ```bash
-cd quant_screener/backend
-python -m pytest tests/ -v
+cd backend
+source venv/bin/activate
+python -m pytest tests/ -v        # 89 tests, ~15s
 ```
 
-### Access the Platform
+### Access Points
 
-| Page | URL |
-|------|-----|
-| Command Center | `http://localhost:3000/` |
-| Intelligence Dashboard | `http://localhost:3000/dashboard` |
-| Receipts Ledger | `http://localhost:3000/receipts` |
-| API Explorer (Swagger) | `http://localhost:8060/docs` |
-| Legacy Dashboard | `http://localhost:8060/momentum_dashboard.html` |
-
-> **First Run**: Backend takes ~60s to build initial data (fetches from yfinance). Subsequent runs load instantly from the SQLite cache.
+| Page | URL | Description |
+|------|-----|-------------|
+| Command Center | `http://localhost:3000/` | Landing page with KPIs, sector heatmap, signal feed |
+| Intelligence Dashboard | `http://localhost:3000/dashboard` | Full screener with 11 sidebar pages |
+| Receipts Ledger | `http://localhost:3000/receipts` | Backtest performance tracking |
+| API Explorer (Swagger) | `http://localhost:8060/docs` | Interactive API documentation |
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8060` | Backend server port |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8060` | Frontend → Backend API URL |
-| `DATA_DIR` | `backend/pipelines/` | Directory for SQLite database file |
+Create `.env.local` in `frontend/` if you need to override defaults:
+
+```bash
+# Frontend (.env.local)
+NEXT_PUBLIC_API_URL=http://localhost:8060    # Backend API base URL (default)
+
+# Backend (shell env or .env)
+PORT=8060                                    # API server port
+DATA_DIR=backend/pipelines/                  # SQLite database directory
+```
+
+### Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| Backend won't start | Ensure Python 3.11+, check `pip install -r requirements.txt` succeeded |
+| Frontend "fetch failed" | Ensure backend is running on port 8060 first |
+| "No data available" on charts | Wait ~60s for initial yfinance data fetch to complete |
+| `quant_screener.db` missing | Normal on first run — auto-created by the backend pipeline |
+| Redis connection errors | Safe to ignore — falls back to in-memory cache automatically |
+| Port already in use | Kill existing process: `lsof -ti:8060 \| xargs kill` or `lsof -ti:3000 \| xargs kill` |
+
+### Cloud Deployment
+
+The project includes a `legacy/render.yaml` for Render.com deployment:
+- Backend binds to `0.0.0.0` when `RENDER` env var is set
+- SQLite DB is auto-copied to persistent disk on first deploy
+- Set `NEXT_PUBLIC_API_URL` to your deployed backend URL for the frontend
 
 ---
 
@@ -152,6 +195,94 @@ quant_screener/
 │
 └── README.md
 ```
+
+---
+
+## Frontend Component Architecture
+
+> **For AI agents**: This section maps every file in `frontend/src/` with its purpose, props, and dependencies. Use this to understand where to make changes.
+
+### Design System
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| **Fonts** | Inter (sans), JetBrains Mono (mono) | Headings / Data |
+| **Theme** | True Black (`#000`) with `white/[0.03-0.06]` overlays | Glassmorphism |
+| **Border radius** | `rounded-xl` (cards), `rounded-2xl` (modals) | Apple aesthetic |
+| **Shadows** | CSS custom properties (`--shadow-soft`, `--shadow-elevated`) | Depth layers |
+| **Colors** | Palette keys: `cyan`, `emerald`, `rose`, `amber`, `violet` | Via `getTextColorClass()` / `getBackgroundColorClass()` from `lib/utils.ts` |
+| **Z-index** | `Z_INDEX` object in `lib/constants.ts` (10-100 range) | Layered UI |
+| **Icons** | `lucide-react` via `SFIcon.tsx` — **zero emojis** | 45 icon mappings |
+
+### Pages (`src/app/`)
+
+| File | Route | Type | Description |
+|------|-------|------|-------------|
+| `layout.tsx` | Global | Server | Root layout — Inter + JetBrains Mono fonts, global CSS |
+| `page.tsx` | `/` | Client | **Command Center** — KPI strip, Main Character hero, sector heatmap, signal feed, rotating quotes |
+| `dashboard/layout.tsx` | `/dashboard` | Server | Dashboard metadata (SEO title/description), wraps the client page |
+| `dashboard/page.tsx` | `/dashboard` | Client | **Intelligence Dashboard** — sidebar + 11 sub-pages (screeners, charts, backtest) |
+| `receipts/page.tsx` | `/receipts` | Client | **Receipts Ledger** — backtest performance history, win/loss tracking |
+| `globals.css` | — | CSS | Full Apple design system: glassmorphism tokens, skeleton animations, bento grid, scrollbar styling |
+
+### UI Components (`src/components/ui/`)
+
+| Component | File | Key Props | Description |
+|-----------|------|-----------|-------------|
+| **SFIcon** | `SFIcon.tsx` | `name`, `size`, `className` | Central icon system. Maps SF Symbol names → `lucide-react` SVGs. All icons flow through here |
+| **BentoCard** | `bento-card.tsx` | `span`, `rowSpan`, `interactive`, `glowColor` | Glassmorphic card with CSS Grid span, hover lift, press scale, keyboard a11y |
+| **DataTable** | `data-table.tsx` | `data`, `columns`, `selectedKey`, `onRowClick` | Virtualized (500+ rows) via `@tanstack/react-virtual`. Sortable, sticky header |
+| **AppleCard** | `apple-card.tsx` | `className`, `glowColor`, `whileHover` | Framer Motion card with glassmorphic backdrop |
+| **AppleButton** | `apple-button.tsx` | `variant`, `size` | Premium button with gradient, glow, spring hover |
+
+### Domain Components (`src/components/momentum/`)
+
+| Component | File | Data Source | Description |
+|-----------|------|-------------|-------------|
+| **ScreenerTable** | `screener-table.tsx` | `Signal[]` | Full signal table with tier dividers (High/Med/Developing conviction) |
+| **SignalTable** | `signal-table.tsx` | `Signal[]` | Compact signal list for screener pages |
+| **Leaderboard** | `leaderboard.tsx` | `Signal[]` | Top tickers ranked by composite score |
+| **TickerModal** | `ticker-modal.tsx` | `Signal` | Full detail modal: 4-system breakdown, alerts, score calculation |
+| **TickerSearch** | `ticker-search.tsx` | API | Search local DB + yfinance, auto-add tickers |
+| **SectorHeatmap** | `sector-heatmap.tsx` | `SectorSummary[]` | 11-sector regime grid with bull/bear bars |
+| **StrategyBuilder** | `strategy-builder.tsx` | API | Visual condition builder + code editor + 4-system backtester |
+| **BacktestResults** | `backtest-results.tsx` | `BacktestResult` | Metrics grid, equity chart, monthly heatmap, trade log |
+| **SentimentBadge** | `sentiment-badge.tsx` | `Sentiment` | Color-coded label (Strong Bullish → Strong Bearish) |
+| **RegimeBadge** | `regime-badge.tsx` | `Regime` | Regime label (Trending / Mean-Reverting / Choppy) |
+| **KPIStrip** | `kpi-strip.tsx` | `DashboardData` | Animated counter row for key metrics |
+
+### Chart Components (`src/components/charts/`)
+
+All charts use **TradingView Lightweight Charts** with dark theme integration.
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **PriceChart** | `price-chart.tsx` | Candlestick + HMA overlay |
+| **IndicatorChart** | `indicator-chart.tsx` | Multi-line chart for ADX, Stochastics, TRIX |
+| **ElderChart** | `elder-chart.tsx` | MACD histogram with Elder Impulse coloring |
+| **EquityChart** | `equity-chart.tsx` | Equity curve for backtest results |
+
+### Custom Hooks (`src/hooks/`)
+
+All hooks marked "RN Safe" contain no DOM logic and are portable to React Native.
+
+| Hook | File | RN Safe | Description |
+|------|------|---------|-------------|
+| `useSignals` | `use-signals.ts` | Yes | Fetches + caches dashboard signals from API |
+| `useSectors` | `use-sectors.ts` | Yes | Sector summary data with regime info |
+| `useBacktest` | `use-backtest.ts` | Yes | Backtest execution, cancellation, history |
+| `useStrategy` | `use-strategy.ts` | Yes | Strategy save/load/delete/execute |
+| `useDataTable` | `use-data-table.ts` | Yes | Generic sort state + sorted data output |
+| `useMediaQuery` | `use-media-query.ts` | No | Responsive breakpoint detection (DOM) |
+
+### Services & Types
+
+| File | Purpose |
+|------|---------|
+| `services/api.ts` | Typed API client — wraps all 22 backend endpoints. Uses `fetch` with `NEXT_PUBLIC_API_URL` |
+| `types/momentum.ts` | Core TypeScript interfaces: `Signal`, `DashboardData`, `BacktestResult`, `Strategy`, `SectorSummary`, branded primitives (`Ticker`, `Composite`) |
+| `lib/constants.ts` | Design tokens (`COLORS`, `Z_INDEX`, `SHADOW_*`), `SIDEBAR_NAV`, `SF_SYMBOLS` map, spring configs |
+| `lib/utils.ts` | `cn()` class merger, `getTextColorClass()`, `getBackgroundColorClass()`, color helpers |
 
 ---
 
