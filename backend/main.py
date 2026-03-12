@@ -376,6 +376,15 @@ def build_dashboard_data() -> dict:
     def slim(recs):
         return [{k: v for k, v in r.items() if k not in ("charts", "sys1", "sys2", "sys3", "sys4")} for r in recs]
 
+    # ── Persist all indicators to DB ──
+    try:
+        _etf_set_db = set(cfg.ETF_TICKERS)
+        _ai_set_db = set(cfg.AI_STOCKS)
+        persist_counts = db.persist_all_indicators(results, _etf_set_db, _ai_set_db)
+        print(f"    ✓ Persisted to DB: {persist_counts}")
+    except Exception as e:
+        print(f"    ⚠ DB persist failed: {e}")
+
     _ps.update("done", "Pipeline complete")
 
     return {
@@ -728,6 +737,46 @@ async def get_derived():
                 "momentum_95"]
         return encode_response({k: _CACHED_DASHBOARD_DATA.get(k, []) for k in keys})
     return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
+
+
+@app.get("/api/db/signals")
+async def get_db_signals(
+    sector: str | None = None,
+    regime: str | None = None,
+    min_probability: float | None = None,
+    min_composite: float | None = None,
+    is_etf: bool | None = None,
+    is_ai: bool | None = None,
+    limit: int = 200,
+    order_by: str = "probability DESC",
+):
+    """Query persisted signals from DB with optional filters."""
+    try:
+        signals = db.load_signals(
+            sector=sector, regime=regime,
+            min_probability=min_probability, min_composite=min_composite,
+            is_etf=is_etf, is_ai=is_ai,
+            limit=min(limit, 1000), order_by=order_by,
+        )
+        return encode_response({
+            "signals": signals,
+            "count": len(signals),
+            "persisted_total": db.get_signals_count(),
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/db/signal/{ticker}")
+async def get_db_signal(ticker: str):
+    """Get a single ticker with full indicator detail from DB."""
+    try:
+        signal = db.load_signal(ticker.upper())
+        if not signal:
+            return JSONResponse(content={"error": f"No signal data for {ticker}"}, status_code=404)
+        return encode_response(signal)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 # ── Portfolio Intelligence Engine ──

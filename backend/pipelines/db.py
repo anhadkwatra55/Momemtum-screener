@@ -69,7 +69,7 @@ def db_session(db_path=None):
 #  SCHEMA INIT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 -- OHLCV daily bars
@@ -121,6 +121,97 @@ CREATE TABLE IF NOT EXISTS strategies (
     created     TEXT DEFAULT (datetime('now')),
     updated     TEXT DEFAULT (datetime('now'))
 );
+
+-- ══════════════════════════════════════════════════════════
+--  INDICATOR TABLES  (persisted across restarts)
+-- ══════════════════════════════════════════════════════════
+
+-- Final screened signal per ticker (flat, queryable)
+CREATE TABLE IF NOT EXISTS signals (
+    ticker         TEXT PRIMARY KEY,
+    company_name   TEXT,
+    sector         TEXT,
+    price          REAL,
+    daily_change   REAL,
+    return_20d     REAL,
+    volatility_20d REAL,
+    vol_spike      REAL,
+    ta_branch      TEXT,
+    momentum_phase TEXT,
+    sys1_score     REAL,
+    sys2_score     REAL,
+    sys3_score     REAL,
+    sys4_score     REAL,
+    composite      REAL,
+    regime         TEXT,
+    sentiment      TEXT,
+    probability    REAL,
+    shock_trigger  INTEGER DEFAULT 0,
+    shock_strength REAL,
+    sm_trigger     INTEGER DEFAULT 0,
+    sm_score       REAL,
+    cont_prob      REAL,
+    is_etf         INTEGER DEFAULT 0,
+    is_ai          INTEGER DEFAULT 0,
+    updated_at     TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_signals_sector      ON signals(sector);
+CREATE INDEX IF NOT EXISTS idx_signals_probability  ON signals(probability);
+CREATE INDEX IF NOT EXISTS idx_signals_composite    ON signals(composite);
+CREATE INDEX IF NOT EXISTS idx_signals_regime       ON signals(regime);
+
+-- System 1: ADX + TRIX + Full Stochastics
+CREATE TABLE IF NOT EXISTS indicator_system1 (
+    ticker     TEXT PRIMARY KEY,
+    score      REAL,
+    adx        REAL,
+    plus_di    REAL,
+    minus_di   REAL,
+    trix       REAL,
+    trix_signal REAL,
+    stoch_k    REAL,
+    stoch_d    REAL,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- System 2: Elder Impulse System
+CREATE TABLE IF NOT EXISTS indicator_system2 (
+    ticker        TEXT PRIMARY KEY,
+    score         REAL,
+    last_color    TEXT,
+    consecutive   INTEGER,
+    macd_hist     REAL,
+    green_pct_10d REAL,
+    red_pct_10d   REAL,
+    updated_at    TEXT DEFAULT (datetime('now'))
+);
+
+-- System 3: Renko + Stochastics
+CREATE TABLE IF NOT EXISTS indicator_system3 (
+    ticker            TEXT PRIMARY KEY,
+    score             REAL,
+    renko_direction   INTEGER,
+    consecutive_bricks INTEGER,
+    brick_size        REAL,
+    recent_up         INTEGER,
+    recent_dn         INTEGER,
+    stoch_k           REAL,
+    stoch_d           REAL,
+    updated_at        TEXT DEFAULT (datetime('now'))
+);
+
+-- System 4: Heikin-Ashi + Hull Moving Average
+CREATE TABLE IF NOT EXISTS indicator_system4 (
+    ticker              TEXT PRIMARY KEY,
+    score               REAL,
+    ha_bullish          INTEGER,
+    consecutive_candles  INTEGER,
+    wick_quality        REAL,
+    hma_value           REAL,
+    hma_rising          INTEGER,
+    bull_pct_10d        REAL,
+    updated_at          TEXT DEFAULT (datetime('now'))
+);
 """
 
 
@@ -132,9 +223,10 @@ def init_db(db_path=None) -> None:
         existing = conn.execute(
             "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
         ).fetchone()
-        if not existing:
+        current = existing["version"] if existing else 0
+        if current < SCHEMA_VERSION:
             conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?)",
+                "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
                 (SCHEMA_VERSION,),
             )
 
@@ -410,3 +502,216 @@ def delete_strategy(sid: int) -> bool:
     with db_session() as conn:
         conn.execute("DELETE FROM strategies WHERE id = ?", (sid,))
         return True
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  SIGNALS TABLE  (persisted screener results)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_SIGNALS_COLS = [
+    "ticker", "company_name", "sector", "price", "daily_change", "return_20d",
+    "volatility_20d", "vol_spike", "ta_branch", "momentum_phase",
+    "sys1_score", "sys2_score", "sys3_score", "sys4_score", "composite",
+    "regime", "sentiment", "probability",
+    "shock_trigger", "shock_strength", "sm_trigger", "sm_score", "cont_prob",
+    "is_etf", "is_ai",
+]
+
+
+def _flatten_signal(r: dict, etf_set: set, ai_set: set) -> tuple:
+    """Flatten a screen_ticker result dict into a signals table row."""
+    shock = r.get("momentum_shock", {})
+    sm = r.get("smart_money", {})
+    cont = r.get("continuation", {})
+    return (
+        r["ticker"], r.get("company_name", r["ticker"]), r.get("sector", "Unknown"),
+        r.get("price"), r.get("daily_change"), r.get("return_20d"),
+        r.get("volatility_20d"), r.get("vol_spike"),
+        r.get("ta_branch"), r.get("momentum_phase"),
+        r.get("sys1_score"), r.get("sys2_score"), r.get("sys3_score"), r.get("sys4_score"),
+        r.get("composite"),
+        r.get("regime"), r.get("sentiment"), r.get("probability"),
+        int(shock.get("trigger", False)), shock.get("shock_strength", 0),
+        int(sm.get("trigger", False)), sm.get("score", 0),
+        cont.get("probability", 0),
+        int(r["ticker"] in etf_set), int(r["ticker"] in ai_set),
+    )
+
+
+def upsert_signals_bulk(results: List[dict], etf_set: set, ai_set: set) -> int:
+    """Bulk write all screened signals to the signals table. Returns count."""
+    placeholders = ", ".join(["?"] * len(_SIGNALS_COLS))
+    cols = ", ".join(_SIGNALS_COLS)
+    sql = f"INSERT OR REPLACE INTO signals ({cols}) VALUES ({placeholders})"
+    rows = [_flatten_signal(r, etf_set, ai_set) for r in results]
+    with db_session() as conn:
+        conn.executemany(sql, rows)
+    return len(rows)
+
+
+def upsert_indicator_system1_bulk(results: List[dict]) -> int:
+    """Bulk write indicator_system1 from screen results."""
+    sql = """INSERT OR REPLACE INTO indicator_system1
+             (ticker, score, adx, plus_di, minus_di, trix, trix_signal, stoch_k, stoch_d)
+             VALUES (?,?,?,?,?,?,?,?,?)"""
+    rows = []
+    for r in results:
+        s = r.get("sys1", {})
+        rows.append((
+            r["ticker"], s.get("score"), s.get("adx"), s.get("plus_di"), s.get("minus_di"),
+            s.get("trix"), s.get("trix_signal"), s.get("stoch_k"), s.get("stoch_d"),
+        ))
+    with db_session() as conn:
+        conn.executemany(sql, rows)
+    return len(rows)
+
+
+def upsert_indicator_system2_bulk(results: List[dict]) -> int:
+    """Bulk write indicator_system2 from screen results."""
+    sql = """INSERT OR REPLACE INTO indicator_system2
+             (ticker, score, last_color, consecutive, macd_hist, green_pct_10d, red_pct_10d)
+             VALUES (?,?,?,?,?,?,?)"""
+    rows = []
+    for r in results:
+        s = r.get("sys2", {})
+        rows.append((
+            r["ticker"], s.get("score"), s.get("last_color"), s.get("consecutive"),
+            s.get("macd_hist"), s.get("green_pct_10d"), s.get("red_pct_10d"),
+        ))
+    with db_session() as conn:
+        conn.executemany(sql, rows)
+    return len(rows)
+
+
+def upsert_indicator_system3_bulk(results: List[dict]) -> int:
+    """Bulk write indicator_system3 from screen results."""
+    sql = """INSERT OR REPLACE INTO indicator_system3
+             (ticker, score, renko_direction, consecutive_bricks, brick_size,
+              recent_up, recent_dn, stoch_k, stoch_d)
+             VALUES (?,?,?,?,?,?,?,?,?)"""
+    rows = []
+    for r in results:
+        s = r.get("sys3", {})
+        rows.append((
+            r["ticker"], s.get("score"), s.get("renko_direction"), s.get("consecutive_bricks"),
+            s.get("brick_size"), s.get("recent_up"), s.get("recent_dn"),
+            s.get("stoch_k"), s.get("stoch_d"),
+        ))
+    with db_session() as conn:
+        conn.executemany(sql, rows)
+    return len(rows)
+
+
+def upsert_indicator_system4_bulk(results: List[dict]) -> int:
+    """Bulk write indicator_system4 from screen results."""
+    sql = """INSERT OR REPLACE INTO indicator_system4
+             (ticker, score, ha_bullish, consecutive_candles, wick_quality,
+              hma_value, hma_rising, bull_pct_10d)
+             VALUES (?,?,?,?,?,?,?,?)"""
+    rows = []
+    for r in results:
+        s = r.get("sys4", {})
+        rows.append((
+            r["ticker"], s.get("score"), int(s.get("ha_bullish", False)),
+            s.get("consecutive_candles"), s.get("wick_quality"),
+            s.get("hma_value"), int(s.get("hma_rising", False)) if s.get("hma_rising") is not None else None,
+            s.get("bull_pct_10d"),
+        ))
+    with db_session() as conn:
+        conn.executemany(sql, rows)
+    return len(rows)
+
+
+def persist_all_indicators(results: List[dict], etf_set: set, ai_set: set) -> dict:
+    """
+    Persist all pipeline results to DB in one shot.
+    Returns counts per table for logging.
+    """
+    counts = {}
+    counts["signals"] = upsert_signals_bulk(results, etf_set, ai_set)
+    counts["system1"] = upsert_indicator_system1_bulk(results)
+    counts["system2"] = upsert_indicator_system2_bulk(results)
+    counts["system3"] = upsert_indicator_system3_bulk(results)
+    counts["system4"] = upsert_indicator_system4_bulk(results)
+    return counts
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  SIGNAL QUERIES  (fast per-ticker or filtered)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def load_signals(
+    sector: Optional[str] = None,
+    regime: Optional[str] = None,
+    min_probability: Optional[float] = None,
+    min_composite: Optional[float] = None,
+    is_etf: Optional[bool] = None,
+    is_ai: Optional[bool] = None,
+    limit: int = 500,
+    order_by: str = "probability DESC",
+) -> List[dict]:
+    """Query signals table with optional filters. Fast indexed queries."""
+    clauses = []
+    params: list = []
+
+    if sector:
+        clauses.append("sector = ?")
+        params.append(sector)
+    if regime:
+        clauses.append("regime = ?")
+        params.append(regime)
+    if min_probability is not None:
+        clauses.append("probability >= ?")
+        params.append(min_probability)
+    if min_composite is not None:
+        clauses.append("composite >= ?")
+        params.append(min_composite)
+    if is_etf is not None:
+        clauses.append("is_etf = ?")
+        params.append(int(is_etf))
+    if is_ai is not None:
+        clauses.append("is_ai = ?")
+        params.append(int(is_ai))
+
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    # Sanitise order_by to prevent injection
+    allowed_cols = {"probability", "composite", "daily_change", "return_20d", "price",
+                    "vol_spike", "sys1_score", "sys2_score", "sys3_score", "sys4_score"}
+    order_col = order_by.split()[0] if order_by else "probability"
+    order_dir = "DESC" if "DESC" in order_by.upper() else "ASC"
+    if order_col not in allowed_cols:
+        order_col, order_dir = "probability", "DESC"
+
+    sql = f"SELECT * FROM signals{where} ORDER BY {order_col} {order_dir} LIMIT ?"
+    params.append(limit)
+
+    with db_session() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def load_signal(ticker: str) -> Optional[dict]:
+    """Load a single signal with all 4 system indicator details joined."""
+    with db_session() as conn:
+        sig = conn.execute("SELECT * FROM signals WHERE ticker = ?", (ticker,)).fetchone()
+        if not sig:
+            return None
+        result = dict(sig)
+
+        # Join indicator details from each system
+        for sys_num in range(1, 5):
+            table = f"indicator_system{sys_num}"
+            ind = conn.execute(f"SELECT * FROM {table} WHERE ticker = ?", (ticker,)).fetchone()
+            if ind:
+                result[f"sys{sys_num}"] = {k: ind[k] for k in ind.keys() if k not in ("ticker", "updated_at")}
+            else:
+                result[f"sys{sys_num}"] = {}
+
+    return result
+
+
+def get_signals_count() -> int:
+    """Count rows in signals table."""
+    with db_session() as conn:
+        row = conn.execute("SELECT COUNT(*) as c FROM signals").fetchone()
+        return row["c"] if row else 0
