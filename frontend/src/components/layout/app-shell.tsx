@@ -18,7 +18,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, dbStats }: AppShellProps) {
-  const [activePage, setActivePage] = useState("intelligence");
+  const [activePage, setActivePage] = useState("market-pulse");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const hamburgerInitial = useMemo(() => ({

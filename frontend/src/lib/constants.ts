@@ -53,41 +53,23 @@ export interface NavItem {
 }
 
 export const SIDEBAR_NAV: NavItem[] = [
-  // Platform
-  { label: "Intelligence", icon: "bolt.fill", pageId: "intelligence", section: "PLATFORM" },
-  { label: "Vector Market Map", icon: "map.fill", pageId: "vector-map", section: "PLATFORM" },
-  { label: "Sector Intelligence", icon: "antenna.radiowaves.left.and.right", pageId: "sector-intel", section: "PLATFORM" },
-  { label: "Portfolio Intelligence", icon: "briefcase.fill", pageId: "portfolio-intel", section: "PLATFORM" },
-  { label: "Ticker Detail", icon: "chart.bar.fill", pageId: "ticker-detail", section: "PLATFORM" },
-  // Stock Screeners
-  { label: "Fresh Momentum", icon: "leaf.fill", pageId: "fresh", section: "STOCK SCREENERS" },
-  { label: "Momentum 95+", icon: "star.fill", pageId: "momentum-95", section: "STOCK SCREENERS" },
-  { label: "Exhausting Momentum", icon: "flame.fill", pageId: "exhausting", section: "STOCK SCREENERS" },
-  { label: "Rotation Breakouts", icon: "tornado", pageId: "rotation", section: "STOCK SCREENERS" },
-  { label: "Momentum Shock", icon: "bolt.slash.fill", pageId: "shock", section: "STOCK SCREENERS" },
-  { label: "Gamma Squeeze Ops", icon: "target", pageId: "gamma", section: "STOCK SCREENERS" },
-  { label: "Smart Money", icon: "dollarsign.circle.fill", pageId: "smart-money", section: "STOCK SCREENERS" },
-  { label: "Momentum Continuation", icon: "rocket.fill", pageId: "continuation", section: "STOCK SCREENERS" },
-  { label: "Momentum Clusters", icon: "cube.fill", pageId: "clusters", section: "STOCK SCREENERS" },
-  { label: "Sector Shock Clusters", icon: "bolt.circle.fill", pageId: "shock-clusters", section: "STOCK SCREENERS" },
-  { label: "Hidden Gems", icon: "diamond.fill", pageId: "hidden-gems", section: "STOCK SCREENERS" },
-  // ETF
-  { label: "ETF Screener", icon: "chart.line.uptrend.rectangle.fill", pageId: "etf-screener", section: "ETF" },
-  // Thematic
-  { label: "AI Stocks", icon: "brain.fill", pageId: "ai-stocks", section: "THEMATIC" },
-  { label: "Bullish Momentum", icon: "arrow.up.right.circle.fill", pageId: "bullish-momentum", section: "THEMATIC" },
-  { label: "Volume Gappers", icon: "chart.bar.doc.horizontal.fill", pageId: "volume-gappers", section: "THEMATIC" },
-  // Fundamentals
-  { label: "Earnings Growers", icon: "chart.line.uptrend.xyaxis", pageId: "earnings-growers", section: "FUNDAMENTALS" },
-  // Income
-  { label: "High Yield ETFs", icon: "chart.line.uptrend.rectangle.fill", pageId: "yield-etfs", section: "INCOME" },
-  { label: "Dividend Stocks", icon: "dollarsign.square.fill", pageId: "dividend-stocks", section: "INCOME" },
-  // Research
-  { label: "Signals & Strategies", icon: "radar.fill", pageId: "signals", section: "RESEARCH" },
-  // Hedge Fund Analysis
-  { label: "Insider Buying", icon: "person.badge.key.fill", pageId: "insider-buys", section: "HEDGE FUND" },
-  // Strategy
-  { label: "Strategy Builder", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
+  // Orientation — "What's happening right now?"
+  { label: "Market Pulse", icon: "bolt.fill", pageId: "market-pulse", section: "ORIENTATION" },
+  { label: "Sector Radar", icon: "antenna.radiowaves.left.and.right", pageId: "sector-radar", section: "ORIENTATION" },
+  // Discovery — "What should I be watching?"
+  { label: "Momentum Lifecycle", icon: "leaf.fill", pageId: "momentum-lifecycle", section: "DISCOVERY" },
+  { label: "Anomaly Detector", icon: "bolt.slash.fill", pageId: "anomaly-detector", section: "DISCOVERY" },
+  { label: "Hidden Alpha", icon: "diamond.fill", pageId: "hidden-alpha", section: "DISCOVERY" },
+  // Construction — "How do I build a portfolio?"
+  { label: "Portfolio X-Ray", icon: "briefcase.fill", pageId: "portfolio-intel", section: "CONSTRUCTION" },
+  { label: "Income Engine", icon: "dollarsign.circle.fill", pageId: "income-engine", section: "CONSTRUCTION" },
+  // Rigor — "Can I prove this works?"
+  { label: "Strategy Lab", icon: "flask.fill", pageId: "strategy", section: "RIGOR" },
+  { label: "Signals & Evidence", icon: "radar.fill", pageId: "signals", section: "RIGOR" },
+  // Edge Cases — "What am I missing?"
+  { label: "Insider & Institutional", icon: "person.badge.key.fill", pageId: "insider-buys", section: "EDGE CASES" },
+  { label: "Ticker Deep Dive", icon: "chart.bar.fill", pageId: "ticker-detail", section: "EDGE CASES" },
+  { label: "Earnings & Growth", icon: "chart.line.uptrend.xyaxis", pageId: "earnings-growers", section: "EDGE CASES" },
 ];
 
 // ── Shared Numerical Constants ───────────────────────────────────────────────

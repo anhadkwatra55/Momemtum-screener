@@ -21,7 +21,6 @@ RUN mkdir -p /app/pipelines/data
 ENV PORT=8060
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV DEPLOY_TICKER_LIMIT=500
 
 # Health check (Railway/Render will use this to know when the server is ready)
 HEALTHCHECK --interval=60s --timeout=30s --start-period=120s --retries=3 \

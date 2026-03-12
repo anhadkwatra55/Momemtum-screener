@@ -126,7 +126,7 @@ export default function CommandCenter() {
   const { data, loading, error } = useSignals();
 
   const navigateToDashboard = useCallback(() => {
-    router.push(`${ROUTES.dashboard}?view=intelligence`);
+    router.push(`${ROUTES.dashboard}?view=market-pulse`);
   }, [router]);
   const navigateToReceipts = useCallback(() => {
     router.push(ROUTES.receipts);

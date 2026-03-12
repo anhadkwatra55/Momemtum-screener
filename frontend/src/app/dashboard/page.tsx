@@ -34,36 +34,21 @@ import { Card } from "@/components/ui/card";
 // ── Lazy-loaded heavy components (code-split per page) ──────────────────────
 const LazySignalTable = dynamic(() => import('@/components/momentum/signal-table').then(m => ({ default: m.SignalTable })), { ssr: false });
 const LazyStrategyCard = dynamic(() => import('@/components/momentum/strategy-card').then(m => ({ default: m.StrategyCard })), { ssr: false });
-const LazyScreenerTable = dynamic(() => import('@/components/momentum/screener-table').then(m => ({ default: m.ScreenerTable })), { ssr: false });
 const LazyLeaderboard = dynamic(() => import('@/components/momentum/leaderboard').then(m => ({ default: m.Leaderboard })), { ssr: false });
 const LazyTopSignals = dynamic(() => import('@/components/momentum/top-signals').then(m => ({ default: m.TopSignals })), { ssr: false });
 const LazyMiniSignalList = dynamic(() => import('@/components/momentum/mini-signal-list').then(m => ({ default: m.MiniSignalList })), { ssr: false });
-const LazyTrendingSectors = dynamic(() => import('@/components/momentum/trending-sectors').then(m => ({ default: m.TrendingSectors })), { ssr: false });
-const LazyRotationSignals = dynamic(() => import('@/components/momentum/rotation-signals').then(m => ({ default: m.RotationSignals })), { ssr: false });
 const LazyTickerSearch = dynamic(() => import('@/components/momentum/ticker-search').then(m => ({ default: m.TickerSearch })), { ssr: false });
 const LazyStrategyBuilder = dynamic(() => import('@/components/momentum/strategy-builder').then(m => ({ default: m.StrategyBuilder })), { ssr: false });
-const LazyYieldTable = dynamic(() => import('@/components/momentum/yield-table').then(m => ({ default: m.YieldTable })), { ssr: false });
 const LazySectorHeatmap = dynamic(() => import('@/components/momentum/sector-heatmap').then(m => ({ default: m.SectorHeatmap })), { ssr: false });
 const LazyPortfolioIntelligence = dynamic(() => import('@/components/momentum/portfolio-intelligence').then(m => ({ default: m.PortfolioIntelligence })), { ssr: false });
+const LazyInsiderBuying = dynamic(() => import('@/components/momentum/insider-buying').then(m => ({ default: m.InsiderBuying })), { ssr: false });
 const LazyCandlestickChart = dynamic(() => import('@/components/charts/candlestick-chart').then(m => ({ default: m.CandlestickChart })), { ssr: false });
-
-const SCREENER_MAP: Record<string, { key: string; title: string; icon: string; info: string }> = {
-  fresh: { key: "fresh_momentum", title: "Fresh Momentum", icon: "leaf.fill", info: "Early-stage momentum signals where Stochastic %K has just crossed above %D below the 70 level — catching trends before they become crowded. Scored by our 4-system ensemble (ADX + Elder + Renko + HA/HMA)." },
-  exhausting: { key: "exhausting_momentum", title: "Exhausting Momentum", icon: "flame.fill", info: "Late-stage momentum where Stochastic %K is above 80 — overbought conditions that may reverse. Useful for profit-taking or initiating tactical hedges." },
-  rotation: { key: "rotation_ideas", title: "Rotation Breakouts", icon: "tornado", info: "Sector rotation signals detected when a ticker's regime shifts from Choppy/Mean-Reverting to Trending (ADX crossing above 25), suggesting institutional capital flows into new sectors." },
-  shock: { key: "shock_signals", title: "Momentum Shock Detector", icon: "bolt.slash.fill", info: "Sudden momentum reversals where composite score flips direction with high magnitude — indicates potential trend breaks. Often precedes multi-day moves." },
-  gamma: { key: "gamma_signals", title: "Gamma Squeeze Ops", icon: "target", info: "Identifies tickers with conditions favorable for gamma squeezes: high short interest environment combined with strong bullish momentum and rising volatility spikes." },
-  "smart-money": { key: "smart_money", title: "Smart Money Accumulation", icon: "dollarsign.circle.fill", info: "Detects institutional accumulation patterns: rising volume with controlled price action, positive composite in a Mean-Reverting regime — the signature of large players building positions quietly." },
-  continuation: { key: "continuation", title: "Momentum Continuation", icon: "rocket.fill", info: "Stocks already in Trending regime with sustained high composite scores and probability > 70% — momentum that is likely to persist based on ADX strength and system agreement." },
-  clusters: { key: "momentum_clusters", title: "Momentum Clusters", icon: "cube.fill", info: "Groups of stocks within the same sector showing correlated momentum — indicates sector-wide moves rather than idiosyncratic stock stories." },
-  "shock-clusters": { key: "shock_clusters", title: "Sector Shock Clusters", icon: "bolt.circle.fill", info: "Multiple momentum shocks occurring simultaneously within a sector — signals sector-level catalysts like earnings season surprises or regulatory changes." },
-  "hidden-gems": { key: "hidden_gems", title: "Hidden Gems", icon: "diamond.fill", info: "Mid-cap and small-cap stocks with strong composite scores but low analyst coverage — under-the-radar opportunities with asymmetric risk/reward profiles." },
-  "etf-screener": { key: "high_yield_etfs", title: "ETF Screener", icon: "chart.line.uptrend.rectangle.fill", info: "Dedicated ETF screening covering high-yield bonds, dividend equity, REITs, and covered call strategies — sorted by yield with momentum overlay for timing." },
-  "ai-stocks": { key: "ai_stocks", title: "AI Stocks", icon: "brain.fill", info: "Curated universe of 30+ AI, semiconductor, and cloud computing leaders (NVDA, AMD, GOOGL, MSFT, META, PLTR, etc.) with full 4-system momentum analysis and regime classification." },
-  "bullish-momentum": { key: "bullish_momentum", title: "Bullish Momentum", icon: "arrow.up.right.circle.fill", info: "Comprehensive bullish technical alignment: positive composite score, trending regime (ADX ≥ 25), MACD bullish, and probability confirmation across all 4 indicator systems." },
-  "volume-gappers": { key: "high_volume_gappers", title: "High Volume Gappers", icon: "chart.bar.doc.horizontal.fill", info: "Stocks gapping up on significantly above-average volume (RVOL > 1.5x) with bullish momentum — often indicates institutional order flow driving price discovery." },
-  "momentum-95": { key: "momentum_95", title: "Momentum Score 95+", icon: "star.fill", info: "The highest-conviction picks: only stocks where all 4 systems produce probability ≥ 95%. Requires unanimous directional agreement across ADX/TRIX/Stoch, Elder Impulse, Renko, and Heikin-Ashi/HMA." },
-};
+// New consolidated tabbed components
+const LazyMomentumLifecycle = dynamic(() => import('@/components/momentum/momentum-lifecycle').then(m => ({ default: m.MomentumLifecycle })), { ssr: false });
+const LazyAnomalyDetector = dynamic(() => import('@/components/momentum/anomaly-detector').then(m => ({ default: m.AnomalyDetector })), { ssr: false });
+const LazyHiddenAlpha = dynamic(() => import('@/components/momentum/hidden-alpha').then(m => ({ default: m.HiddenAlpha })), { ssr: false });
+const LazySectorRadar = dynamic(() => import('@/components/momentum/sector-radar').then(m => ({ default: m.SectorRadar })), { ssr: false });
+const LazyIncomeEngine = dynamic(() => import('@/components/momentum/income-engine').then(m => ({ default: m.IncomeEngine })), { ssr: false });
 
 const ChartSkeleton = memo(() => (
   <div className={cn("flex h-full w-full items-center justify-center bg-card rounded-2xl overflow-hidden relative p-5", MIN_CHART_HEIGHT_CLASS)}>
@@ -266,17 +251,17 @@ const DashboardPage = memo(() => {
 
         return (
           <AnimatePresence mode="wait" initial={false}>
-            {/* ══════ INTELLIGENCE ══════ */}
-            {activePage === "intelligence" && (
+            {/* ══════ MARKET PULSE (was Intelligence) ══════ */}
+            {activePage === "market-pulse" && (
               <motion.div
-                key="intelligence"
+                key="market-pulse"
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h1 className={cn("text-2xl font-extrabold md:text-3xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
                     <SFIcon name="bolt.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
-                    Momentum Intelligence
+                    Market Pulse
                   </h1>
                   <div className="flex items-center gap-3">
                     <LazyTickerSearch
@@ -290,14 +275,12 @@ const DashboardPage = memo(() => {
                   </div>
                 </div>
 
-                {/* Quote — instant, always available */}
                 {data.all_quotes?.length > 0 && (
                   <Card className="mb-4 p-3">
                     <QuoteRotator quotes={data.all_quotes} />
                   </Card>
                 )}
 
-                {/* KPI Strip — Tier 1 progressive reveal */}
                 <DataReveal
                   loading={tierLoading.summary && kpiStripItems.length === 0}
                   skeleton={<KPISkeleton />}
@@ -306,7 +289,6 @@ const DashboardPage = memo(() => {
                   <KPIStrip className="" items={kpiStripItems} />
                 </DataReveal>
 
-                {/* Leaderboard + Top Signals — Tier 2 progressive reveal */}
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
                   skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
@@ -319,7 +301,6 @@ const DashboardPage = memo(() => {
                   </div>
                 </DataReveal>
 
-                {/* Fresh + Exhausting mini-cards — staggered reveal */}
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
                   skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
@@ -332,25 +313,14 @@ const DashboardPage = memo(() => {
                   </div>
                 </DataReveal>
 
-                {/* Hidden Gems Preview */}
                 {(data.hidden_gems || []).length > 0 && (
-                  <CardReveal
-                    loading={false}
-                    className="mb-4"
-                    delay={300}
-                  >
+                  <CardReveal loading={false} className="mb-4" delay={300}>
                     <Card className="p-3">
                       <div className="flex items-center justify-between mb-2">
                         <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
                           <SFIcon name="diamond.fill" size="text-lg" className="text-cyan-400" /> Hidden Gems — Underrated Picks
                         </h2>
-                        <AppleButton
-                          variant="ghost"
-                          size="sm"
-                          className="text-cyan-400 hover:text-cyan-300"
-                          onClick={() => setActivePage("hidden-gems")}
-                          glowColor="cyan"
-                        >
+                        <AppleButton variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300" onClick={() => setActivePage("hidden-alpha")} glowColor="cyan">
                           View All <span className="ml-1 text-sm font-semibold">→</span>
                         </AppleButton>
                       </div>
@@ -376,12 +346,8 @@ const DashboardPage = memo(() => {
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
-                              <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>
-                                {s.probability}%
-                              </span>
-                              <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>
-                                {s.daily_change > 0 ? '+' : ''}{s.daily_change}%
-                              </span>
+                              <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
+                              <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
                             </div>
                           </motion.div>
                         ))}
@@ -390,16 +356,12 @@ const DashboardPage = memo(() => {
                   </CardReveal>
                 )}
 
-                {/* Sector Regime Heatmap */}
                 <CardReveal loading={!data.sector_regimes} delay={400}>
                   <Card className="p-3">
                     <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
                       <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
                     </h2>
-                    <LazySectorHeatmap
-                      sectors={data.sector_regimes}
-                      sentiment={data.sector_sentiment}
-                    />
+                    <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
                   </Card>
                 </CardReveal>
               </motion.div>
@@ -448,33 +410,20 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
-            {/* ══════ SECTOR INTELLIGENCE ══════ */}
-            {activePage === "sector-intel" && (
+            {/* ══════ SECTOR RADAR ══════ */}
+            {activePage === "sector-radar" && (
               <motion.div
-                key="sector-intel"
+                key="sector-radar"
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="antenna.radiowaves.left.and.right" size="text-3xl md:text-4xl" className="text-cyan-400" />
-                  Sector Intelligence
-                </h1>
-                <CardReveal loading={!data.sector_regimes} className="mb-4">
-                  <Card className="border-cyan-500/20 shadow-lg shadow-cyan-500/5 p-3">
-                    <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                      <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
-                      <span className="text-xs text-muted-foreground font-normal tracking-normal ml-2">— Real-time regime classification</span>
-                    </h2>
-                    <LazySectorHeatmap
-                      sectors={data.sector_regimes}
-                      sentiment={data.sector_sentiment}
-                    />
-                  </Card>
-                </CardReveal>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  <LazyTrendingSectors sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
-                  <LazyRotationSignals rotationIdeas={data.rotation_ideas || []} />
-                </div>
+                <LazySectorRadar
+                  sectorRegimes={data.sector_regimes}
+                  sectorSentiment={data.sector_sentiment}
+                  rotationIdeas={data.rotation_ideas || []}
+                  shockClusters={(data as any).shock_clusters || []}
+                  onSelectTicker={handlePageTickerSelect}
+                />
               </motion.div>
             )}
 
@@ -632,111 +581,47 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
-            {/* ══════ SCREENER PAGES (all 10 + hidden gems) ══════ */}
-            {Object.keys(SCREENER_MAP).includes(activePage) && (() => {
-              const screenerData = (data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || [];
-              // Compute top 5 sectors by count
-              const sectorCounts: Record<string, number> = {};
-              screenerData.forEach((s: any) => {
-                const sec = s?.sector || "Unknown";
-                sectorCounts[sec] = (sectorCounts[sec] || 0) + 1;
-              });
-              const topSectors = Object.entries(sectorCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5);
-              const sectorColors: Record<string, string> = {
-                "Technology": "text-cyan-400 bg-cyan-400/10",
-                "Healthcare": "text-emerald-400 bg-emerald-400/10",
-                "Financials": "text-amber-400 bg-amber-400/10",
-                "Consumer Discretionary": "text-violet-400 bg-violet-400/10",
-                "Industrials": "text-blue-400 bg-blue-400/10",
-                "Communication Services": "text-pink-400 bg-pink-400/10",
-                "Consumer Staples": "text-lime-400 bg-lime-400/10",
-                "Energy": "text-orange-400 bg-orange-400/10",
-                "Utilities": "text-teal-400 bg-teal-400/10",
-                "Real Estate": "text-rose-400 bg-rose-400/10",
-                "Materials": "text-indigo-400 bg-indigo-400/10",
-              };
-              return (
-                <motion.div
-                  key={activePage}
-                  {...PAGE_MOTION_VARIANTS}
-                  className="pt-4 md:pt-6 pb-8 md:pb-12"
-                >
-                  {/* Research info for this screener */}
-                  <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-gradient-to-r from-cyan-500/[0.04] to-violet-500/[0.04] border border-white/[0.04] px-4 py-3">
-                    <SFIcon icon="info.circle.fill" size={14} className="text-cyan-400/60 mt-0.5 shrink-0" />
-                    <p className="text-xs text-muted-foreground/60 leading-relaxed">
-                      {SCREENER_MAP[activePage].info}
-                    </p>
-                  </div>
-                  {/* Sector breakdown — top 5 */}
-                  {topSectors.length > 0 && (
-                    <div className="mb-4 flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 mr-1">
-                        <SFIcon icon="chart.pie.fill" size={11} className="inline-block mr-1 -mt-0.5" />
-                        Sectors
-                      </span>
-                      {topSectors.map(([sector, count]) => (
-                        <span
-                          key={sector}
-                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${sectorColors[sector] || "text-slate-400 bg-slate-400/10"}`}
-                        >
-                          {sector.replace("Consumer ", "").replace("Communication ", "Comm. ")} · {count}
-                        </span>
-                      ))}
-                      {Object.keys(sectorCounts).length > 5 && (
-                        <span className="text-[10px] text-muted-foreground/30 font-medium">
-                          +{Object.keys(sectorCounts).length - 5} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
-                    <LazyScreenerTable
-                      data={screenerData}
-                      title={SCREENER_MAP[activePage].title}
-                      icon={SCREENER_MAP[activePage].icon}
-                      onSelectTicker={handlePageTickerSelect}
-                    />
-                  </DataReveal>
-                </motion.div>
-              );
-            })()}
-
-            {/* ══════ HIGH YIELD ETFs ══════ */}
-            {activePage === "yield-etfs" && (
+            {/* ══════ MOMENTUM LIFECYCLE ══════ */}
+            {activePage === "momentum-lifecycle" && (
               <motion.div
-                key="yield-etfs"
+                key="momentum-lifecycle"
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <DataReveal loading={!data.high_yield_etfs?.length} skeleton={<SectionSkeleton rows={8} />}>
-                  <LazyYieldTable
-                    data={data.high_yield_etfs || []}
-                    title="High Yield ETFs"
-                    icon="chart.line.uptrend.rectangle.fill"
-                    onSelectTicker={handlePageTickerSelect}
-                  />
-                </DataReveal>
+                <LazyMomentumLifecycle data={data as any} onSelectTicker={handlePageTickerSelect} />
               </motion.div>
             )}
 
-            {/* ══════ DIVIDEND STOCKS ══════ */}
-            {activePage === "dividend-stocks" && (
+            {/* ══════ ANOMALY DETECTOR ══════ */}
+            {activePage === "anomaly-detector" && (
               <motion.div
-                key="dividend-stocks"
+                key="anomaly-detector"
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <DataReveal loading={!data.dividend_stocks?.length} skeleton={<SectionSkeleton rows={8} />}>
-                  <LazyYieldTable
-                    data={data.dividend_stocks || []}
-                    title="Dividend Stocks — Aristocrats & Kings"
-                    icon="dollarsign.square.fill"
-                    onSelectTicker={handlePageTickerSelect}
-                  />
-                </DataReveal>
+                <LazyAnomalyDetector data={data as any} onSelectTicker={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ HIDDEN ALPHA ══════ */}
+            {activePage === "hidden-alpha" && (
+              <motion.div
+                key="hidden-alpha"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyHiddenAlpha data={data as any} onSelectTicker={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ INCOME ENGINE ══════ */}
+            {activePage === "income-engine" && (
+              <motion.div
+                key="income-engine"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyIncomeEngine data={data as any} onSelectTicker={handlePageTickerSelect} />
               </motion.div>
             )}
 
@@ -754,132 +639,15 @@ const DashboardPage = memo(() => {
             )}
 
             {/* ══════ INSIDER BUYING ══════ */}
-            {activePage === "insider-buys" && (() => {
-              const [insiderData, setInsiderData] = React.useState<any>(null);
-              const [insiderLoading, setInsiderLoading] = React.useState(true);
-              const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
-
-              React.useEffect(() => {
-                setInsiderLoading(true);
-                fetch(`${API}/api/insider-buys?limit=20&lookback_days=180`)
-                  .then(res => res.json())
-                  .then(d => { setInsiderData(d); setInsiderLoading(false); })
-                  .catch(() => setInsiderLoading(false));
-              }, [API]);
-
-              const buys = insiderData?.insider_buys || [];
-
-              return (
-                <motion.div
-                  key="insider-buys"
-                  {...PAGE_MOTION_VARIANTS}
-                  className="pt-4 md:pt-6 pb-8 md:pb-12"
-                >
-                  {/* Info banner */}
-                  <div className="mb-5 flex items-start gap-2.5 rounded-xl bg-gradient-to-r from-emerald-500/[0.04] to-cyan-500/[0.04] border border-white/[0.04] px-4 py-3">
-                    <SFIcon icon="info.circle.fill" size={14} className="text-emerald-400/60 mt-0.5 shrink-0" />
-                    <p className="text-xs text-muted-foreground/60 leading-relaxed">
-                      <span className="text-foreground/70 font-medium">Insider Buying Signals</span> — Tracks SEC Form 4 filings where corporate insiders (CEO, CFO, Directors, 10%+ owners) purchase shares with their own money. Insider buying is one of the strongest alpha signals — insiders have asymmetric information about their company's future. Scored by: number of unique insiders buying, total $ value, seniority (CEO &gt; Director &gt; VP), and recency.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
-                      <SFIcon icon="person.badge.key.fill" size={20} /> Insider Buying Activity
-                    </h2>
-                    <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">
-                      Last 180 days · {buys.length} stocks
-                    </span>
-                  </div>
-
-                  {insiderLoading ? (
-                    <div className="space-y-3">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="h-24 rounded-xl bg-white/[0.02] animate-pulse" />
-                      ))}
-                    </div>
-                  ) : buys.length === 0 ? (
-                    <div className="text-center py-16 text-muted-foreground/40">
-                      <SFIcon icon="person.badge.key.fill" size={40} className="mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">Scanning insider transactions… This may take a minute on first load.</p>
-                      <p className="text-xs mt-1">The scanner checks 300 tickers against SEC Form 4 filings.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {buys.map((buy: any, idx: number) => (
-                        <motion.div
-                          key={buy.ticker}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.05, duration: 0.3 }}
-                          className="rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-emerald-500/20 transition-all cursor-pointer p-4"
-                          onClick={() => handlePageTickerSelect(buy.ticker)}
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm font-bold">
-                                #{idx + 1}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-base font-bold">{buy.ticker}</span>
-                                  <span className="text-xs text-muted-foreground/50">{buy.company_name}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-muted-foreground/50">{buy.sector}</span>
-                                  <span className="text-xs text-muted-foreground/40">${buy.price?.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/40">Score</span>
-                                <span className={`text-lg font-bold ${buy.insider_score >= 70 ? 'text-emerald-400' : buy.insider_score >= 40 ? 'text-amber-400' : 'text-slate-400'}`}>
-                                  {buy.insider_score?.toFixed(0)}
-                                </span>
-                              </div>
-                              <div className="text-[10px] text-muted-foreground/40 mt-0.5">
-                                {buy.unique_insiders} insider{buy.unique_insiders > 1 ? 's' : ''} · {buy.transaction_count} txn{buy.transaction_count > 1 ? 's' : ''}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Metrics row */}
-                          <div className="grid grid-cols-4 gap-3 mb-3">
-                            <div className="rounded-lg bg-white/[0.02] px-2.5 py-1.5">
-                              <div className="text-[9px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">Total Value</div>
-                              <div className="text-sm font-semibold text-emerald-400">
-                                ${buy.total_value >= 1_000_000 ? `${(buy.total_value / 1_000_000).toFixed(1)}M` : buy.total_value >= 1000 ? `${(buy.total_value / 1000).toFixed(0)}K` : buy.total_value?.toFixed(0)}
-                              </div>
-                            </div>
-                            <div className="rounded-lg bg-white/[0.02] px-2.5 py-1.5">
-                              <div className="text-[9px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">Shares</div>
-                              <div className="text-sm font-semibold">{buy.total_shares?.toLocaleString()}</div>
-                            </div>
-                            <div className="rounded-lg bg-white/[0.02] px-2.5 py-1.5">
-                              <div className="text-[9px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">Seniority</div>
-                              <div className="text-sm font-semibold text-violet-400">{buy.avg_seniority?.toFixed(1)}x</div>
-                            </div>
-                            <div className="rounded-lg bg-white/[0.02] px-2.5 py-1.5">
-                              <div className="text-[9px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">Most Recent</div>
-                              <div className="text-sm font-semibold text-cyan-400">{buy.most_recent_date}</div>
-                            </div>
-                          </div>
-
-                          {/* Latest insider */}
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
-                            <SFIcon icon="person.badge.key.fill" size={11} className="text-emerald-400/40" />
-                            <span className="font-medium text-foreground/60">{buy.most_recent_insider}</span>
-                            <span className="text-muted-foreground/30">·</span>
-                            <span>{buy.most_recent_position}</span>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })()}
+            {activePage === "insider-buys" && (
+              <motion.div
+                key="insider-buys"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyInsiderBuying onSelectTicker={handlePageTickerSelect} />
+              </motion.div>
+            )}
 
             {/* ══════ STRATEGY BUILDER ══════ */}
             {activePage === "strategy" && (
@@ -892,22 +660,7 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
-            {/* ══════ VECTOR MAP ══════ */}
-            {activePage === "vector-map" && (
-              <motion.div
-                key="vector-map"
-                {...PAGE_MOTION_VARIANTS}
-                className="pt-4 md:pt-6 pb-8 md:pb-12"
-              >
-                <Card className="p-6 text-center">
-                  <SFIcon name="hand.wave.fill" size="text-4xl" className="text-cyan-400 mb-2" />
-                  <p className={cn("text-muted-foreground text-base font-semibold", TRACKING_HEADING_CLASS)}>Coming soon — a visual map of momentum vectors.</p>
-                  <p className="text-muted-foreground/60 text-xs mt-1.5 max-w-lg mx-auto">
-                    Our team is meticulously crafting an immersive and insightful market visualization. Stay tuned!
-                  </p>
-                </Card>
-              </motion.div>
-            )}
+
 
             {/* ══════ EARNINGS GROWERS ══════ */}
             {activePage === "earnings-growers" && (
