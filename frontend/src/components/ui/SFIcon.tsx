@@ -41,6 +41,14 @@ import {
   Hand,
   Receipt,
   HardDrive,
+  UserCheck,
+  Info,
+  Star,
+  Briefcase,
+  Brain,
+  Activity,
+  Percent,
+  Database,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,6 +103,16 @@ const ICON_MAP: Record<string, LucideIcon> = {
   "hand.wave.fill": Hand,
   "receipt.text.fill": Receipt,
   "database": HardDrive,
+  "person.badge.key.fill": UserCheck,
+  "info.circle.fill": Info,
+  "star.fill": Star,
+  "briefcase.fill": Briefcase,
+  "brain.fill": Brain,
+  "waveform.path.ecg": Activity,
+  "percent": Percent,
+  "cylinder.fill": Database,
+  "arrow.up.right.circle.fill": ArrowUpCircle,
+  "chart.bar.doc.horizontal.fill": BarChart3,
 };
 
 // Re-export the type for consumers that need it

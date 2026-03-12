@@ -63,6 +63,7 @@ from strategy_engine import (
 from redis_cache import get_cache, RedisCache
 from validators import validate_universe, validate_ohlcv_dataframe
 from engine import run_pipeline_sync, pipeline_status as _engine_status
+from insider_signals import fetch_insider_buys_parallel, fetch_insider_buys_single
 
 # ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
 
@@ -735,8 +736,61 @@ async def get_derived():
                 "continuation", "momentum_clusters", "shock_clusters", "hidden_gems",
                 "ai_stocks", "bullish_momentum", "high_volume_gappers", "earnings_growers",
                 "momentum_95"]
-        return encode_response({k: _CACHED_DASHBOARD_DATA.get(k, []) for k in keys})
+        return encode_response({k: _CACHED_DASHBOARD_DATA.get(k) or [] for k in keys})
     return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
+
+
+# ── Insider Buying cache ──
+_CACHED_INSIDER_BUYS: list | None = None
+_INSIDER_CACHE_TIME: float = 0
+INSIDER_CACHE_TTL = 3600  # 1 hour
+
+
+@app.get("/api/insider-buys")
+async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
+    """Return stocks with significant insider buying activity."""
+    global _CACHED_INSIDER_BUYS, _INSIDER_CACHE_TIME
+    import time as _time
+
+    # Return cache if fresh
+    if _CACHED_INSIDER_BUYS and (_time.time() - _INSIDER_CACHE_TIME) < INSIDER_CACHE_TTL:
+        return encode_response({
+            "insider_buys": _CACHED_INSIDER_BUYS[:limit],
+            "total": len(_CACHED_INSIDER_BUYS),
+            "lookback_days": lookback_days,
+            "cached": True,
+        })
+
+    # Scan a targeted set of high-quality tickers (not full 1500 — too slow)
+    # Use the screened results for tickers we already have data for
+    scan_tickers = []
+    if _CACHED_DASHBOARD_DATA:
+        signals = _CACHED_DASHBOARD_DATA.get("signals", [])
+        # Prioritize: high composite + trending + bullish
+        scan_tickers = [s["ticker"] for s in signals
+                        if s.get("composite", 0) > -0.5][:300]
+    if not scan_tickers:
+        scan_tickers = list(cfg.ALL_TICKERS)[:200]
+
+    try:
+        results = fetch_insider_buys_parallel(
+            scan_tickers,
+            lookback_days=lookback_days,
+            max_workers=15,
+            progress=True,
+        )
+        _CACHED_INSIDER_BUYS = results
+        _INSIDER_CACHE_TIME = _time.time()
+
+        return encode_response({
+            "insider_buys": results[:limit],
+            "total": len(results),
+            "lookback_days": lookback_days,
+            "cached": False,
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @app.get("/api/db/signals")

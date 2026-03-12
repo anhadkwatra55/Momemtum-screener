@@ -84,6 +84,8 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Dividend Stocks", icon: "dollarsign.square.fill", pageId: "dividend-stocks", section: "INCOME" },
   // Research
   { label: "Signals & Strategies", icon: "radar.fill", pageId: "signals", section: "RESEARCH" },
+  // Hedge Fund Analysis
+  { label: "Insider Buying", icon: "person.badge.key.fill", pageId: "insider-buys", section: "HEDGE FUND" },
   // Strategy
   { label: "Strategy Builder", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
 ];
