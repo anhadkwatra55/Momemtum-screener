@@ -190,8 +190,8 @@ export const springTransition = SPRING_PHYSICS_DEFAULT;
 
 // ── API / WebSocket Constants ────────────────────────────────────────────────
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8060";
-export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE ?? "ws://localhost:8060/ws";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8060";
+export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE ?? API_BASE.replace(/^http/, "ws") + "/ws";
 
 export const API_MAX_RETRIES = 2;
 export const API_RETRY_DELAY_MS = 500;
