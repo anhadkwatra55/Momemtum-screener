@@ -1,10 +1,80 @@
-# MOMENTUM — Quantitative Trading Screener
+# HEADSTART — Quantitative Momentum Research Platform
 
 > **4-System Momentum Analysis · SQLite-Backed · Real-Time Screener · Strategy Builder & Backtester**
 
-A full-stack quantitative momentum screening platform that screens **507 US equities** (S&P 500 + NASDAQ 100, deduplicated) across **11 GICS sectors** using four proprietary technical indicator systems, classifies market regimes, generates actionable trade strategies (leveraged ETFs & options), and includes a comprehensive backtesting engine with a visual strategy builder.
+A full-stack quantitative momentum research platform that screens **1,500+ US equities** (S&P 1500: S&P 500 + S&P MidCap 400 + S&P SmallCap 600, plus 30 ETFs) across **11 GICS sectors** using four proprietary technical indicator systems, classifies market regimes, generates actionable trade strategies (leveraged ETFs & options), and includes a comprehensive backtesting engine with a visual strategy builder.
 
-**Architecture**: Next.js 16 frontend (TypeScript, Tailwind CSS, Framer Motion) + FastAPI backend (Python 3.11+) + SQLite (WAL mode).
+**Architecture**: Next.js 16 frontend (TypeScript, Tailwind CSS, Framer Motion) + FastAPI backend (Python 3.11+) + SQLite (WAL mode, per-indicator tables).
+
+---
+
+## Quantitative Research Methodology
+
+HEADSTART is built on the thesis that **no single technical indicator is reliable in isolation** — but a multi-system ensemble, weighted by regime context, produces statistically significant alpha signals. Our research combines momentum, mean-reversion, and volatility analysis across four independent indicator systems.
+
+### The Ensemble Approach
+
+Each ticker in the S&P 1500 universe is scored independently by four systems that capture different facets of price momentum:
+
+| System | Indicators | What It Captures |
+|--------|-----------|-----------------|
+| **System 1** | ADX + TRIX + Full Stochastics | Trend strength × momentum direction × mean-reversion timing |
+| **System 2** | Elder Impulse (EMA-13 + MACD-Hist) | Institutional buying/selling pressure via consecutive impulse bars |
+| **System 3** | Renko (ATR-based) + Full Stochastics | Noise-filtered trend via brick aggregation + oscillator timing |
+| **System 4** | Heikin-Ashi + Hull Moving Average | Smoothed candle trend quality (wick analysis) + low-lag MA direction |
+
+Each system produces a score from **-2 to +2**. The composite score is the arithmetic mean of all four, giving equal weight to trend (S1), impulse (S2), structure (S3), and smoothed momentum (S4).
+
+### Regime Classification
+
+Market regime determines **which strategies work**. Momentum strategies excel in trending markets but fail in choppy ones. We classify each ticker into:
+
+- **Trending** (ADX ≥ 25): Momentum strategies have the highest edge
+- **Mean-Reverting** (ADX 15–25, Stochastics 30–70): Oscillator-based contrarian plays
+- **Choppy** (ADX < 15): Reduced position sizing, wider stops
+
+### Probability Engine
+
+Signal confidence (0–98%) isn't just composite magnitude — it factors in **directional agreement** across all 4 systems. When systems unanimously agree on direction, probability gets a 1.2x multiplier. This penalises ambiguous signals where systems disagree.
+
+### Persisted Indicator Database (v2)
+
+All computed indicators are persisted to SQLite in **5 separate tables** for fast querying:
+
+```
+signals            → 25-column flat table (price, composite, probability, regime, sector)
+indicator_system1  → ADX, TRIX, Stochastics per ticker
+indicator_system2  → Elder Impulse colors, MACD histogram
+indicator_system3  → Renko brick direction, brick size, Stochastics
+indicator_system4  → Heikin-Ashi trend, wick quality, HMA direction
+```
+
+This enables fast filtered queries (e.g., all Technology tickers with probability > 90%) and eliminates the need to recompute 1,500 tickers from scratch on every restart.
+
+### Thematic Screeners & Research Lists
+
+Beyond the core 10 momentum screeners, we generate thematic research lists:
+
+- **Momentum 95+**: Stocks with signal probability ≥ 95% — the highest-conviction picks
+- **AI Stocks**: Curated universe of AI/semiconductor/cloud tickers with momentum overlay
+- **Bullish Momentum**: Positive composite + positive regime + relaxed probability filters
+- **High Volume Gappers**: Unusual volume + significant daily price change
+- **Earnings Growers**: Fundamental overlay (planned: 5 consecutive quarters of revenue + EBITDA growth)
+
+### API-First Architecture
+
+All research data is accessible via typed REST endpoints:
+
+```bash
+# Filtered signal query from DB
+GET /api/db/signals?sector=Technology&min_probability=95&order_by=composite%20DESC
+
+# Single ticker with full 4-system breakdown
+GET /api/db/signal/NVDA
+
+# Derived screener lists (momentum_95, ai_stocks, etc.)
+GET /api/derived
+```
 
 ---
 
