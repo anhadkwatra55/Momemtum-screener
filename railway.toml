@@ -1,16 +1,9 @@
 [build]
-  builder = "NIXPACKS"
-
-[build.nixpacks]
-  providers = ["python"]
+  builder = "DOCKERFILE"
+  dockerfilePath = "./Dockerfile"
 
 [deploy]
-  startCommand = "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8060}"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
   restartPolicyMaxRetries = 3
-
-[[services]]
-  name = "headstart-api"
-  rootDir = "."
