@@ -1,0 +1,20 @@
+# Ignore frontend, venv, pycache, and large files from Docker build
+venv/
+frontend/
+legacy/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.db-shm
+*.db-wal
+*.json
+!backend/**/*.json
+!backend/**/*.py
+*.log
+node_modules/
+.next/
+fe_agent*
+README.md

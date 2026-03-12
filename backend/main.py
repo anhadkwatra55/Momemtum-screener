@@ -643,6 +643,17 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+# ── Health Check for Deployment Platforms ──
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for Railway/Render deployment monitoring."""
+    return {
+        "status": "ok",
+        "pipeline": _engine_status.to_dict(),
+        "cached": _CACHED_DASHBOARD_DATA is not None,
+    }
+
 
 # ── Dashboard Data ──
 
