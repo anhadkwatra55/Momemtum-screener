@@ -49,6 +49,9 @@ import {
   Activity,
   Percent,
   Database,
+  ShieldAlert,
+  Minus,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 
@@ -113,6 +116,16 @@ const ICON_MAP: Record<string, LucideIcon> = {
   "cylinder.fill": Database,
   "arrow.up.right.circle.fill": ArrowUpCircle,
   "chart.bar.doc.horizontal.fill": BarChart3,
+  "exclamationmark.shield.fill": ShieldAlert,
+  "chart.line.downtrend.xyaxis": TrendingDown,
+  "chart.line.flattrend.xyaxis": Minus,
+  "bell.badge.fill": Bell,
+  "arrow.right.circle.fill": ArrowRight,
+  "xmark.circle.fill": X,
+  "tablecells.fill": ClipboardList,
+  "plus.circle.fill": ArrowUpCircle,
+  "arrow.triangle.2.circlepath": RotateCw,
+  "trash.fill": X,
 };
 
 // Re-export the type for consumers that need it

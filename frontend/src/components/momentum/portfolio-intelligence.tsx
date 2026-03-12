@@ -204,6 +204,8 @@ const HoldingsTable = memo(({
           <th className="pb-3">P&L</th>
           <th className="pb-3">Weight</th>
           <th className="pb-3">Composite</th>
+          <th className="pb-3">Risk</th>
+          <th className="pb-3">Prob</th>
           <th className="pb-3">Sentiment</th>
           <th className="pb-3">Sector</th>
           <th className="pb-3 pr-3"></th>
@@ -243,6 +245,30 @@ const HoldingsTable = memo(({
                 </span>
               ) : (
                 <span className="text-muted-foreground/40">N/A</span>
+              )}
+            </td>
+            <td className="py-3">
+              <span className={cn(
+                "font-mono-data text-xs font-semibold px-1.5 py-0.5 rounded-md",
+                h.risk_score >= 7 ? "bg-rose-500/10 text-rose-400" :
+                h.risk_score >= 4 ? "bg-amber-500/10 text-amber-400" :
+                "bg-emerald-500/10 text-emerald-400"
+              )}>
+                {h.risk_score.toFixed(1)}
+              </span>
+            </td>
+            <td className="py-3">
+              {h.probability !== null ? (
+                <span className={cn(
+                  "font-mono-data text-xs",
+                  h.probability >= 70 ? "text-emerald-400" :
+                  h.probability >= 50 ? "text-amber-400" :
+                  "text-rose-400"
+                )}>
+                  {h.probability.toFixed(0)}%
+                </span>
+              ) : (
+                <span className="text-muted-foreground/40">—</span>
               )}
             </td>
             <td className="py-3">
@@ -433,20 +459,33 @@ MissingSectorCard.displayName = "MissingSectorCard";
 
 // ── Alpha Alert Card ──
 
-const AlertCard = memo(({ alert, i }: { alert: AlphaAlert; i: number }) => (
+const ALERT_STYLES: Record<string, { borderColor: string; iconName: string; iconColor: string; badgeClass: string }> = {
+  concentration_risk: { borderColor: "border-l-violet-500/40", iconName: "exclamationmark.shield.fill", iconColor: "text-violet-400", badgeClass: "bg-violet-500/10 text-violet-400" },
+  risky_overweight: { borderColor: "border-l-violet-500/30", iconName: "exclamationmark.triangle.fill", iconColor: "text-violet-400", badgeClass: "bg-violet-500/10 text-violet-400" },
+  bearish_impulse: { borderColor: "border-l-rose-500/40", iconName: "arrow.down.circle.fill", iconColor: "text-rose-400", badgeClass: "bg-rose-500/10 text-rose-400" },
+  deep_loss: { borderColor: "border-l-rose-500/40", iconName: "chart.line.downtrend.xyaxis", iconColor: "text-rose-400", badgeClass: "bg-rose-500/10 text-rose-400" },
+  fading_winner: { borderColor: "border-l-amber-500/40", iconName: "chart.line.flattrend.xyaxis", iconColor: "text-amber-400", badgeClass: "bg-amber-500/10 text-amber-400" },
+  exhausting_momentum: { borderColor: "border-l-orange-500/40", iconName: "bell.badge.fill", iconColor: "text-orange-400", badgeClass: "bg-orange-500/10 text-orange-400" },
+  exhausting_phase: { borderColor: "border-l-amber-500/30", iconName: "bell.badge.fill", iconColor: "text-amber-400", badgeClass: "bg-amber-500/10 text-amber-400" },
+};
+const DEFAULT_ALERT_STYLE = { borderColor: "border-l-amber-500/40", iconName: "bell.badge.fill", iconColor: "text-amber-400", badgeClass: "bg-amber-500/10 text-amber-400" };
+
+const AlertCard = memo(({ alert, i }: { alert: AlphaAlert; i: number }) => {
+  const style = ALERT_STYLES[alert.alert_type] || DEFAULT_ALERT_STYLE;
+  return (
   <motion.div
     initial={{ opacity: 0, x: -8 }}
     animate={{ opacity: 1, x: 0 }}
     transition={{ delay: i * 0.08, ...SPRING_TRANSITION_PROPS }}
   >
-    <Card className="p-4 border-l-2 border-l-amber-500/40">
+    <Card className={cn("p-4 border-l-2", style.borderColor)}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <SFIcon name="bell.badge.fill" size="text-base" className="text-amber-400" />
-          <span className="font-mono-data font-bold text-amber-400">{alert.ticker}</span>
+          <SFIcon name={style.iconName} size="text-base" className={style.iconColor} />
+          <span className={cn("font-mono-data font-bold", style.iconColor)}>{alert.ticker}</span>
           <span className={cn(
             "text-xs px-2 py-0.5 rounded-lg font-medium",
-            alert.alert_type.includes("exhausting") ? "bg-orange-500/10 text-orange-400" : "bg-rose-500/10 text-rose-400"
+            style.badgeClass
           )}>
             {alert.alert_type.replace(/_/g, " ")}
           </span>
@@ -464,7 +503,8 @@ const AlertCard = memo(({ alert, i }: { alert: AlphaAlert; i: number }) => (
       </div>
     </Card>
   </motion.div>
-));
+);
+});
 AlertCard.displayName = "AlertCard";
 
 // ── Rotation Suggestion Card ──

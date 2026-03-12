@@ -6,6 +6,8 @@ high-yield ETFs, dividend stocks, AI stocks, leveraged ETF mappings,
 indicator parameters, and a curated collection of quant/finance quotes.
 """
 
+import os
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STOCK UNIVERSE  (S&P 1500 — ~1500 tickers, 11 GICS sectors)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -356,7 +358,24 @@ AI_STOCKS = [
 _stock_tickers = {t for tickers in UNIVERSE.values() for t in tickers}
 STOCK_TICKERS = sorted(_stock_tickers)  # Stocks only (no ETFs)
 ETF_TICKERS = sorted(HIGH_YIELD_ETFS)   # ETFs only
-ALL_TICKERS = sorted(_stock_tickers | set(HIGH_YIELD_ETFS) | set(HIGH_DIVIDEND_STOCKS))
+
+# Cloud deployment: limit universe size to avoid resource exhaustion
+# Set DEPLOY_TICKER_LIMIT=200 (or any number) on Railway/Render
+_full_tickers = sorted(_stock_tickers | set(HIGH_YIELD_ETFS) | set(HIGH_DIVIDEND_STOCKS))
+_ticker_limit = int(os.environ.get("DEPLOY_TICKER_LIMIT", "0"))
+if _ticker_limit > 0:
+    # Prioritize S&P 500 stocks + all ETFs + dividend stocks
+    _sp500_sectors = ["Technology", "Healthcare", "Financials", "Consumer Discretionary",
+                      "Industrials", "Communication Services", "Consumer Staples", "Energy"]
+    _priority_tickers = []
+    for sec in _sp500_sectors:
+        _priority_tickers.extend(UNIVERSE.get(sec, [])[:_ticker_limit // len(_sp500_sectors)])
+    _priority_tickers.extend(HIGH_YIELD_ETFS[:10])
+    _priority_tickers.extend(HIGH_DIVIDEND_STOCKS[:10])
+    ALL_TICKERS = sorted(set(_priority_tickers))[:_ticker_limit]
+    print(f"  ☁ Cloud mode: limited to {len(ALL_TICKERS)} tickers (DEPLOY_TICKER_LIMIT={_ticker_limit})")
+else:
+    ALL_TICKERS = _full_tickers
 
 # Reverse lookup: ticker → sector
 TICKER_SECTOR = {}

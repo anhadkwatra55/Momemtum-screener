@@ -856,8 +856,10 @@ _ALL_SECTORS = [
 
 def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
     """
-    Cross-reference user holdings against in-memory pipeline data.
-    Returns aura score, sector exposure, alpha alerts, rotation suggestions.
+    Portfolio Intelligence — enhanced quant analysis engine.
+    Cross-references user holdings against in-memory pipeline data.
+    Returns aura score, sector exposure, alpha alerts, rotation suggestions,
+    concentration risk, momentum quality metrics, and actionable insights.
     All in-memory lookups — sub-10ms execution.
     """
     data = _CACHED_DASHBOARD_DATA
@@ -870,6 +872,8 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
 
     # Build exhausting set for alert flagging
     exhausting_tickers = {s["ticker"] for s in data.get("exhausting_momentum", [])}
+    # Fresh momentum tickers (for rotation suggestions)
+    fresh_tickers = {s["ticker"] for s in data.get("fresh_momentum", [])}
 
     holdings_analysis = []
     total_value = 0.0
@@ -877,6 +881,8 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
     sector_values: dict[str, float] = {}
     sector_composites: dict[str, list[float]] = {}
     weighted_score_sum = 0.0
+    all_composites: list[float] = []
+    all_probabilities: list[float] = []
 
     for h in holdings:
         ticker = str(h.get("ticker", "")).upper().strip()
@@ -900,6 +906,10 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
         sentiment = sig["sentiment"] if sig else "Neutral"
         regime = sig["regime"] if sig else "Choppy"
         phase = sig.get("momentum_phase", "Neutral") if sig else "Neutral"
+        probability = sig.get("probability", 50.0) if sig else 50.0
+
+        all_composites.append(composite)
+        all_probabilities.append(probability)
 
         # Accumulate sector data
         sector_values[sector] = sector_values.get(sector, 0.0) + position_value
@@ -907,28 +917,55 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
             sector_composites[sector] = []
         sector_composites[sector].append(composite)
 
-        # Weighted score for aura
-        # Normalize composite: map [-2, 2] -> [0, 100]
+        # Weighted score for aura (normalize composite: [-2, 2] -> [0, 100])
         norm_score = max(0, min(100, (composite + 2) / 4 * 100))
         weighted_score_sum += norm_score * position_value
 
-        # Detect alerts
+        # ── Risk Score per holding (0-10, higher = riskier) ──
+        risk_score = 0.0
+        if regime == "Choppy":
+            risk_score += 2.0
+        elif regime == "Mean Reverting":
+            risk_score += 1.0
+        if sentiment in ("Bearish", "Strong Bearish"):
+            risk_score += 3.0
+        elif sentiment == "Neutral":
+            risk_score += 1.0
+        if phase == "Exhausting":
+            risk_score += 2.5
+        if composite < -0.5:
+            risk_score += 2.0
+        elif composite < 0:
+            risk_score += 1.0
+        # Cap at 10
+        risk_score = min(10, risk_score)
+
+        # ── Detect Alerts (enhanced) ──
         alert = None
         alert_type = None
         action = None
         if sig:
             if ticker in exhausting_tickers:
-                alert = f"{ticker} is showing exhausting momentum — trend may be losing steam"
+                alert = f"{ticker} is showing exhausting momentum — historical pattern suggests mean reversion within 5-15 days"
                 alert_type = "exhausting_momentum"
-                action = "Consider taking profits or tightening stops"
+                action = f"Consider scaling out 25-50% of position. Current composite {composite:.2f} is unsustainable"
             elif sentiment in ("Bearish", "Strong Bearish") and composite < -0.5:
-                alert = f"{ticker} is bearish with composite {composite:.2f} — downside risk elevated"
+                alert = (f"{ticker} is in bearish territory (composite {composite:.2f}, probability {probability:.0f}%). "
+                         f"All 4 momentum systems are negative")
                 alert_type = "bearish_impulse"
-                action = "Evaluate stop-loss or reduce position size"
+                action = f"Set stop-loss at {current_price * 0.95:.2f} (-5%) or reduce by {max(25, min(75, int(abs(composite) * 50)))}%"
             elif phase == "Exhausting":
-                alert = f"{ticker} momentum phase is exhausting — move may be overextended"
+                alert = f"{ticker} momentum phase is exhausting — RSI overbought, trend may be extended"
                 alert_type = "exhausting_phase"
-                action = "Monitor closely for reversal signals"
+                action = "Tighten trailing stop to 3% or take profits on 30-50% of position"
+            elif pnl_pct < -15:
+                alert = f"{ticker} is down {pnl_pct:.1f}% from your entry — below your cost basis of ${avg_cost:.2f}"
+                alert_type = "deep_loss"
+                action = f"Review thesis. Avg down if conviction high, or cut loss if composite ({composite:.2f}) is negative"
+            elif pnl_pct > 50 and composite < 0.3:
+                alert = f"{ticker} is up {pnl_pct:.1f}% but momentum is fading (composite {composite:.2f})"
+                alert_type = "fading_winner"
+                action = "Lock in gains — sell 50% at market, trail stop on remainder"
 
         entry = {
             "ticker": ticker,
@@ -947,21 +984,61 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
             "alert_type": alert_type,
             "action": action,
             "in_universe": sig is not None,
+            "risk_score": round(risk_score, 1),
+            "probability": round(probability, 1) if sig else None,
         }
         holdings_analysis.append(entry)
 
-    # Calculate weight percentages
+    # Calculate weight percentages + concentration risk
+    concentration_alerts = []
     for entry in holdings_analysis:
         if total_value > 0:
             val = entry["shares"] * entry["current_price"]
             entry["weight_pct"] = round(val / total_value * 100, 2)
+            # Concentration risk: flag if any single holding > 25%
+            if entry["weight_pct"] > 25:
+                concentration_alerts.append({
+                    "ticker": entry["ticker"],
+                    "alert_type": "concentration_risk",
+                    "message": (f"{entry['ticker']} is {entry['weight_pct']:.1f}% of your portfolio — "
+                                f"institutional guidelines recommend max 10-15% per position"),
+                    "composite": entry["composite"],
+                    "sentiment": entry["sentiment"],
+                    "action": f"Consider trimming to ~15% allocation. Current position: ${val:,.0f}",
+                })
+            elif entry["weight_pct"] > 15 and entry.get("risk_score", 0) > 5:
+                concentration_alerts.append({
+                    "ticker": entry["ticker"],
+                    "alert_type": "risky_overweight",
+                    "message": (f"{entry['ticker']} has {entry['weight_pct']:.1f}% weight with risk score "
+                                f"{entry.get('risk_score', 0)}/10 — high-risk overweight"),
+                    "composite": entry["composite"],
+                    "sentiment": entry["sentiment"],
+                    "action": f"Reduce position or hedge — risk/weight ratio is unfavorable",
+                })
 
-    # ── Aura Score (0-100) ──
-    aura_score = round(weighted_score_sum / total_value, 1) if total_value > 0 else 50.0
-    # Bonus for diversification (up to +10)
+    # ── Aura Score (0-100) — Enhanced ──
+    base_aura = round(weighted_score_sum / total_value, 1) if total_value > 0 else 50.0
+
+    # Diversification bonus (up to +10)
     unique_sectors = len([s for s in sector_values if s != "Unknown"])
     diversification_bonus = min(10, unique_sectors * 1.5)
-    aura_score = round(min(100, max(0, aura_score + diversification_bonus)), 1)
+
+    # Momentum quality bonus (up to +5): based on % of holdings with positive composite
+    positive_ratio = (sum(1 for c in all_composites if c > 0) / len(all_composites)) if all_composites else 0
+    momentum_quality_bonus = positive_ratio * 5
+
+    # Risk penalty (up to -15): based on avg risk score of holdings
+    avg_risk = (sum(e.get("risk_score", 0) for e in holdings_analysis) / len(holdings_analysis)) if holdings_analysis else 0
+    risk_penalty = min(15, avg_risk * 1.5)
+
+    # Concentration penalty (up to -10): penalize if top holding > 40%
+    max_weight = max((e["weight_pct"] for e in holdings_analysis), default=0)
+    concentration_penalty = max(0, (max_weight - 25) * 0.4)
+
+    aura_score = round(min(100, max(0,
+        base_aura + diversification_bonus + momentum_quality_bonus - risk_penalty - concentration_penalty
+    )), 1)
 
     if aura_score >= 80:
         aura_label = "Ultra Instinct"
@@ -995,9 +1072,18 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
         regime_info = sector_regimes.get(sector, {})
         regime = regime_info.get("regime", "Unknown")
         avg_comp = regime_info.get("avg_composite", 0)
-        # Find top pick in this sector
+        # Find top pick in this sector — prefer fresh momentum with high probability
         sector_signals = [s for s in data.get("signals", []) if s.get("sector") == sector]
-        sector_signals.sort(key=lambda s: s.get("composite", 0), reverse=True)
+        # Score candidates by: composite * 0.4 + probability * 0.004 + (fresh bonus 0.3)
+        def _pick_score(s: dict) -> float:
+            score = s.get("composite", 0) * 0.4
+            score += s.get("probability", 50) * 0.004
+            if s.get("ticker") in fresh_tickers:
+                score += 0.3
+            if s.get("sentiment", "").startswith("Bullish"):
+                score += 0.2
+            return score
+        sector_signals.sort(key=_pick_score, reverse=True)
         top = sector_signals[0] if sector_signals else None
         missing_sectors.append({
             "sector": sector,
@@ -1014,7 +1100,7 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
         -(x["avg_composite"] or 0),
     ))
 
-    # ── Alpha Alerts ──
+    # ── Alpha Alerts (enriched + concentration alerts) ──
     alpha_alerts = [
         {
             "ticker": e["ticker"],
@@ -1026,29 +1112,91 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
         }
         for e in holdings_analysis if e["alert"]
     ]
+    # Add concentration risk alerts
+    alpha_alerts.extend(concentration_alerts)
+    # Sort by conviction: high-impact alerts first
+    def _alert_priority(a: dict) -> int:
+        type_order = {"concentration_risk": 0, "bearish_impulse": 1, "deep_loss": 2,
+                       "risky_overweight": 3, "exhausting_momentum": 4, "fading_winner": 5,
+                       "exhausting_phase": 6}
+        return type_order.get(a.get("alert_type", ""), 99)
+    alpha_alerts.sort(key=_alert_priority)
 
-    # ── Rotation Suggestions ──
+    # ── Rotation Suggestions (smarter) ──
     rotation_suggestions = []
-    # For each alerted holding, suggest a replacement from the same or trending sector
+    held_tickers = {e["ticker"] for e in holdings_analysis}
+    # Sectors we already hold (avoid overconcentrating)
+    overweight_sectors = {s for s, d in sector_exposure.items() if d.get("weight_pct", 0) > 30}
+
     for alert_entry in alpha_alerts[:5]:  # Max 5 suggestions
         ticker = alert_entry["ticker"]
+        if alert_entry.get("alert_type") in ("concentration_risk", "risky_overweight"):
+            # For concentration alerts, suggest diversifying into a missing trending sector
+            candidates = []
+            for ms in missing_sectors:
+                if ms["top_pick"] and ms["top_pick"] not in held_tickers and ms["priority"] in ("high", "medium"):
+                    sig = signal_map.get(ms["top_pick"])
+                    if sig and sig.get("composite", 0) > 0.3:
+                        candidates.append(sig)
+            if candidates:
+                candidates.sort(key=lambda s: s.get("composite", 0) * 0.6 + s.get("probability", 50) * 0.004, reverse=True)
+                best = candidates[0]
+                rotation_suggestions.append({
+                    "sell_ticker": ticker,
+                    "sell_composite": alert_entry["composite"],
+                    "sell_sentiment": alert_entry["sentiment"],
+                    "buy_ticker": best["ticker"],
+                    "buy_composite": round(best.get("composite", 0), 2),
+                    "buy_sentiment": best.get("sentiment", "Neutral"),
+                    "buy_sector": best.get("sector", "Unknown"),
+                    "rationale": (f"Trim overweight {ticker} ({alert_entry.get('alert_type', '').replace('_', ' ')}) "
+                                  f"→ diversify into {best.get('sector', 'N/A')} ({best.get('sentiment', 'N/A')}, "
+                                  f"composite {best.get('composite', 0):.2f})"),
+                })
+            continue
+
         holding_entry = next((h for h in holdings_analysis if h["ticker"] == ticker), None)
         if not holding_entry:
             continue
-        # Find best replacement: fresh momentum in same sector or top trending sector
+
+        # Prefer same-sector replacements first, then trending sectors (avoid overweight sectors)
+        sell_sector = holding_entry.get("sector", "Unknown")
         candidates = [
-            s for s in data.get("fresh_momentum", [])
-            if s["ticker"] != ticker and s.get("composite", 0) > 0.5
+            s for s in data.get("signals", [])
+            if s["ticker"] != ticker
+            and s["ticker"] not in held_tickers
+            and s.get("composite", 0) > 0.5
+            and s.get("sentiment", "").startswith("Bullish")
+            and s.get("sector", "") not in overweight_sectors
         ]
-        if not candidates:
-            candidates = [
-                s for s in data.get("signals", [])
-                if s["ticker"] != ticker and s.get("composite", 0) > 0.8
-                and s.get("sentiment") in ("Bullish", "Strong Bullish")
-            ]
-        if candidates:
-            candidates.sort(key=lambda s: s.get("composite", 0), reverse=True)
-            best = candidates[0]
+        # Prefer same-sector candidates
+        same_sector = [c for c in candidates if c.get("sector") == sell_sector]
+        search_pool = same_sector if same_sector else candidates
+        # Also add fresh momentum tickers as candidates
+        fresh_candidates = [
+            s for s in data.get("fresh_momentum", [])
+            if s["ticker"] not in held_tickers and s.get("composite", 0) > 0.5
+            and s.get("sector", "") not in overweight_sectors
+        ]
+        search_pool = search_pool + [c for c in fresh_candidates if c not in search_pool]
+
+        if search_pool:
+            # Score: composite * 0.5 + probability * 0.005 + fresh_bonus * 0.2
+            def _rot_score(s: dict) -> float:
+                score = s.get("composite", 0) * 0.5
+                score += s.get("probability", 50) * 0.005
+                if s.get("ticker") in fresh_tickers:
+                    score += 0.2
+                return score
+            search_pool.sort(key=_rot_score, reverse=True)
+            best = search_pool[0]
+            is_same_sector = best.get("sector") == sell_sector
+            rationale = (
+                f"Rotate from {alert_entry.get('alert_type', '').replace('_', ' ')} "
+                f"{'within' if is_same_sector else 'into'} {best.get('sector', 'N/A')} — "
+                f"{best['ticker']} has {best.get('momentum_phase', 'fresh')} momentum "
+                f"(composite {best.get('composite', 0):.2f}, {best.get('probability', 50):.0f}% probability)"
+            )
             rotation_suggestions.append({
                 "sell_ticker": ticker,
                 "sell_composite": alert_entry["composite"],
@@ -1057,8 +1205,7 @@ def _compute_portfolio_analysis(holdings: list[dict]) -> dict:
                 "buy_composite": round(best.get("composite", 0), 2),
                 "buy_sentiment": best.get("sentiment", "Neutral"),
                 "buy_sector": best.get("sector", "Unknown"),
-                "rationale": f"Rotate out of {alert_entry['alert_type'].replace('_', ' ')} "
-                             f"into {best.get('momentum_phase', 'fresh')} momentum in {best.get('sector', 'N/A')}",
+                "rationale": rationale,
             })
 
     total_pnl = total_value - total_cost

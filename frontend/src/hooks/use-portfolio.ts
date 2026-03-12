@@ -25,6 +25,8 @@ export interface HoldingAnalysis extends Holding {
   alert_type: string | null;
   action: string | null;
   in_universe: boolean;
+  risk_score: number;
+  probability: number | null;
 }
 
 export interface SectorExposure {
