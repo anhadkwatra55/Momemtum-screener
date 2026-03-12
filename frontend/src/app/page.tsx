@@ -211,6 +211,24 @@ export default function CommandCenter() {
                 View Track Record
               </AppleButton>
             </div>
+
+            {/* Research Methodology Highlights */}
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-5xl mx-auto">
+              {[
+                { icon: "chart.line.uptrend.xyaxis", label: "4-System Ensemble", desc: "ADX/TRIX, Elder Impulse, Renko, and Heikin-Ashi/HMA scored independently then averaged" },
+                { icon: "waveform.path.ecg", label: "Regime Classification", desc: "Every ticker classified as Trending, Mean-Reverting, or Choppy based on ADX + Stochastic analysis" },
+                { icon: "percent", label: "Probability Engine", desc: "0–98% confidence from directional agreement across all 4 systems with 1.2x unanimity bonus" },
+                { icon: "cylinder.fill", label: "Persisted Indicators", desc: "All data stored in 5 SQL tables — signals survive restarts, fast filtered queries" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-2.5 rounded-xl bg-white/[0.02] border border-white/[0.03] px-3.5 py-3">
+                  <SFIcon icon={item.icon} size={14} className="text-cyan-400/50 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-[11px] font-semibold text-foreground/70 mb-0.5">{item.label}</div>
+                    <div className="text-[10px] text-muted-foreground/45 leading-relaxed">{item.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </motion.section>
 
           {/* ═══ KPI STRIP ═══ */}
@@ -346,6 +364,12 @@ export default function CommandCenter() {
                 </h2>
                 <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">{sectorCount} sectors</span>
               </div>
+              <div className="flex items-start gap-2 mb-4 rounded-lg bg-white/[0.02] border border-white/[0.03] px-3.5 py-2.5">
+                <SFIcon icon="info.circle.fill" size={12} className="text-violet-400/50 mt-0.5 shrink-0" />
+                <p className="text-[10px] text-muted-foreground/45 leading-relaxed">
+                  Each sector is classified into <span className="text-emerald-400/70 font-medium">Trending</span> (ADX ≥ 25, momentum strategies have edge), <span className="text-amber-400/70 font-medium">Mean-Reverting</span> (ADX 15–25, oscillator plays), or <span className="text-rose-400/70 font-medium">Choppy</span> (ADX &lt; 15, reduce exposure). Bull/Bear bars show sentiment distribution within each sector.
+                </p>
+              </div>
               <SectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
             </AppleCard>
           </motion.div>
@@ -358,6 +382,14 @@ export default function CommandCenter() {
                   <SFIcon icon="antenna.radiowaves.left.and.right" size={20} /> Live Signal Feed
                 </h2>
                 <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">Top {topSignals.length}</span>
+              </div>
+              <div className="px-6 pb-3">
+                <div className="flex items-start gap-2 rounded-lg bg-white/[0.02] border border-white/[0.03] px-3.5 py-2.5">
+                  <SFIcon icon="info.circle.fill" size={12} className="text-cyan-400/50 mt-0.5 shrink-0" />
+                  <p className="text-[10px] text-muted-foreground/45 leading-relaxed">
+                    Ranked by composite score — the average of 4 independent indicator systems. <span className="text-foreground/40 font-medium">Confidence</span> reflects directional agreement: unanimous bullish/bearish alignment across all systems gets a 1.2x multiplier. Click any ticker for full analysis.
+                  </p>
+                </div>
               </div>
               <div className="horizontal-scroll-on-mobile custom-scrollbar px-6 pb-6">
                 <table className="w-full text-left border-separate border-spacing-y-1 min-w-[700px]">

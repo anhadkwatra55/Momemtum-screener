@@ -47,22 +47,22 @@ const LazySectorHeatmap = dynamic(() => import('@/components/momentum/sector-hea
 const LazyPortfolioIntelligence = dynamic(() => import('@/components/momentum/portfolio-intelligence').then(m => ({ default: m.PortfolioIntelligence })), { ssr: false });
 const LazyCandlestickChart = dynamic(() => import('@/components/charts/candlestick-chart').then(m => ({ default: m.CandlestickChart })), { ssr: false });
 
-const SCREENER_MAP: Record<string, { key: string; title: string; icon: string }> = {
-  fresh: { key: "fresh_momentum", title: "Fresh Momentum", icon: "leaf.fill" },
-  exhausting: { key: "exhausting_momentum", title: "Exhausting Momentum", icon: "flame.fill" },
-  rotation: { key: "rotation_ideas", title: "Rotation Breakouts", icon: "tornado" },
-  shock: { key: "shock_signals", title: "Momentum Shock Detector", icon: "bolt.slash.fill" },
-  gamma: { key: "gamma_signals", title: "Gamma Squeeze Ops", icon: "target" },
-  "smart-money": { key: "smart_money", title: "Smart Money Accumulation", icon: "dollarsign.circle.fill" },
-  continuation: { key: "continuation", title: "Momentum Continuation", icon: "rocket.fill" },
-  clusters: { key: "momentum_clusters", title: "Momentum Clusters", icon: "cube.fill" },
-  "shock-clusters": { key: "shock_clusters", title: "Sector Shock Clusters", icon: "bolt.circle.fill" },
-  "hidden-gems": { key: "hidden_gems", title: "Hidden Gems", icon: "diamond.fill" },
-  "etf-screener": { key: "high_yield_etfs", title: "ETF Screener", icon: "chart.line.uptrend.rectangle.fill" },
-  "ai-stocks": { key: "ai_stocks", title: "AI Stocks", icon: "brain.fill" },
-  "bullish-momentum": { key: "bullish_momentum", title: "Bullish Momentum", icon: "arrow.up.right.circle.fill" },
-  "volume-gappers": { key: "high_volume_gappers", title: "High Volume Gappers", icon: "chart.bar.doc.horizontal.fill" },
-  "momentum-95": { key: "momentum_95", title: "Momentum Score 95+", icon: "star.fill" },
+const SCREENER_MAP: Record<string, { key: string; title: string; icon: string; info: string }> = {
+  fresh: { key: "fresh_momentum", title: "Fresh Momentum", icon: "leaf.fill", info: "Early-stage momentum signals where Stochastic %K has just crossed above %D below the 70 level — catching trends before they become crowded. Scored by our 4-system ensemble (ADX + Elder + Renko + HA/HMA)." },
+  exhausting: { key: "exhausting_momentum", title: "Exhausting Momentum", icon: "flame.fill", info: "Late-stage momentum where Stochastic %K is above 80 — overbought conditions that may reverse. Useful for profit-taking or initiating tactical hedges." },
+  rotation: { key: "rotation_ideas", title: "Rotation Breakouts", icon: "tornado", info: "Sector rotation signals detected when a ticker's regime shifts from Choppy/Mean-Reverting to Trending (ADX crossing above 25), suggesting institutional capital flows into new sectors." },
+  shock: { key: "shock_signals", title: "Momentum Shock Detector", icon: "bolt.slash.fill", info: "Sudden momentum reversals where composite score flips direction with high magnitude — indicates potential trend breaks. Often precedes multi-day moves." },
+  gamma: { key: "gamma_signals", title: "Gamma Squeeze Ops", icon: "target", info: "Identifies tickers with conditions favorable for gamma squeezes: high short interest environment combined with strong bullish momentum and rising volatility spikes." },
+  "smart-money": { key: "smart_money", title: "Smart Money Accumulation", icon: "dollarsign.circle.fill", info: "Detects institutional accumulation patterns: rising volume with controlled price action, positive composite in a Mean-Reverting regime — the signature of large players building positions quietly." },
+  continuation: { key: "continuation", title: "Momentum Continuation", icon: "rocket.fill", info: "Stocks already in Trending regime with sustained high composite scores and probability > 70% — momentum that is likely to persist based on ADX strength and system agreement." },
+  clusters: { key: "momentum_clusters", title: "Momentum Clusters", icon: "cube.fill", info: "Groups of stocks within the same sector showing correlated momentum — indicates sector-wide moves rather than idiosyncratic stock stories." },
+  "shock-clusters": { key: "shock_clusters", title: "Sector Shock Clusters", icon: "bolt.circle.fill", info: "Multiple momentum shocks occurring simultaneously within a sector — signals sector-level catalysts like earnings season surprises or regulatory changes." },
+  "hidden-gems": { key: "hidden_gems", title: "Hidden Gems", icon: "diamond.fill", info: "Mid-cap and small-cap stocks with strong composite scores but low analyst coverage — under-the-radar opportunities with asymmetric risk/reward profiles." },
+  "etf-screener": { key: "high_yield_etfs", title: "ETF Screener", icon: "chart.line.uptrend.rectangle.fill", info: "Dedicated ETF screening covering high-yield bonds, dividend equity, REITs, and covered call strategies — sorted by yield with momentum overlay for timing." },
+  "ai-stocks": { key: "ai_stocks", title: "AI Stocks", icon: "brain.fill", info: "Curated universe of 30+ AI, semiconductor, and cloud computing leaders (NVDA, AMD, GOOGL, MSFT, META, PLTR, etc.) with full 4-system momentum analysis and regime classification." },
+  "bullish-momentum": { key: "bullish_momentum", title: "Bullish Momentum", icon: "arrow.up.right.circle.fill", info: "Comprehensive bullish technical alignment: positive composite score, trending regime (ADX ≥ 25), MACD bullish, and probability confirmation across all 4 indicator systems." },
+  "volume-gappers": { key: "high_volume_gappers", title: "High Volume Gappers", icon: "chart.bar.doc.horizontal.fill", info: "Stocks gapping up on significantly above-average volume (RVOL > 1.5x) with bullish momentum — often indicates institutional order flow driving price discovery." },
+  "momentum-95": { key: "momentum_95", title: "Momentum Score 95+", icon: "star.fill", info: "The highest-conviction picks: only stocks where all 4 systems produce probability ≥ 95%. Requires unanimous directional agreement across ADX/TRIX/Stoch, Elder Impulse, Renko, and Heikin-Ashi/HMA." },
 };
 
 const ChartSkeleton = memo(() => (
@@ -639,6 +639,13 @@ const DashboardPage = memo(() => {
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
+                {/* Research info for this screener */}
+                <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-gradient-to-r from-cyan-500/[0.04] to-violet-500/[0.04] border border-white/[0.04] px-4 py-3">
+                  <SFIcon icon="info.circle.fill" size={14} className="text-cyan-400/60 mt-0.5 shrink-0" />
+                  <p className="text-xs text-muted-foreground/60 leading-relaxed">
+                    {SCREENER_MAP[activePage].info}
+                  </p>
+                </div>
                 <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
                   <LazyScreenerTable
                     data={(data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || []}
