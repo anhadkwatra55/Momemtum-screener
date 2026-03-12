@@ -44,10 +44,11 @@ warnings.filterwarnings("ignore")
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # CPU workers for indicator math (leave 1 core for the event loop)
-CPU_WORKERS = max(1, (os.cpu_count() or 4) - 1)
+# In cloud mode, cap at 2 — Railway/Render report many shared CPUs but have limited RAM
+_is_cloud = bool(os.environ.get("DEPLOY_TICKER_LIMIT") or os.environ.get("RAILWAY_ENVIRONMENT"))
+CPU_WORKERS = 2 if _is_cloud else max(1, (os.cpu_count() or 4) - 1)
 
 # I/O workers for network requests — reduce in cloud to avoid thread exhaustion
-_is_cloud = bool(os.environ.get("DEPLOY_TICKER_LIMIT") or os.environ.get("RAILWAY_ENVIRONMENT"))
 IO_WORKERS = 5 if _is_cloud else 20
 
 # Chunk size for batched screening (controls peak memory)
