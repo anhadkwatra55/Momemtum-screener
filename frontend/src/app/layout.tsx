@@ -26,12 +26,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  // Evocative title that reflects the platform's power and user benefit.
-  title: "MOMENTUM — Unleash Your Trading Edge",
-  // Compelling, benefit-driven description for a premium digital experience,
-  // aligning with the "IQ 300" standard of telling a story for every interaction.
+  title: "HEADSTART — Your Alpha Edge",
   description:
-    "Unlock unparalleled market insights with MOMENTUM: a premium trading platform engineered for precision. Discover real-time signals, build powerful strategies, and backtest with confidence to elevate your financial edge.",
+    "Unlock unparalleled market insights with HEADSTART: a premium trading intelligence platform. Discover real-time momentum signals, screen stocks & ETFs, build strategies, and gain your edge.",
 };
 
 export default function RootLayout({

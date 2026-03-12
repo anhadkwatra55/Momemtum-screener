@@ -11,7 +11,7 @@ import { QuoteRotator } from "@/components/momentum/quote-rotator";
 import { SentimentBadge } from "@/components/momentum/sentiment-badge";
 import { AppleCard } from "@/components/ui/apple-card";
 import { AppleButton } from "@/components/ui/apple-button";
-import { SFIcon } from "@/components/ui/SFIcon"; // Using the centralized SFIcon component
+import { SFIcon } from "@/components/ui/SFIcon";
 import { useSignals } from "@/hooks/use-signals";
 import {
   COLORS,
@@ -32,247 +32,117 @@ import {
 import { Signal } from "@/types/momentum";
 import { cn, getBackgroundColorClass, getTextColorClass, type PaletteColorKey } from "@/lib/utils";
 
-// ── Framer Motion Animations ──
+// ── Animations ──
 const staggerContainer = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: STAGGER_CHILDREN_DELAY,
-      delayChildren: INITIAL_STAGGER_DELAY,
-    },
+    transition: { staggerChildren: STAGGER_CHILDREN_DELAY, delayChildren: INITIAL_STAGGER_DELAY },
   },
 };
-
-const fadeInTranslateY = {
+const fadeIn = {
   hidden: { opacity: 0, y: 20 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: SPRING_TRANSITION,
-  },
+  show: { opacity: 1, y: 0, transition: SPRING_TRANSITION },
 };
-
 const pageTransition = {
   initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0, transition: { duration: PAGE_TRANSITION_DURATION, ease: [0.33, 1, 0.68, 1] } },
-  exit: { opacity: 0, y: -20, transition: { duration: PAGE_TRANSITION_DURATION, ease: [0.33, 1, 0.68, 1] } },
+  animate: { opacity: 1, y: 0, transition: { duration: PAGE_TRANSITION_DURATION, ease: [0.33, 1, 0.68, 1] as const } },
+  exit: { opacity: 0, y: -20, transition: { duration: PAGE_TRANSITION_DURATION, ease: [0.33, 1, 0.68, 1] as const } },
 };
 
-// ── Memoized Table Header ──
-const tableHeaders = [
-  "Ticker", "Sentiment", "Composite", "Confidence", "Δ Day", "20D", "Price", "Sector"
-];
-
-// Define column widths for consistency and desktop table layout
-const columnWidths = [
-  "w-[16%]", // Ticker
-  "w-[12%]", // Sentiment
-  "w-[10%]", // Composite
-  "w-[10%]", // Confidence
-  "w-[10%]", // Δ Day
-  "w-[10%]", // 20D
-  "w-[12%]", // Price
-  "w-[20%]", // Sector
-];
-
-// ── Local Momentum Phase Badge Component (for "Fresh") ──
-interface MomentumPhaseBadgeProps {
-  phase: string;
-  icon: string; // Now expects SF Symbol name
-  className?: string;
+// ── Skeleton ──
+function CommandCenterSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 animate-pulse" />
+        <div className="w-48 h-4 rounded-lg bg-muted/30 animate-pulse" />
+        <div className="w-32 h-3 rounded-lg bg-muted/20 animate-pulse" />
+      </div>
+    </div>
+  );
 }
 
-const MomentumPhaseBadge = React.memo(({ phase, icon, className }: MomentumPhaseBadgeProps) => {
-  const bgColor = getBackgroundColorClass("emerald", "500", "12");
-  const textColor = getTextColorClass("emerald", "400");
-
+// ── Rating Badge ──
+function RatingBadge({ sentiment }: { sentiment: string }) {
+  const styles = {
+    "Strong Bullish": "bg-emerald-500/15 text-emerald-400",
+    "Bullish": "bg-lime-500/12 text-lime-400",
+    "Neutral": "bg-slate-500/10 text-slate-400",
+    "Bearish": "bg-orange-500/12 text-orange-400",
+    "Strong Bearish": "bg-rose-500/15 text-rose-400",
+  };
   return (
-    <span className={cn(
-      "text-xs px-3 py-1.5 rounded-2xl font-bold tracking-[0.1em] font-inter",
-      bgColor,
-      textColor,
-      className
-    )}>
-      <SFIcon icon={icon} size={14} className="mr-1" />
-      {phase.toUpperCase()}
+    <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", styles[sentiment as keyof typeof styles] || styles.Neutral)}>
+      {sentiment}
     </span>
   );
-});
-MomentumPhaseBadge.displayName = "MomentumPhaseBadge";
-
-// ── Live Signal Table Row Component ──
-interface SignalTableRowProps {
-  signal: Signal;
-  onClick: (ticker: string) => void;
-  index: number; // For staggered animation
 }
 
-const SignalTableRow = React.memo(({ signal, onClick, index }: SignalTableRowProps) => {
-  const textColorClass = useCallback((value: number, threshold?: number) => {
-    if (threshold !== undefined) {
-      return value > threshold ? getTextColorClass("emerald", "400") : getTextColorClass("amber", "400");
-    }
-    return value > 0 ? getTextColorClass("emerald", "400") : getTextColorClass("rose", "400");
-  }, []);
+// ── Platform Feature Card ──
+interface FeatureCardProps {
+  icon: string;
+  title: string;
+  desc: string;
+  tags: string[];
+  href: string;
+  color: PaletteColorKey;
+  delay: number;
+}
 
+function FeatureCard({ icon, title, desc, tags, href, color, delay }: FeatureCardProps) {
   return (
-    <motion.tr
-      key={signal.ticker}
-      className="relative z-10 cursor-pointer group"
-      initial={{ opacity: 0, y: 10 }}
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }} // Animates out with opacity and y-transform
-      whileHover={{
-        y: HOVER_Y_LIFT,
-        boxShadow: SHADOW_GLOW_CYAN,
-        transition: SPRING_TRANSITION,
-      }}
-      transition={{
-        ...SPRING_TRANSITION,
-        delay: index * STAGGER_CHILDREN_DELAY * 0.8,
-      }}
-      onClick={() => onClick(signal.ticker)}
-      aria-label={`View details for ${signal.ticker}`}
+      transition={{ ...SPRING_TRANSITION, delay }}
     >
-      <td className="bg-card/60 p-4 rounded-l-xl">
-        <div className="font-mono-data font-bold text-cyan-400 group-hover:text-cyan-300 transition-colors">
-          {signal.ticker}
-        </div>
-      </td>
-      <td className="bg-card/60 p-4">
-        <SentimentBadge sentiment={signal.sentiment} />
-      </td>
-      <td className="bg-card/60 p-4">
-        <div className={cn("font-mono-data font-bold", textColorClass(signal.composite))}>
-          {signal.composite.toFixed(2)}
-        </div>
-      </td>
-      <td className="bg-card/60 p-4">
-        <div className={cn("font-mono-data", textColorClass(signal.probability, HIGH_CONFIDENCE_THRESHOLD))}>
-          {signal.probability}%
-        </div>
-      </td>
-      <td className="bg-card/60 p-4">
-        <div className={cn("font-mono-data", textColorClass(signal.daily_change))}>
-          {signal.daily_change > 0 ? "+" : ""}{signal.daily_change.toFixed(2)}%
-        </div>
-      </td>
-      <td className="bg-card/60 p-4">
-        <div className={cn("font-mono-data", textColorClass(signal.return_20d))}>
-          {signal.return_20d > 0 ? "+" : ""}{signal.return_20d.toFixed(2)}%
-        </div>
-      </td>
-      <td className="bg-card/60 p-4">
-        <div className="font-mono-data">${signal.price.toFixed(2)}</div>
-      </td>
-      <td className="bg-card/60 p-4 rounded-r-xl">
-        <div className="text-muted-foreground/60 text-sm">{signal.sector}</div>
-      </td>
-    </motion.tr>
-  );
-});
-SignalTableRow.displayName = "SignalTableRow";
-
-// ── Skeleton Loader Component ──
-const CommandCenterSkeleton = React.memo(() => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    transition={{ duration: 0.5 }}
-    className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 md:p-6 lg:p-8"
-  >
-    <div className="relative">
-      <div className="w-12 h-12 border-[2.5px] border-white/[0.05] border-t-cyan-400/80 rounded-full animate-spin" />
-      <div className="absolute inset-0 w-12 h-12 border-[2.5px] border-transparent border-b-violet-400/30 rounded-full animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.5s" }} />
-    </div>
-    <p className="text-muted-foreground/60 text-sm font-medium tracking-wide font-inter">Loading Command Center…</p>
-
-    {/* Custom Skeleton Preview */}
-    <div className="w-full max-w-[1440px] mt-10 px-4 sm:px-6">
-      <div className="h-6 w-1/3 mx-auto skeleton rounded-2xl mb-4" />
-      <div className="h-4 w-1/4 mx-auto skeleton rounded-2xl mb-10" />
-
-      {/* KPI Strip Skeleton */}
-      <div className="bento-grid mb-10">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="apple-card skeleton h-16 sm:h-20 flex flex-col items-center justify-center rounded-2xl" />
-        ))}
-      </div>
-
-      {/* Bento Grid Skeleton */}
-      <div className="bento-grid">
-        {/* Main Character / Quote Rotator */}
-        <div className="skeleton apple-card h-[180px] sm:h-[200px] lg:col-span-2 rounded-2xl" />
-        <div className="skeleton apple-card h-[180px] sm:h-[200px] lg:col-span-2 rounded-2xl" />
-
-        {/* Platform Modules (4 cards) */}
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="skeleton apple-card h-[140px] rounded-2xl" />
-        ))}
-
-        {/* Market Heat (full width) */}
-        <div className="skeleton apple-card h-[280px] col-span-full rounded-2xl" />
-
-        {/* Live Signal Feed (full width table) */}
-        <div className="skeleton apple-card col-span-full pt-5 pb-3 rounded-2xl">
-          <div className="h-5 w-1/4 mb-4 mx-6 skeleton rounded-2xl" />
-          <div className="horizontal-scroll-on-mobile">
-            <div className="h-10 w-full bg-slate-800/20 mb-1 rounded-2xl" />
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-10 w-full mb-2 bg-slate-800/10 rounded-2xl" />
+      <Link href={href} className="block h-full">
+        <AppleCard glowColor={color} className="h-full group flex flex-col justify-between p-5">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-violet-500/20 flex items-center justify-center">
+                <SFIcon icon={icon} size={20} className="text-cyan-400" />
+              </div>
+              <SFIcon icon="arrow.right" size={16} className="text-muted-foreground/30 group-hover:text-foreground/60 transition-all group-hover:translate-x-1 duration-200" />
+            </div>
+            <h3 className="font-semibold text-base text-foreground/90 mb-1.5 group-hover:text-foreground transition-colors tracking-tight">{title}</h3>
+            <p className="text-sm text-muted-foreground/60 font-light leading-relaxed mb-4">{desc}</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map(t => (
+              <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-muted-foreground/50 font-medium uppercase tracking-wider">{t}</span>
             ))}
           </div>
-        </div>
-      </div>
-    </div>
-  </motion.div>
-));
-CommandCenterSkeleton.displayName = "CommandCenterSkeleton";
-
-// Define a type for platform module items for improved type safety
-interface PlatformModuleItem {
-  name: string;
-  tag: string;
-  color: PaletteColorKey;
-  href: string;
-  pageId: string;
-  icon: string;
-  desc: string;
-  ariaLabel: string;
+        </AppleCard>
+      </Link>
+    </motion.div>
+  );
 }
 
-export default function CommandCenterPage() {
-  const { data, loading, error } = useSignals();
+// ── Main Page ──
+export default function CommandCenter() {
   const router = useRouter();
+  const { data, loading, error } = useSignals();
 
-  // ── Handlers ──
   const navigateToDashboard = useCallback(() => {
-    router.push(ROUTES.dashboard);
+    router.push(`${ROUTES.dashboard}?view=intelligence`);
   }, [router]);
-
   const navigateToReceipts = useCallback(() => {
     router.push(ROUTES.receipts);
   }, [router]);
-
   const navigateToDashboardWithTicker = useCallback((ticker: string) => {
-    router.push(`${ROUTES.dashboard}?ticker=${ticker}`);
+    router.push(`${ROUTES.dashboard}?view=ticker-detail&ticker=${ticker}`);
+  }, [router]);
+  const navigateToDashboardWithView = useCallback((view: string) => {
+    router.push(`${ROUTES.dashboard}?view=${view}`);
   }, [router]);
 
-  const navigateToPlatformModule = useCallback((pageId: string, href: string) => {
-    if (href === ROUTES.dashboard) {
-      router.push(`${ROUTES.dashboard}?view=${pageId}`);
-    } else {
-      router.push(href);
-    }
-  }, [router]);
-
-  // ── Memoized Data (MUST be before any conditional returns per React Rules of Hooks) ──
-  const mainChar = useMemo(() => data?.signals?.[0], [data?.signals]);
+  // ── Memoized data ──
+  const bullishMomentum = useMemo(() => data?.bullish_momentum?.slice(0, 5) || [], [data?.bullish_momentum]);
+  const topSignals = useMemo(() => data?.signals?.slice(0, 8) || [], [data?.signals]);
   const freshCount = useMemo(() => data?.fresh_momentum?.length || 0, [data?.fresh_momentum]);
   const sectorCount = useMemo(() => data?.sector_regimes ? Object.keys(data.sector_regimes).length : 0, [data?.sector_regimes]);
-  const topSignals = useMemo(() => data?.signals?.slice(0, TOP_SIGNALS_LIMIT) || [], [data?.signals]);
-
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
     return [
@@ -285,60 +155,20 @@ export default function CommandCenterPage() {
     ];
   }, [data?.summary]);
 
-  const mainCharMetrics = useMemo(() => {
-    if (!mainChar) return [];
-    return [
-      { l: "Composite", v: mainChar.composite.toFixed(2), c: mainChar.composite > 0 ? getTextColorClass("emerald", "400") : getTextColorClass("rose", "400") },
-      { l: "Confidence", v: `${mainChar.probability}%`, c: mainChar.probability > HIGH_CONFIDENCE_THRESHOLD ? getTextColorClass("emerald", "400") : getTextColorClass("amber", "400") },
-      { l: "Δ Day", v: `${mainChar.daily_change > 0 ? "+" : ""}${mainChar.daily_change.toFixed(2)}%`, c: mainChar.daily_change > 0 ? getTextColorClass("emerald", "400") : getTextColorClass("rose", "400") },
-      { l: "20D", v: `${mainChar.return_20d > 0 ? "+" : ""}${mainChar.return_20d.toFixed(2)}%`, c: mainChar.return_20d > 0 ? getTextColorClass("emerald", "400") : getTextColorClass("rose", "400") },
-    ];
-  }, [mainChar]);
+  if (loading) return <CommandCenterSkeleton />;
 
-  const platformModules: PlatformModuleItem[] = useMemo(() => {
-    if (!data?.summary) return [];
-    const findIcon = (pageId: string) => SIDEBAR_NAV.find(item => item.pageId === pageId)?.icon || "diamond.fill";
-
-    return [
-      { name: "Intelligence", tag: "Core", color: "cyan", href: ROUTES.dashboard, pageId: "intelligence", icon: findIcon("intelligence"), desc: `${data.summary.bullish} Bullish · ${data.summary.bearish} Bearish`, ariaLabel: "Open Intelligence Dashboard" },
-      { name: "Fresh Momentum", tag: "Screener", color: "cyan", href: ROUTES.dashboard, pageId: "fresh", icon: findIcon("fresh"), desc: `${freshCount} Fresh Signals`, ariaLabel: "View Fresh Momentum Signals" },
-      { name: "Sector Intel", tag: "Intel", color: "cyan", href: ROUTES.dashboard, pageId: "sector-intel", icon: findIcon("sector-intel"), desc: `${sectorCount} Sectors Tracked`, ariaLabel: "Explore Sector Intelligence" },
-      { name: "Portfolio Intel", tag: "New", color: "violet", href: ROUTES.dashboard, pageId: "portfolio-intel", icon: findIcon("portfolio-intel"), desc: "Aura Score · Alpha Alerts", ariaLabel: "Open Portfolio Intelligence" },
-      { name: "Receipts", tag: "History", color: "violet", href: ROUTES.receipts, pageId: "receipts", icon: findIcon("receipts"), desc: "Performance Tracking", ariaLabel: "View Receipts Ledger" },
-    ];
-  }, [data?.summary, freshCount, sectorCount]);
-
-  // ── Loading States (after all hooks) ──
-  if (loading) {
-    return <CommandCenterSkeleton />;
-  }
-
-  // ── Premium Error State UI (after all hooks) ──
   if (error || !data) {
     return (
       <AnimatePresence mode="wait">
-        <motion.div
-          key="error-state-page"
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          variants={pageTransition}
-          className="min-h-screen flex items-center justify-center p-4 md:p-6 lg:p-8"
-        >
+        <motion.div key="error" initial="initial" animate="animate" exit="exit" variants={pageTransition} className="min-h-screen flex items-center justify-center p-4">
           <AppleCard className="max-w-md w-full p-8 text-center flex flex-col items-center">
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, ...SPRING_TRANSITION }}>
-              <SFIcon icon="exclamationmark.triangle.fill" size={48} className="text-rose-500 mb-4 animate-pulse" />
-            </motion.div>
-            <h2 className="text-3xl font-bold text-rose-400 mb-3 tracking-tight font-inter">
-              System Offline
-            </h2>
-            <p className="text-muted-foreground/70 mb-6 max-w-sm text-base leading-relaxed font-inter">
-              We couldn&apos;t load the Command Center data. {typeof error === 'string' ? error : error?.message || "No data available."}
+            <SFIcon icon="exclamationmark.triangle.fill" size={48} className="text-rose-500 mb-4 animate-pulse" />
+            <h2 className="text-3xl font-bold text-rose-400 mb-3 tracking-tight">System Offline</h2>
+            <p className="text-muted-foreground/70 mb-6 max-w-sm text-base leading-relaxed">
+              {typeof error === 'string' ? error : error?.message || "No data available."}
             </p>
-            <p className="text-muted-foreground/50 text-sm mb-8 font-light font-inter">
-              Please ensure the backend server is running and accessible (port 8060).
-            </p>
-            <AppleButton variant="primary" size="lg" onClick={() => window.location.reload()} className="w-full sm:w-auto">
+            <p className="text-muted-foreground/50 text-sm mb-8 font-light">Backend server must be running (port 8060).</p>
+            <AppleButton variant="primary" size="lg" onClick={() => window.location.reload()}>
               <SFIcon icon="arrow.clockwise" size={18} className="mr-2" /> Retry Connection
             </AppleButton>
           </AppleCard>
@@ -347,205 +177,235 @@ export default function CommandCenterPage() {
     );
   }
 
-
   return (
     <AnimatePresence mode="wait">
-      <motion.div
-        key="command-center-page"
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        variants={pageTransition}
-        className="min-h-screen"
-      >
-        <TopNav title="COMMAND CENTER" icon="bolt.fill" />
+      <motion.div key="headstart-landing" initial="initial" animate="animate" exit="exit" variants={pageTransition} className="min-h-screen">
+        <TopNav title="HEADSTART" icon="bolt.fill" />
 
         <div className="pt-[72px] pb-14 px-4 sm:px-6 max-w-[1440px] mx-auto relative z-[1]">
 
-          {/* ── Hero ── */}
+          {/* ═══ HERO ═══ */}
           <motion.section
-            className="text-center mb-12 pt-4 font-inter"
-            initial={{ opacity: 0, y: 24 }}
+            className="text-center mb-14 pt-8"
+            initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...SPRING_TRANSITION, delay: 0.05 }}
           >
-            <div className="text-[0.75rem] uppercase tracking-[0.1em] text-muted-foreground/60 font-semibold mb-4">
-              4-System Momentum · SQLite-Backed · Strategy Backtesting
+            <div className="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground/50 font-semibold mb-5">
+              4-System Momentum · Real-Time Screening · Strategy Backtesting
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-[-0.03em] bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent mb-5 leading-tight shadow-text-cyan-gradient">
-              Your Alpha Edge Starts Here
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-[-0.04em] mb-6 leading-[1.05]">
+              <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent">
+                HEADSTART
+              </span>
+              <span className="text-foreground/20 font-light ml-2 text-3xl sm:text-4xl lg:text-5xl align-middle">AI</span>
             </h1>
-            <p className="text-muted-foreground/70 max-w-xl mx-auto text-base sm:text-lg leading-relaxed mb-8 font-light">
-              Real-time momentum screening across <span className="font-mono-data font-bold text-cyan-400">{data.summary.total_screened}+</span> tickers with actionable trade strategies.
+            <p className="text-muted-foreground/60 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed mb-8 font-light">
+              Turns real-time market data into simple, actionable intelligence for stocks, ETFs, and AI-driven investments. Screening <span className="font-mono-data font-bold text-cyan-400">{data.summary.total_screened}+</span> tickers across momentum, fundamentals, and thematic strategies.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-3">
               <AppleButton variant="primary" size="lg" onClick={navigateToDashboard}>
-                Open Intelligence Dashboard
-                <SFIcon icon="arrow.right" size={18} className="ml-2 inline-block transition-transform group-hover:translate-x-1 duration-200 ease-out" />
+                Open Dashboard <SFIcon icon="arrow.right" size={18} className="ml-2 inline-block" />
               </AppleButton>
               <AppleButton variant="secondary" size="lg" onClick={navigateToReceipts}>
-                Receipts Ledger
+                View Track Record
               </AppleButton>
             </div>
           </motion.section>
 
-          {/* ── KPI Strip ── */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...SPRING_TRANSITION, delay: 0.15 }}
-          >
+          {/* ═══ KPI STRIP ═══ */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.15 }}>
             <KPIStrip className="mb-10" items={kpiStripItems} />
           </motion.div>
 
-          {/* ═══ BENTO GRID ═══ */}
-          <motion.div
-            className="bento-grid mb-10"
-            variants={staggerContainer}
-            initial="hidden"
-            animate="show"
-          >
-            {/* Main Character — 2 col */}
-            {mainChar && (
-              <motion.div variants={fadeInTranslateY} className="lg:col-span-2">
-                <AppleCard interactive={true} glowColor={COLORS.cyan} className="h-full cursor-pointer flex flex-col justify-between" onClick={() => navigateToDashboardWithTicker(mainChar.ticker)} aria-label={`View details for ${mainChar.ticker}`}>
-                  <div>
-                    <div className="flex items-center gap-2 mb-2 font-inter">
-                      <span className="text-xs uppercase tracking-[0.1em] text-muted-foreground/60 font-bold"><SFIcon icon="chess.piece.queen.fill" size={14} className="mr-1 inline-block" /> Main Character</span>
-                      <SentimentBadge sentiment={mainChar.sentiment} />
-                      {mainChar.momentum_phase === "Fresh" && (
-                        <MomentumPhaseBadge phase="Fresh" icon="leaf.fill" />
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-baseline gap-4 mt-2 mb-4">
-                      <div className="font-mono-data text-4xl font-extrabold text-cyan-400 tracking-tight shadow-text-cyan-gradient">
-                        {mainChar.ticker}
-                      </div>
-                      <div className="font-mono-data text-2xl font-medium text-foreground/90">${mainChar.price.toFixed(2)}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 sm:gap-6 font-inter text-sm flex-wrap pt-4 mt-4">
-                    {mainCharMetrics.map((m) => (
-                      <div key={m.l}>
-                        <div className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium mb-1">{m.l}</div>
-                        <div className={cn("font-mono-data font-bold text-base sm:text-lg", m.c)}>{m.v}</div>
-                      </div>
-                    ))}
-                  </div>
-                </AppleCard>
-              </motion.div>
-            )}
-
-            {/* Quote Rotator — 2 col (mobile, tablet), stacked on lg */}
-            {data.all_quotes?.length > 0 && (
-              <motion.div variants={fadeInTranslateY} className="lg:col-span-2">
-                <AppleCard interactive={false} padded={false} className="h-full flex items-center justify-center overflow-hidden">
-                  <div className="w-full h-full">
-                    <QuoteRotator quotes={data.all_quotes} />
-                  </div>
-                </AppleCard>
-              </motion.div>
-            )}
-
-            {/* Platform Modules — 4 cards */}
-            {platformModules.map((mod: PlatformModuleItem) => (
-              <motion.div key={mod.name} variants={fadeInTranslateY}>
-                <Link href={mod.href === ROUTES.dashboard ? `${mod.href}?view=${mod.pageId}` : mod.href} className="block h-full" aria-label={mod.ariaLabel}>
-                  <AppleCard glowColor={mod.color === "cyan" ? COLORS.cyan : COLORS.violet} className="h-full group flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <SFIcon icon={mod.icon} size={24} />
-                        <span
-                          className={cn(
-                            "text-xs uppercase font-bold px-3 py-1.5 rounded-2xl tracking-[0.1em] font-inter",
-                            getBackgroundColorClass(mod.color, "500", "12"),
-                            getTextColorClass(mod.color, "400")
-                          )}
-                        >
-                          {mod.tag}
-                        </span>
-                      </div>
-                      <h3 className="font-semibold text-base text-foreground/90 mb-1 group-hover:text-foreground transition-colors tracking-tight font-inter">{mod.name}</h3>
-                      <p className="text-sm text-muted-foreground/60 font-light font-inter">{mod.desc}</p>
-                    </div>
-                    {/* Subtle arrow on hover */}
-                    <div className="mt-4 text-muted-foreground/40 text-lg group-hover:text-foreground/60 transition-colors duration-200">
-                      <SFIcon icon="arrow.right" size={18} className="inline-block transition-transform group-hover:translate-x-1 duration-200 ease-out" />
-                    </div>
-                  </AppleCard>
-                </Link>
-              </motion.div>
-            ))}
-
-            {/* Market Heat — full width (4 col) */}
-            <motion.div variants={fadeInTranslateY} className="col-span-full">
+          {/* ═══ BULLISH MOMENTUM RIGHT NOW ═══ */}
+          {bullishMomentum.length > 0 && (
+            <motion.section
+              className="mb-10"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...SPRING_TRANSITION, delay: 0.2 }}
+            >
               <AppleCard interactive={false} className="overflow-hidden">
-                <div className="flex items-center justify-between mb-5 px-0 font-inter">
-                  <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
-                    <SFIcon icon="map.fill" size={20} /> Market Heat
-                  </h2>
-                  <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">{sectorCount} sectors</span>
+                <div className="flex items-center justify-between mb-4 px-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <h2 className="text-lg font-bold tracking-tight">Stocks with Bullish Momentum Right Now</h2>
+                  </div>
+                  <AppleButton variant="ghost" size="sm" onClick={() => navigateToDashboardWithView("bullish-momentum")}>
+                    View All <SFIcon icon="arrow.right" size={14} className="ml-1 inline-block" />
+                  </AppleButton>
                 </div>
-                <SectorHeatmap
-                  sectors={data.sector_regimes}
-                  sentiment={data.sector_sentiment}
-                />
-              </AppleCard>
-            </motion.div>
-
-            {/* Live Signal Feed — full width (4 col) */}
-            <motion.div variants={fadeInTranslateY} className="col-span-full">
-              <AppleCard interactive={false} padded={false}>
-                <div className="px-6 pt-5 pb-4 flex items-center justify-between font-inter">
-                  <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
-                    <SFIcon icon="antenna.radiowaves.left.and.right" size={20} /> Live Signal Feed
-                  </h2>
-                  <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">Top {topSignals.length}</span>
-                </div>
-                <div className="horizontal-scroll-on-mobile custom-scrollbar px-6 pb-6">
-                  <table className="w-full text-left border-separate border-spacing-y-2 lg:border-spacing-y-0.5 min-w-[768px] lg:min-w-0">
-                    <thead className={cn(
-                      "sticky top-0 z-[Z_INDEX_STICKY_HEADER] bg-card/80 backdrop-blur-sm",
-                      SHADOW_STICKY_HEADER // Applies subtle shadow for elevation
-                    )}>
-                      <tr className="rounded-xl overflow-hidden">
-                        {tableHeaders.map((h, i) => (
-                          <th
-                            key={h}
-                            className={cn(
-                              "py-3.5 px-4 text-xs uppercase tracking-[0.1em] font-semibold text-muted-foreground/50 whitespace-nowrap bg-card",
-                              i === 0 && "rounded-tl-xl",
-                              i === tableHeaders.length - 1 && "rounded-tr-xl",
-                              columnWidths[i]
-                            )}
-                          >
-                            {h}
-                          </th>
+                <p className="text-xs text-muted-foreground/50 mb-4 px-1">
+                  Stocks with strong composite scores, positive daily action, trending regime, and high probability alignment.
+                </p>
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left min-w-[600px]">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        {["Ticker", "Sentiment", "Composite", "Probability", "Δ Day", "Price"].map(h => (
+                          <th key={h} className="py-2.5 px-3 text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="mt-2">
-                      <AnimatePresence initial={false}>
-                        {topSignals.map((s, index) => (
-                          <SignalTableRow
-                            key={s.ticker}
-                            signal={s}
-                            onClick={navigateToDashboardWithTicker}
-                            index={index}
-                          />
-                        ))}
-                      </AnimatePresence>
+                    <tbody>
+                      {bullishMomentum.map((s: Signal, i: number) => (
+                        <motion.tr
+                          key={s.ticker}
+                          className="border-b border-white/[0.02] hover:bg-white/[0.02] cursor-pointer transition-colors"
+                          onClick={() => navigateToDashboardWithTicker(s.ticker)}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.25 + i * 0.05 }}
+                        >
+                          <td className="py-2.5 px-3 font-mono-data font-bold text-cyan-400 text-sm">{s.ticker}</td>
+                          <td className="py-2.5 px-3"><RatingBadge sentiment={s.sentiment} /></td>
+                          <td className={cn("py-2.5 px-3 font-mono-data text-sm font-semibold", s.composite > 0 ? "text-emerald-400" : "text-rose-400")}>{s.composite.toFixed(2)}</td>
+                          <td className="py-2.5 px-3 font-mono-data text-sm text-amber-400">{s.probability}%</td>
+                          <td className={cn("py-2.5 px-3 font-mono-data text-sm", s.daily_change > 0 ? "text-emerald-400" : "text-rose-400")}>{s.daily_change > 0 ? "+" : ""}{s.daily_change}%</td>
+                          <td className="py-2.5 px-3 font-mono-data text-sm text-foreground/80">${s.price.toFixed(2)}</td>
+                        </motion.tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </AppleCard>
+            </motion.section>
+          )}
+
+          {/* ═══ PLATFORM FEATURES GRID ═══ */}
+          <motion.section className="mb-10" variants={staggerContainer} initial="hidden" animate="show">
+            <motion.div variants={fadeIn} className="text-center mb-6">
+              <h2 className="text-2xl font-bold tracking-tight mb-2">Explore the Platform</h2>
+              <p className="text-sm text-muted-foreground/50">Dedicated screeners for every edge</p>
             </motion.div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FeatureCard
+                icon="chart.line.uptrend.xyaxis"
+                title="Stock Screeners"
+                desc={`${freshCount} fresh momentum signals across S&P 500 + NASDAQ 100 — stocks only, no ETFs.`}
+                tags={["Momentum", "Stocks Only", "4-System"]}
+                href={`${ROUTES.dashboard}?view=fresh`}
+                color="cyan"
+                delay={0.3}
+              />
+              <FeatureCard
+                icon="chart.line.uptrend.rectangle.fill"
+                title="ETF Screener"
+                desc="Dedicated ETF screening — high-yield bonds, dividend equity, REITs, covered calls."
+                tags={["ETFs Only", "Income", "Yield"]}
+                href={`${ROUTES.dashboard}?view=etf-screener`}
+                color="violet"
+                delay={0.35}
+              />
+              <FeatureCard
+                icon="brain.fill"
+                title="AI Stocks"
+                desc="Track NVDA, AMD, GOOGL, MSFT, META, PLTR and 25+ AI/ML/semiconductor plays."
+                tags={["AI/ML", "Semiconductors", "Cloud"]}
+                href={`${ROUTES.dashboard}?view=ai-stocks`}
+                color="cyan"
+                delay={0.4}
+              />
+              <FeatureCard
+                icon="arrow.up.right.circle.fill"
+                title="Bullish Momentum"
+                desc="Stocks with comprehensive bullish technical alignment — MACD, RSI, Bollinger, volume."
+                tags={["Momentum", "Bullish", "Volume"]}
+                href={`${ROUTES.dashboard}?view=bullish-momentum`}
+                color="emerald"
+                delay={0.45}
+              />
+              <FeatureCard
+                icon="chart.bar.doc.horizontal.fill"
+                title="Volume Gappers"
+                desc="High-volume movers with notable price gaps, above-average RVOL, and bullish action."
+                tags={["Gaps", "Volume", "Breakouts"]}
+                href={`${ROUTES.dashboard}?view=volume-gappers`}
+                color="amber"
+                delay={0.5}
+              />
+              <FeatureCard
+                icon="briefcase.fill"
+                title="Portfolio Intelligence"
+                desc="Input your holdings. Get scored. Expose blind spots. Discover alpha rotations."
+                tags={["Aura Score", "Alpha Alerts", "Rotation"]}
+                href={`${ROUTES.dashboard}?view=portfolio-intel`}
+                color="violet"
+                delay={0.55}
+              />
+            </div>
+          </motion.section>
+
+          {/* ═══ MARKET HEAT ═══ */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.6 }} className="mb-10">
+            <AppleCard interactive={false} className="overflow-hidden">
+              <div className="flex items-center justify-between mb-5 px-0">
+                <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
+                  <SFIcon icon="map.fill" size={20} /> Market Heat
+                </h2>
+                <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">{sectorCount} sectors</span>
+              </div>
+              <SectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
+            </AppleCard>
           </motion.div>
 
-          {/* Footer tagline */}
-          <div className="text-center py-6 font-inter">
-            <p className="text-xs text-muted-foreground/30 uppercase tracking-[0.1em] font-medium">
-              MOMENTUM · Built for Speed
+          {/* ═══ LIVE SIGNAL FEED ═══ */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.65 }} className="mb-10">
+            <AppleCard interactive={false} padded={false}>
+              <div className="px-6 pt-5 pb-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
+                  <SFIcon icon="antenna.radiowaves.left.and.right" size={20} /> Live Signal Feed
+                </h2>
+                <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">Top {topSignals.length}</span>
+              </div>
+              <div className="horizontal-scroll-on-mobile custom-scrollbar px-6 pb-6">
+                <table className="w-full text-left border-separate border-spacing-y-1 min-w-[700px]">
+                  <thead>
+                    <tr>
+                      {["Ticker", "Sentiment", "Composite", "Confidence", "Δ Day", "Price", "Sector"].map(h => (
+                        <th key={h} className="py-2.5 px-3 text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 bg-card">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topSignals.map((s: Signal, i: number) => (
+                      <motion.tr
+                        key={s.ticker}
+                        className="hover:bg-white/[0.02] cursor-pointer transition-colors"
+                        onClick={() => navigateToDashboardWithTicker(s.ticker)}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.7 + i * 0.04 }}
+                      >
+                        <td className="py-2 px-3 font-mono-data font-bold text-cyan-400 text-sm">{s.ticker}</td>
+                        <td className="py-2 px-3"><SentimentBadge sentiment={s.sentiment} /></td>
+                        <td className={cn("py-2 px-3 font-mono-data text-sm font-semibold", s.composite > 0 ? "text-emerald-400" : "text-rose-400")}>{s.composite.toFixed(2)}</td>
+                        <td className={cn("py-2 px-3 font-mono-data text-sm", s.probability > HIGH_CONFIDENCE_THRESHOLD ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</td>
+                        <td className={cn("py-2 px-3 font-mono-data text-sm", s.daily_change > 0 ? "text-emerald-400" : "text-rose-400")}>{s.daily_change > 0 ? "+" : ""}{s.daily_change.toFixed(2)}%</td>
+                        <td className="py-2 px-3 font-mono-data text-sm text-foreground/80">${s.price.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-xs text-muted-foreground/60">{s.sector}</td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </AppleCard>
+          </motion.div>
+
+          {/* ═══ QUOTE ═══ */}
+          {data.all_quotes?.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.75 }} className="mb-10">
+              <AppleCard interactive={false} padded={false} className="overflow-hidden">
+                <QuoteRotator quotes={data.all_quotes} />
+              </AppleCard>
+            </motion.div>
+          )}
+
+          {/* Footer */}
+          <div className="text-center py-8">
+            <p className="text-xs text-muted-foreground/25 uppercase tracking-[0.15em] font-medium">
+              HEADSTART · headstart.ai · Built for Speed
             </p>
           </div>
         </div>

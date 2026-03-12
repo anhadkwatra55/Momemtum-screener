@@ -58,6 +58,10 @@ const SCREENER_MAP: Record<string, { key: string; title: string; icon: string }>
   clusters: { key: "momentum_clusters", title: "Momentum Clusters", icon: "cube.fill" },
   "shock-clusters": { key: "shock_clusters", title: "Sector Shock Clusters", icon: "bolt.circle.fill" },
   "hidden-gems": { key: "hidden_gems", title: "Hidden Gems", icon: "diamond.fill" },
+  "etf-screener": { key: "high_yield_etfs", title: "ETF Screener", icon: "chart.line.uptrend.rectangle.fill" },
+  "ai-stocks": { key: "ai_stocks", title: "AI Stocks", icon: "brain.fill" },
+  "bullish-momentum": { key: "bullish_momentum", title: "Bullish Momentum", icon: "arrow.up.right.circle.fill" },
+  "volume-gappers": { key: "high_volume_gappers", title: "High Volume Gappers", icon: "chart.bar.doc.horizontal.fill" },
 };
 
 const ChartSkeleton = memo(() => (
@@ -718,6 +722,32 @@ const DashboardPage = memo(() => {
                   <p className="text-muted-foreground/60 text-xs mt-1.5 max-w-lg mx-auto">
                     Our team is meticulously crafting an immersive and insightful market visualization. Stay tuned!
                   </p>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* ══════ EARNINGS GROWERS ══════ */}
+            {activePage === "earnings-growers" && (
+              <motion.div
+                key="earnings-growers"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <Card className="p-6 text-center">
+                  <SFIcon name="chart.line.uptrend.xyaxis" size="text-4xl" className="text-emerald-400 mb-2" />
+                  <p className={cn("text-foreground text-lg font-bold mb-2", TRACKING_HEADING_CLASS)}>Consistent Earnings & Revenue Growth</p>
+                  <p className="text-muted-foreground/60 text-sm max-w-lg mx-auto mb-4">
+                    This scanner discovers S&P Composite 1500 symbols with 5 consecutive quarters of strong revenue and EBITDA growth — perfect for long-term holds.
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center mb-4">
+                    {["Fundamentals", "Revenue Growth", "EBITDA Growth", "Long Term"].map(t => (
+                      <span key={t} className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold uppercase tracking-wider">{t}</span>
+                    ))}
+                  </div>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 text-xs font-medium">
+                    <SFIcon name="clock.fill" size="text-sm" />
+                    Coming Soon — Requires quarterly financials pipeline
+                  </div>
                 </Card>
               </motion.div>
             )}

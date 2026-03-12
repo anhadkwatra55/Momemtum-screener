@@ -331,6 +331,10 @@ export interface DashboardData {
   hidden_gems: Signal[];
   high_yield_etfs: YieldSignal[];
   dividend_stocks: YieldSignal[];
+  ai_stocks: Signal[];
+  bullish_momentum: Signal[];
+  high_volume_gappers: Signal[];
+  earnings_growers: Signal[];
   quote: Quote;
   all_quotes: Quote[];
   db_stats?: DBStats;

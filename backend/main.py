@@ -225,9 +225,13 @@ def build_dashboard_data() -> dict:
         else:
             sector_sentiment[s]["neutral"] += 1
 
+    _etf_set = set(cfg.ETF_TICKERS)
+    _ai_set = set(cfg.AI_STOCKS)
     signals_table = []
     for r in results:
         row = {k: v for k, v in r.items() if k not in ("charts", "sys1", "sys2", "sys3", "sys4")}
+        row["is_etf"] = r["ticker"] in _etf_set
+        row["is_ai"] = r["ticker"] in _ai_set
         signals_table.append(row)
 
     chart_data = {r["ticker"]: r.get("charts", {}) for r in results}
@@ -406,6 +410,21 @@ def build_dashboard_data() -> dict:
         "hidden_gems": slim(hidden_gems),
         "high_yield_etfs": etf_yield_data,
         "dividend_stocks": div_stock_data,
+        # ── Thematic Derived Lists ──
+        "ai_stocks": slim([r for r in results if r["ticker"] in _ai_set]),
+        "bullish_momentum": slim(sorted(
+            [r for r in results if r["composite"] > 0.3 and r["daily_change"] > 0
+             and r.get("regime") == "Trending" and r["probability"] > 55
+             and not r["ticker"] in _etf_set],
+            key=lambda x: x["composite"], reverse=True
+        )[:50]),
+        "high_volume_gappers": slim(sorted(
+            [r for r in results if r["daily_change"] > 1.5
+             and r.get("vol_spike", 1.0) > 1.5 and r["composite"] > 0
+             and not r["ticker"] in _etf_set],
+            key=lambda x: x["daily_change"], reverse=True
+        )[:50]),
+        "earnings_growers": [],  # TODO: Phase 2 — requires quarterly financials pipeline
     }
 
 

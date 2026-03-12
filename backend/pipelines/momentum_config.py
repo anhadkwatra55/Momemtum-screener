@@ -186,8 +186,51 @@ HIGH_DIVIDEND_STOCKS = [
     "AEP",   # American Electric Power
 ]
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  AI / ML / SEMICONDUCTOR STOCKS  (Thematic Dashboard)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AI_STOCKS = [
+    # Core AI / Cloud
+    "NVDA",   # NVIDIA
+    "AMD",    # AMD
+    "GOOGL",  # Alphabet
+    "MSFT",   # Microsoft
+    "META",   # Meta Platforms
+    "AMZN",   # Amazon
+    "AAPL",   # Apple
+    "PLTR",   # Palantir
+    "CRM",    # Salesforce
+    "NOW",    # ServiceNow
+    "SNOW",   # Snowflake
+    "ARM",    # Arm Holdings
+    # Semiconductors & Infra
+    "SMCI",   # Super Micro Computer
+    "MRVL",   # Marvell Technology
+    "AVGO",   # Broadcom
+    "INTC",   # Intel
+    "MU",     # Micron
+    "DELL",   # Dell Technologies
+    "HPE",    # Hewlett Packard Enterprise
+    "TSM",    # TSMC (ADR)
+    # Cybersecurity AI
+    "CRWD",   # CrowdStrike
+    "PANW",   # Palo Alto Networks
+    "ZS",     # Zscaler
+    "FTNT",   # Fortinet
+    # Data / Analytics AI
+    "DDOG",   # Datadog
+    "TEAM",   # Atlassian
+    "WDAY",   # Workday
+    "ADBE",   # Adobe
+    "ORCL",   # Oracle
+    "IBM",    # IBM
+]
+
 # Flat list for convenience (stocks + ETFs + dividend stocks)
 _stock_tickers = {t for tickers in UNIVERSE.values() for t in tickers}
+STOCK_TICKERS = sorted(_stock_tickers)  # Stocks only (no ETFs)
+ETF_TICKERS = sorted(HIGH_YIELD_ETFS)   # ETFs only
 ALL_TICKERS = sorted(_stock_tickers | set(HIGH_YIELD_ETFS) | set(HIGH_DIVIDEND_STOCKS))
 
 # Reverse lookup: ticker → sector

@@ -59,22 +59,30 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Sector Intelligence", icon: "antenna.radiowaves.left.and.right", pageId: "sector-intel", section: "PLATFORM" },
   { label: "Portfolio Intelligence", icon: "briefcase.fill", pageId: "portfolio-intel", section: "PLATFORM" },
   { label: "Ticker Detail", icon: "chart.bar.fill", pageId: "ticker-detail", section: "PLATFORM" },
-  // Signal Screeners
-  { label: "Fresh Momentum", icon: "leaf.fill", pageId: "fresh", section: "SIGNAL SCREENERS" },
-  { label: "Exhausting Momentum", icon: "flame.fill", pageId: "exhausting", section: "SIGNAL SCREENERS" },
-  { label: "Rotation Breakouts", icon: "tornado", pageId: "rotation", section: "SIGNAL SCREENERS" },
-  { label: "Momentum Shock", icon: "bolt.slash.fill", pageId: "shock", section: "SIGNAL SCREENERS" },
-  { label: "Gamma Squeeze Ops", icon: "target", pageId: "gamma", section: "SIGNAL SCREENERS" },
-  { label: "Smart Money", icon: "dollarsign.circle.fill", pageId: "smart-money", section: "SIGNAL SCREENERS" },
-  { label: "Momentum Continuation", icon: "rocket.fill", pageId: "continuation", section: "SIGNAL SCREENERS" },
-  { label: "Momentum Clusters", icon: "cube.fill", pageId: "clusters", section: "SIGNAL SCREENERS" },
-  { label: "Sector Shock Clusters", icon: "bolt.circle.fill", pageId: "shock-clusters", section: "SIGNAL SCREENERS" },
-  { label: "Hidden Gems", icon: "diamond.fill", pageId: "hidden-gems", section: "SIGNAL SCREENERS" },
-  // Research
-  { label: "Signals & Strategies", icon: "radar.fill", pageId: "signals", section: "RESEARCH" },
+  // Stock Screeners
+  { label: "Fresh Momentum", icon: "leaf.fill", pageId: "fresh", section: "STOCK SCREENERS" },
+  { label: "Exhausting Momentum", icon: "flame.fill", pageId: "exhausting", section: "STOCK SCREENERS" },
+  { label: "Rotation Breakouts", icon: "tornado", pageId: "rotation", section: "STOCK SCREENERS" },
+  { label: "Momentum Shock", icon: "bolt.slash.fill", pageId: "shock", section: "STOCK SCREENERS" },
+  { label: "Gamma Squeeze Ops", icon: "target", pageId: "gamma", section: "STOCK SCREENERS" },
+  { label: "Smart Money", icon: "dollarsign.circle.fill", pageId: "smart-money", section: "STOCK SCREENERS" },
+  { label: "Momentum Continuation", icon: "rocket.fill", pageId: "continuation", section: "STOCK SCREENERS" },
+  { label: "Momentum Clusters", icon: "cube.fill", pageId: "clusters", section: "STOCK SCREENERS" },
+  { label: "Sector Shock Clusters", icon: "bolt.circle.fill", pageId: "shock-clusters", section: "STOCK SCREENERS" },
+  { label: "Hidden Gems", icon: "diamond.fill", pageId: "hidden-gems", section: "STOCK SCREENERS" },
+  // ETF
+  { label: "ETF Screener", icon: "chart.line.uptrend.rectangle.fill", pageId: "etf-screener", section: "ETF" },
+  // Thematic
+  { label: "AI Stocks", icon: "brain.fill", pageId: "ai-stocks", section: "THEMATIC" },
+  { label: "Bullish Momentum", icon: "arrow.up.right.circle.fill", pageId: "bullish-momentum", section: "THEMATIC" },
+  { label: "Volume Gappers", icon: "chart.bar.doc.horizontal.fill", pageId: "volume-gappers", section: "THEMATIC" },
+  // Fundamentals
+  { label: "Earnings Growers", icon: "chart.line.uptrend.xyaxis", pageId: "earnings-growers", section: "FUNDAMENTALS" },
   // Income
   { label: "High Yield ETFs", icon: "chart.line.uptrend.rectangle.fill", pageId: "yield-etfs", section: "INCOME" },
   { label: "Dividend Stocks", icon: "dollarsign.square.fill", pageId: "dividend-stocks", section: "INCOME" },
+  // Research
+  { label: "Signals & Strategies", icon: "radar.fill", pageId: "signals", section: "RESEARCH" },
   // Strategy
   { label: "Strategy Builder", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
 ];

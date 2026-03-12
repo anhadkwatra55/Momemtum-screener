@@ -135,12 +135,12 @@ export const Sidebar = React.memo(function Sidebar({
             whileTap={TAP_TRANSITION}
             transition={SPRING_TRANSITION}
           >
-            M
+            H
           </motion.div>
           <div className="min-w-0">
-            <h2 className="text-base font-bold [letter-spacing:-0.03em]">MOMENTUM</h2>
+            <h2 className="text-base font-bold [letter-spacing:-0.03em]">HEADSTART</h2>
             <p className="text-xs text-sidebar-foreground/70 truncate">
-              Intelligence for the Mo...
+              Your Edge. Automated.
             </p>
           </div>
           {onClose && (
