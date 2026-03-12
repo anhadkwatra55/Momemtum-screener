@@ -209,6 +209,8 @@ class RedisCache:
                     "shock_signals", "gamma_signals", "smart_money",
                     "continuation", "momentum_clusters", "shock_clusters",
                     "hidden_gems",
+                    "ai_stocks", "bullish_momentum", "high_volume_gappers",
+                    "earnings_growers", "momentum_95",
                 )
             },
             self.KEY_YIELD_ETFS: data.get("high_yield_etfs"),

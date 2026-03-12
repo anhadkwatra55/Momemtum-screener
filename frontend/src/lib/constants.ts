@@ -61,6 +61,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Ticker Detail", icon: "chart.bar.fill", pageId: "ticker-detail", section: "PLATFORM" },
   // Stock Screeners
   { label: "Fresh Momentum", icon: "leaf.fill", pageId: "fresh", section: "STOCK SCREENERS" },
+  { label: "Momentum 95+", icon: "star.fill", pageId: "momentum-95", section: "STOCK SCREENERS" },
   { label: "Exhausting Momentum", icon: "flame.fill", pageId: "exhausting", section: "STOCK SCREENERS" },
   { label: "Rotation Breakouts", icon: "tornado", pageId: "rotation", section: "STOCK SCREENERS" },
   { label: "Momentum Shock", icon: "bolt.slash.fill", pageId: "shock", section: "STOCK SCREENERS" },

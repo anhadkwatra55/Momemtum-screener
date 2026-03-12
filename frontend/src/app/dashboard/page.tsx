@@ -62,6 +62,7 @@ const SCREENER_MAP: Record<string, { key: string; title: string; icon: string }>
   "ai-stocks": { key: "ai_stocks", title: "AI Stocks", icon: "brain.fill" },
   "bullish-momentum": { key: "bullish_momentum", title: "Bullish Momentum", icon: "arrow.up.right.circle.fill" },
   "volume-gappers": { key: "high_volume_gappers", title: "High Volume Gappers", icon: "chart.bar.doc.horizontal.fill" },
+  "momentum-95": { key: "momentum_95", title: "Momentum Score 95+", icon: "star.fill" },
 };
 
 const ChartSkeleton = memo(() => (

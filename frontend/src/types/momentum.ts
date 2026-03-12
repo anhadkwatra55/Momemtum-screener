@@ -335,6 +335,7 @@ export interface DashboardData {
   bullish_momentum: Signal[];
   high_volume_gappers: Signal[];
   earnings_growers: Signal[];
+  momentum_95: Signal[];
   quote: Quote;
   all_quotes: Quote[];
   db_stats?: DBStats;

@@ -411,20 +411,29 @@ def build_dashboard_data() -> dict:
         "high_yield_etfs": etf_yield_data,
         "dividend_stocks": div_stock_data,
         # ── Thematic Derived Lists ──
-        "ai_stocks": slim([r for r in results if r["ticker"] in _ai_set]),
-        "bullish_momentum": slim(sorted(
-            [r for r in results if r["composite"] > 0.3 and r["daily_change"] > 0
-             and r.get("regime") == "Trending" and r["probability"] > 55
-             and not r["ticker"] in _etf_set],
+        "ai_stocks": slim(sorted(
+            [r for r in results if r["ticker"] in _ai_set],
             key=lambda x: x["composite"], reverse=True
-        )[:50]),
+        )),
+        "bullish_momentum": slim(sorted(
+            [r for r in results if r["composite"] > 0.15 and r["daily_change"] > 0
+             and r.get("regime") in ("Trending", "Choppy")
+             and r["probability"] > 45
+             and r["ticker"] not in _etf_set],
+            key=lambda x: x["composite"], reverse=True
+        )[:100]),
         "high_volume_gappers": slim(sorted(
-            [r for r in results if r["daily_change"] > 1.5
-             and r.get("vol_spike", 1.0) > 1.5 and r["composite"] > 0
-             and not r["ticker"] in _etf_set],
+            [r for r in results if r["daily_change"] > 1.0
+             and r.get("vol_spike", 1.0) > 1.2 and r["composite"] > 0
+             and r["ticker"] not in _etf_set],
             key=lambda x: x["daily_change"], reverse=True
-        )[:50]),
+        )[:100]),
         "earnings_growers": [],  # TODO: Phase 2 — requires quarterly financials pipeline
+        # ── Momentum Score 95+ ──
+        "momentum_95": slim(sorted(
+            [r for r in results if r["probability"] >= 95],
+            key=lambda x: x["probability"], reverse=True
+        )),
     }
 
 
@@ -714,7 +723,9 @@ async def get_derived():
     if _CACHED_DASHBOARD_DATA:
         keys = ["fresh_momentum", "exhausting_momentum", "rotation_ideas",
                 "shock_signals", "gamma_signals", "smart_money",
-                "continuation", "momentum_clusters", "shock_clusters", "hidden_gems"]
+                "continuation", "momentum_clusters", "shock_clusters", "hidden_gems",
+                "ai_stocks", "bullish_momentum", "high_volume_gappers", "earnings_growers",
+                "momentum_95"]
         return encode_response({k: _CACHED_DASHBOARD_DATA.get(k, []) for k in keys})
     return JSONResponse(content={"error": "Pipeline not yet complete"}, status_code=202)
 
