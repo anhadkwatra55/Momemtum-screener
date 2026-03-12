@@ -3,6 +3,7 @@
 import React, { useState, memo } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { SFIcon } from "@/components/ui/SFIcon";
 import { TRACKING_HEADING_CLASS, SPRING_TRANSITION_PROPS } from "@/lib/constants";
@@ -29,7 +30,7 @@ const LazyScreenerTable = dynamic(
 interface Tab {
   id: string;
   label: string;
-  emoji: string;
+  icon: string;
   description: string;
 }
 
@@ -37,19 +38,19 @@ const RADAR_TABS: Tab[] = [
   {
     id: "regime",
     label: "Regime Map",
-    emoji: "🌐",
+    icon: "globe.americas.fill",
     description: "Real-time sector regime classification — which sectors are trending, which are choppy, and where capital is flowing.",
   },
   {
     id: "rotation",
     label: "Rotation",
-    emoji: "🌀",
+    icon: "tornado",
     description: "Sector rotation signals detected when tickers shift from Choppy to Trending (ADX > 25) — institutional capital flows into new sectors.",
   },
   {
     id: "shocks",
     label: "Shock Clusters",
-    emoji: "⚡",
+    icon: "bolt.circle.fill",
     description: "Multiple momentum shocks in the same sector simultaneously — signals sector-level catalysts like earnings surprises or regulatory changes.",
   },
 ];
@@ -68,13 +69,19 @@ export const SectorRadar = memo(({ sectorRegimes, sectorSentiment, rotationIdeas
 
   return (
     <>
-      <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-1 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-        <SFIcon name="antenna.radiowaves.left.and.right" size="text-3xl md:text-4xl" className="text-cyan-400" />
-        Sector Radar
-      </h1>
-      <p className="text-sm text-muted-foreground/60 mb-5">
-        Money doesn&apos;t appear — it rotates. Understand capital flows before picking stocks.
-      </p>
+      {/* Hero banner */}
+      <div className="relative w-full h-32 md:h-40 rounded-2xl overflow-hidden mb-5">
+        <Image src="/heroes/hero_sector_radar.png" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        <div className="absolute bottom-4 left-5">
+          <h1 className={cn("text-2xl font-extrabold md:text-3xl text-foreground", TRACKING_HEADING_CLASS)}>
+            Sector Radar
+          </h1>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">
+            Money doesn&apos;t appear — it rotates. Understand capital flows before picking stocks.
+          </p>
+        </div>
+      </div>
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1 scrollbar-hide">
@@ -92,7 +99,7 @@ export const SectorRadar = memo(({ sectorRegimes, sectorSentiment, rotationIdeas
             whileTap={{ scale: 0.98 }}
             transition={SPRING_TRANSITION_PROPS}
           >
-            <span className="text-base">{tab.emoji}</span>
+            <SFIcon name={tab.icon} size="text-sm" className={activeTab === tab.id ? "text-cyan-400" : "text-muted-foreground/40"} />
             {tab.label}
           </motion.button>
         ))}
@@ -126,7 +133,7 @@ export const SectorRadar = memo(({ sectorRegimes, sectorSentiment, rotationIdeas
         <DataReveal loading={!rotationIdeas?.length}>
           <LazyScreenerTable
             data={rotationIdeas || []}
-            title="🌀 Rotation Breakouts"
+            title="Rotation Breakouts"
             icon="tornado"
             onSelectTicker={onSelectTicker}
           />
@@ -137,7 +144,7 @@ export const SectorRadar = memo(({ sectorRegimes, sectorSentiment, rotationIdeas
         <DataReveal loading={!shockClusters?.length}>
           <LazyScreenerTable
             data={shockClusters || []}
-            title="⚡ Sector Shock Clusters"
+            title="Sector Shock Clusters"
             icon="bolt.circle.fill"
             onSelectTicker={onSelectTicker}
           />

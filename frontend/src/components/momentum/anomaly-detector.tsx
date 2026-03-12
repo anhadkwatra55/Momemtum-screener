@@ -3,6 +3,7 @@
 import React, { useState, memo } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import type { Signal } from "@/types/momentum";
 import { cn } from "@/lib/utils";
 import { SFIcon } from "@/components/ui/SFIcon";
@@ -17,7 +18,6 @@ interface Tab {
   id: string;
   label: string;
   icon: string;
-  emoji: string;
   dataKey: string;
   description: string;
 }
@@ -27,7 +27,6 @@ const ANOMALY_TABS: Tab[] = [
     id: "shock",
     label: "Shocks",
     icon: "bolt.slash.fill",
-    emoji: "⚡",
     dataKey: "shock_signals",
     description: "Sudden momentum reversals where composite score flips direction with high magnitude — a z-score event indicating potential multi-day moves.",
   },
@@ -35,7 +34,6 @@ const ANOMALY_TABS: Tab[] = [
     id: "gamma",
     label: "Gamma",
     icon: "target",
-    emoji: "🎯",
     dataKey: "gamma_signals",
     description: "Conditions favorable for gamma squeezes — high short interest combined with bullish momentum and rising volatility. A convexity event.",
   },
@@ -43,7 +41,6 @@ const ANOMALY_TABS: Tab[] = [
     id: "volume",
     label: "Volume",
     icon: "chart.bar.doc.horizontal.fill",
-    emoji: "📊",
     dataKey: "high_volume_gappers",
     description: "Stocks gapping on significantly above-average volume (RVOL > 1.5x) with bullish momentum — institutional order flow driving price discovery.",
   },
@@ -51,7 +48,6 @@ const ANOMALY_TABS: Tab[] = [
     id: "ai",
     label: "AI Stocks",
     icon: "brain.fill",
-    emoji: "🧠",
     dataKey: "ai_stocks",
     description: "Curated universe of 30+ AI, semiconductor, and cloud computing leaders with full 4-system momentum analysis and regime classification.",
   },
@@ -69,13 +65,19 @@ export const AnomalyDetector = memo(({ data, onSelectTicker }: AnomalyDetectorPr
 
   return (
     <>
-      <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-1 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-        <SFIcon name="bolt.slash.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
-        Anomaly Detector
-      </h1>
-      <p className="text-sm text-muted-foreground/60 mb-5">
-        Normal markets are boring. Anomalies are where the asymmetry lives.
-      </p>
+      {/* Hero banner */}
+      <div className="relative w-full h-32 md:h-40 rounded-2xl overflow-hidden mb-5">
+        <Image src="/heroes/hero_anomaly.png" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        <div className="absolute bottom-4 left-5">
+          <h1 className={cn("text-2xl font-extrabold md:text-3xl text-foreground", TRACKING_HEADING_CLASS)}>
+            Anomaly Detector
+          </h1>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">
+            Normal markets are boring. Anomalies are where the asymmetry lives.
+          </p>
+        </div>
+      </div>
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1 scrollbar-hide">
@@ -86,19 +88,19 @@ export const AnomalyDetector = memo(({ data, onSelectTicker }: AnomalyDetectorPr
             className={cn(
               "flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all",
               activeTab === tab.id
-                ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/25"
+                ? "bg-violet-500/15 text-violet-400 border border-violet-500/25"
                 : "text-muted-foreground/60 hover:text-foreground/80 hover:bg-white/[0.03] border border-transparent"
             )}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={SPRING_TRANSITION_PROPS}
           >
-            <span className="text-base">{tab.emoji}</span>
+            <SFIcon name={tab.icon} size="text-sm" className={activeTab === tab.id ? "text-violet-400" : "text-muted-foreground/40"} />
             {tab.label}
             {(data[tab.dataKey] as Signal[] || []).length > 0 && (
               <span className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded-full font-mono-data",
-                activeTab === tab.id ? "bg-cyan-500/20 text-cyan-400" : "bg-white/[0.05] text-muted-foreground/40"
+                activeTab === tab.id ? "bg-violet-500/20 text-violet-400" : "bg-white/[0.05] text-muted-foreground/40"
               )}>
                 {(data[tab.dataKey] as Signal[] || []).length}
               </span>
@@ -115,7 +117,7 @@ export const AnomalyDetector = memo(({ data, onSelectTicker }: AnomalyDetectorPr
 
       <LazyScreenerTable
         data={currentData}
-        title={`${currentTab.emoji} ${currentTab.label}`}
+        title={currentTab.label}
         icon={currentTab.icon}
         onSelectTicker={onSelectTicker}
       />

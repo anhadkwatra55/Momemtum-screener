@@ -367,22 +367,25 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
-            {/* ══════ SIGNALS & STRATEGIES ══════ */}
+            {/* ══════ SIGNALS & EVIDENCE ══════ */}
             {activePage === "signals" && (
               <motion.div
                 key="signals"
                 {...PAGE_MOTION_VARIANTS}
                 className="pt-4 md:pt-6 pb-8 md:pb-12 overflow-x-hidden"
               >
-                <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-1 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
                   <SFIcon name="radar.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
-                  Signals & Strategies
+                  Signals & Evidence
                 </h1>
+                <p className="text-sm text-muted-foreground/60 mb-5">
+                  Every signal, ranked by conviction. Click any row for the deep dive.
+                </p>
 
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
                   skeleton={<SectionSkeleton rows={10} />}
-                  className="mb-4"
+                  className="mb-6"
                 >
                   <LazySignalTable
                     signals={sortedSignals}
@@ -394,14 +397,18 @@ const DashboardPage = memo(() => {
                   />
                 </DataReveal>
 
-                <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="chess.piece.queen.fill" size="text-lg" className="text-cyan-400" /> Trading Strategies
+                {/* Minimal divider */}
+                <div className="border-t border-white/[0.04] my-6" />
+
+                <h2 className={cn("text-lg font-bold mb-1 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                  <SFIcon name="chess.piece.queen.fill" size="text-lg" className="text-cyan-400" /> Trade Ideas
                 </h2>
+                <p className="text-xs text-muted-foreground/50 mb-4">Actionable setups with context, entries, and risk levels.</p>
                 <DataReveal
                   loading={!data.strategies?.length}
-                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{Array.from({length: 6}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
+                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 gap-2">{Array.from({length: 4}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {data.strategies.map((s) => (
                       <LazyStrategyCard key={s.ticker} strategy={s} />
                     ))}

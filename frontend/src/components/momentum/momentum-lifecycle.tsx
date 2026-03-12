@@ -3,6 +3,7 @@
 import React, { useState, memo } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import type { Signal } from "@/types/momentum";
 import { cn } from "@/lib/utils";
 import { SFIcon } from "@/components/ui/SFIcon";
@@ -17,7 +18,6 @@ interface Tab {
   id: string;
   label: string;
   icon: string;
-  emoji: string;
   dataKey: string;
   description: string;
 }
@@ -27,7 +27,6 @@ const LIFECYCLE_TABS: Tab[] = [
     id: "fresh",
     label: "Birth",
     icon: "leaf.fill",
-    emoji: "🌱",
     dataKey: "fresh_momentum",
     description: "Early-stage momentum — Stochastic %K just crossed above %D below 70. Catching trends before they become crowded.",
   },
@@ -35,7 +34,6 @@ const LIFECYCLE_TABS: Tab[] = [
     id: "continuation",
     label: "Growth",
     icon: "rocket.fill",
-    emoji: "🚀",
     dataKey: "continuation",
     description: "Sustained momentum — ADX strong, trending regime, all systems aligned with probability > 70%. Momentum that persists.",
   },
@@ -43,7 +41,6 @@ const LIFECYCLE_TABS: Tab[] = [
     id: "bullish",
     label: "Bullish",
     icon: "arrow.up.right.circle.fill",
-    emoji: "📈",
     dataKey: "bullish_momentum",
     description: "Full bullish alignment — positive composite, trending regime, MACD bullish, probability confirmation across all 4 systems.",
   },
@@ -51,7 +48,6 @@ const LIFECYCLE_TABS: Tab[] = [
     id: "elite",
     label: "Elite",
     icon: "star.fill",
-    emoji: "⭐",
     dataKey: "momentum_95",
     description: "Highest-conviction picks — only stocks where all 4 systems produce probability ≥ 95%. Unanimous directional agreement.",
   },
@@ -59,7 +55,6 @@ const LIFECYCLE_TABS: Tab[] = [
     id: "exhausting",
     label: "Exhaustion",
     icon: "flame.fill",
-    emoji: "🔥",
     dataKey: "exhausting_momentum",
     description: "Late-stage momentum — Stochastic %K above 80, overbought conditions that may reverse. Useful for profit-taking or hedging.",
   },
@@ -77,13 +72,19 @@ export const MomentumLifecycle = memo(({ data, onSelectTicker }: MomentumLifecyc
 
   return (
     <>
-      <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-1 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-        <SFIcon name="leaf.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
-        Momentum Lifecycle
-      </h1>
-      <p className="text-sm text-muted-foreground/60 mb-5">
-        Every trend is born, lives, and dies. Your job is knowing which phase you&apos;re looking at.
-      </p>
+      {/* Hero banner */}
+      <div className="relative w-full h-32 md:h-40 rounded-2xl overflow-hidden mb-5">
+        <Image src="/heroes/hero_momentum.png" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        <div className="absolute bottom-4 left-5">
+          <h1 className={cn("text-2xl font-extrabold md:text-3xl text-foreground", TRACKING_HEADING_CLASS)}>
+            Momentum Lifecycle
+          </h1>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">
+            Every trend is born, lives, and dies. Know which phase you&apos;re in.
+          </p>
+        </div>
+      </div>
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1 scrollbar-hide">
@@ -101,7 +102,7 @@ export const MomentumLifecycle = memo(({ data, onSelectTicker }: MomentumLifecyc
             whileTap={{ scale: 0.98 }}
             transition={SPRING_TRANSITION_PROPS}
           >
-            <span className="text-base">{tab.emoji}</span>
+            <SFIcon name={tab.icon} size="text-sm" className={activeTab === tab.id ? "text-cyan-400" : "text-muted-foreground/40"} />
             {tab.label}
             {(data[tab.dataKey] as Signal[] || []).length > 0 && (
               <span className={cn(
@@ -123,7 +124,7 @@ export const MomentumLifecycle = memo(({ data, onSelectTicker }: MomentumLifecyc
 
       <LazyScreenerTable
         data={currentData}
-        title={`${currentTab.emoji} ${currentTab.label}`}
+        title={currentTab.label}
         icon={currentTab.icon}
         onSelectTicker={onSelectTicker}
       />
