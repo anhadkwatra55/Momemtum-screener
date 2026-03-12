@@ -633,29 +633,76 @@ const DashboardPage = memo(() => {
             )}
 
             {/* ══════ SCREENER PAGES (all 10 + hidden gems) ══════ */}
-            {Object.keys(SCREENER_MAP).includes(activePage) && (
-              <motion.div
-                key={activePage}
-                {...PAGE_MOTION_VARIANTS}
-                className="pt-4 md:pt-6 pb-8 md:pb-12"
-              >
-                {/* Research info for this screener */}
-                <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-gradient-to-r from-cyan-500/[0.04] to-violet-500/[0.04] border border-white/[0.04] px-4 py-3">
-                  <SFIcon icon="info.circle.fill" size={14} className="text-cyan-400/60 mt-0.5 shrink-0" />
-                  <p className="text-xs text-muted-foreground/60 leading-relaxed">
-                    {SCREENER_MAP[activePage].info}
-                  </p>
-                </div>
-                <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
-                  <LazyScreenerTable
-                    data={(data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || []}
-                    title={SCREENER_MAP[activePage].title}
-                    icon={SCREENER_MAP[activePage].icon}
-                    onSelectTicker={handlePageTickerSelect}
-                  />
-                </DataReveal>
-              </motion.div>
-            )}
+            {Object.keys(SCREENER_MAP).includes(activePage) && (() => {
+              const screenerData = (data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || [];
+              // Compute top 5 sectors by count
+              const sectorCounts: Record<string, number> = {};
+              screenerData.forEach((s: any) => {
+                const sec = s?.sector || "Unknown";
+                sectorCounts[sec] = (sectorCounts[sec] || 0) + 1;
+              });
+              const topSectors = Object.entries(sectorCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+              const sectorColors: Record<string, string> = {
+                "Technology": "text-cyan-400 bg-cyan-400/10",
+                "Healthcare": "text-emerald-400 bg-emerald-400/10",
+                "Financials": "text-amber-400 bg-amber-400/10",
+                "Consumer Discretionary": "text-violet-400 bg-violet-400/10",
+                "Industrials": "text-blue-400 bg-blue-400/10",
+                "Communication Services": "text-pink-400 bg-pink-400/10",
+                "Consumer Staples": "text-lime-400 bg-lime-400/10",
+                "Energy": "text-orange-400 bg-orange-400/10",
+                "Utilities": "text-teal-400 bg-teal-400/10",
+                "Real Estate": "text-rose-400 bg-rose-400/10",
+                "Materials": "text-indigo-400 bg-indigo-400/10",
+              };
+              return (
+                <motion.div
+                  key={activePage}
+                  {...PAGE_MOTION_VARIANTS}
+                  className="pt-4 md:pt-6 pb-8 md:pb-12"
+                >
+                  {/* Research info for this screener */}
+                  <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-gradient-to-r from-cyan-500/[0.04] to-violet-500/[0.04] border border-white/[0.04] px-4 py-3">
+                    <SFIcon icon="info.circle.fill" size={14} className="text-cyan-400/60 mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground/60 leading-relaxed">
+                      {SCREENER_MAP[activePage].info}
+                    </p>
+                  </div>
+                  {/* Sector breakdown — top 5 */}
+                  {topSectors.length > 0 && (
+                    <div className="mb-4 flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 mr-1">
+                        <SFIcon icon="chart.pie.fill" size={11} className="inline-block mr-1 -mt-0.5" />
+                        Sectors
+                      </span>
+                      {topSectors.map(([sector, count]) => (
+                        <span
+                          key={sector}
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${sectorColors[sector] || "text-slate-400 bg-slate-400/10"}`}
+                        >
+                          {sector.replace("Consumer ", "").replace("Communication ", "Comm. ")} · {count}
+                        </span>
+                      ))}
+                      {Object.keys(sectorCounts).length > 5 && (
+                        <span className="text-[10px] text-muted-foreground/30 font-medium">
+                          +{Object.keys(sectorCounts).length - 5} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
+                    <LazyScreenerTable
+                      data={screenerData}
+                      title={SCREENER_MAP[activePage].title}
+                      icon={SCREENER_MAP[activePage].icon}
+                      onSelectTicker={handlePageTickerSelect}
+                    />
+                  </DataReveal>
+                </motion.div>
+              );
+            })()}
 
             {/* ══════ HIGH YIELD ETFs ══════ */}
             {activePage === "yield-etfs" && (

@@ -338,6 +338,29 @@ def _compute_derived_lists(results: List[dict]) -> dict:
         "shock_clusters": _slim(shock_clusters),
         "gamma_signals": _slim(gamma_signals),
         "hidden_gems": _slim(hidden_gems),
+        # ── Thematic Derived Lists ──
+        "ai_stocks": _slim(sorted(
+            [r for r in results if r["ticker"] in set(cfg.AI_STOCKS)],
+            key=lambda x: x["composite"], reverse=True
+        )),
+        "bullish_momentum": _slim(sorted(
+            [r for r in results if r["composite"] > 0.15 and r["daily_change"] > 0
+             and r.get("regime") in ("Trending", "Choppy")
+             and r["probability"] > 45
+             and r["ticker"] not in set(cfg.ETF_TICKERS)],
+            key=lambda x: x["composite"], reverse=True
+        )[:100]),
+        "high_volume_gappers": _slim(sorted(
+            [r for r in results if r["daily_change"] > 1.0
+             and r.get("vol_spike", 1.0) > 1.2 and r["composite"] > 0
+             and r["ticker"] not in set(cfg.ETF_TICKERS)],
+            key=lambda x: x["daily_change"], reverse=True
+        )[:100]),
+        "earnings_growers": [],  # Phase 2: requires quarterly financials pipeline
+        "momentum_95": _slim(sorted(
+            [r for r in results if r["probability"] >= 95],
+            key=lambda x: x["probability"], reverse=True
+        )),
     }
 
 
