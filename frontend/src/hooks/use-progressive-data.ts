@@ -145,10 +145,14 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
   }, []);
 
   // ── On-demand chart fetch (Tier 4) ──
+  const chartFailedRef = useRef<Set<string>>(new Set());
+
   const fetchChart = useCallback(async (ticker: string): Promise<TickerChartData | null> => {
     const upper = ticker.toUpperCase();
-    // Return from cache if available
+    // Return from cache if available (including failed placeholders)
     if (chartCache[upper]) return chartCache[upper];
+    // Don't retry failed tickers
+    if (chartFailedRef.current.has(upper)) return null;
 
     setChartLoading(upper);
     try {
@@ -162,7 +166,12 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
       } : prev);
       return chart;
     } catch (e) {
-      console.error(`Failed to fetch chart for ${upper}`, e);
+      console.warn(`Chart unavailable for ${upper} (likely not in screener universe)`);
+      // Mark as failed so we don't retry
+      chartFailedRef.current.add(upper);
+      // Cache an empty placeholder so the UI shows "no data" instead of looping
+      const emptyChart = { price: [], hull_ma: [], candlestick: [] } as unknown as TickerChartData;
+      setChartCache(prev => ({ ...prev, [upper]: emptyChart }));
       return null;
     } finally {
       setChartLoading(null);

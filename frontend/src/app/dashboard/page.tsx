@@ -8,6 +8,7 @@ import { KPIStrip } from "@/components/momentum/kpi-strip";
 import { QuoteRotator } from "@/components/momentum/quote-rotator";
 import { useProgressiveData } from "@/hooks/use-progressive-data";
 import { usePipelineStatus } from "@/hooks/use-pipeline-status";
+import { useHybridPrediction } from "@/hooks/use-hybrid-prediction";
 import { DataReveal, CardReveal } from "@/components/ui/data-reveal";
 import { SFIcon } from "@/components/ui/sf-icon";
 import {
@@ -49,6 +50,10 @@ const LazyAnomalyDetector = dynamic(() => import('@/components/momentum/anomaly-
 const LazyHiddenAlpha = dynamic(() => import('@/components/momentum/hidden-alpha').then(m => ({ default: m.HiddenAlpha })), { ssr: false });
 const LazySectorRadar = dynamic(() => import('@/components/momentum/sector-radar').then(m => ({ default: m.SectorRadar })), { ssr: false });
 const LazyIncomeEngine = dynamic(() => import('@/components/momentum/income-engine').then(m => ({ default: m.IncomeEngine })), { ssr: false });
+const LazyMlPredictionPanel = dynamic(() => import('@/components/momentum/ml-prediction-panel').then(m => ({ default: m.MlPredictionPanel })), { ssr: false });
+
+// ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
+const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
 
 const ChartSkeleton = memo(() => (
   <div className={cn("flex h-full w-full items-center justify-center bg-card rounded-2xl overflow-hidden relative p-5", MIN_CHART_HEIGHT_CLASS)}>
@@ -143,6 +148,11 @@ const DashboardPage = memo(() => {
 
   // Pipeline status — auto-refresh when pipeline completes
   const pipeline = usePipelineStatus(refresh);
+
+  // Hybrid prediction — SSE streaming for XGBoost + Triage Gate
+  // Only runs for tickers in the ML sandbox (5 tickers with trained model)
+  const mlTicker = selectedTicker && ML_SANDBOX_TICKERS.has(selectedTicker) ? selectedTicker : null;
+  const hybridPrediction = useHybridPrediction(mlTicker);
 
   const handleSelectTicker = useCallback((ticker: string) => {
     setSelectedTicker(ticker);
@@ -334,11 +344,9 @@ const DashboardPage = memo(() => {
                             className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
                             onClick={() => handlePageTickerSelect(s.ticker)}
                             whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
-                            transition={SPRING_TRANSITION_PROPS}
                             initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
-                            // @ts-expect-error framer-motion transition accepts delay
-                            transitionDelay={`${i * 60}ms`}
+                            transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.06 }}
                           >
                             <div className="flex items-center gap-3">
                               <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
@@ -497,11 +505,29 @@ const DashboardPage = memo(() => {
                   </DataReveal>
                 )}
 
+                {/* ML Prediction Panel — XGBoost + Triage Gate (sandbox tickers only) */}
+                {selectedTicker && ML_SANDBOX_TICKERS.has(selectedTicker) && (
+                  <div className="mb-6">
+                    <LazyMlPredictionPanel
+                      step={hybridPrediction.step}
+                      stepLabel={hybridPrediction.stepLabel}
+                      mlResult={hybridPrediction.mlResult}
+                      isAnomaly={hybridPrediction.isAnomaly}
+                      isComplete={hybridPrediction.isComplete}
+                      isLoading={hybridPrediction.isLoading}
+                      isStreaming={hybridPrediction.isStreaming}
+                    />
+                  </div>
+                )}
+
                 {/* Charts — loaded on-demand per ticker */}
-                {selectedTicker && (
-                  <DataReveal
-                    loading={chartLoading === selectedTicker || (!selectedChart && !!selectedTicker)}
-                    skeleton={
+                {selectedTicker && (() => {
+                  const isChartLoading = chartLoading === selectedTicker;
+                  const hasChartData = selectedChart && selectedChart.dates && selectedChart.dates.length > 0;
+                  const chartFailed = selectedChart && (!selectedChart.dates || selectedChart.dates.length === 0);
+
+                  if (isChartLoading) {
+                    return (
                       <div className="space-y-6">
                         <ChartSkeleton />
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -509,9 +535,23 @@ const DashboardPage = memo(() => {
                           <ChartSkeleton />
                         </div>
                       </div>
-                    }
-                  >
-                    {selectedChart && (
+                    );
+                  }
+
+                  if (chartFailed) {
+                    return (
+                      <Card className="p-8 text-center border border-white/[0.04]">
+                        <SFIcon name="chart.line.downtrend.xyaxis" size={24} className="text-muted-foreground/20 mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground/40 font-medium">Chart data unavailable for {selectedTicker}</p>
+                        <p className="text-xs text-muted-foreground/25 mt-1">This ticker may not be in the screener universe yet.</p>
+                      </Card>
+                    );
+                  }
+
+                  if (!hasChartData) return null;
+
+                  return (
+                    <DataReveal loading={false} skeleton={<ChartSkeleton />}>
                       <div className="space-y-6">
                         {/* Price + HMA + Candlestick */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -582,9 +622,9 @@ const DashboardPage = memo(() => {
                           </Card>
                         </div>
                       </div>
-                    )}
-                  </DataReveal>
-                )}
+                    </DataReveal>
+                  );
+                })()}
               </motion.div>
             )}
 
