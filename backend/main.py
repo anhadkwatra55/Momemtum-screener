@@ -62,7 +62,7 @@ from strategy_engine import (
 )
 from redis_cache import get_cache, RedisCache
 from validators import validate_universe, validate_ohlcv_dataframe
-from engine import run_pipeline_sync, pipeline_status as _engine_status
+from engine import run_pipeline_sync, run_pipeline_progressive, get_wave_version, pipeline_status as _engine_status
 from insider_signals import fetch_insider_buys_parallel, fetch_insider_buys_single
 
 # ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
@@ -386,6 +386,13 @@ def build_dashboard_data() -> dict:
     except Exception as e:
         print(f"    ⚠ DB persist failed: {e}")
 
+    # ── Snapshot daily top momentum for weekly tracking ──
+    try:
+        top_count = db.upsert_daily_top(results)
+        print(f"    ✓ Snapshotted top {top_count} daily momentum leaders")
+    except Exception as e:
+        print(f"    ⚠ Daily top snapshot failed: {e}")
+
     _ps.update("done", "Pipeline complete")
 
     return {
@@ -454,12 +461,12 @@ def build_dashboard_data() -> dict:
 _CACHED_DASHBOARD_DATA: dict | None = None
 
 
-def _run_pipeline_background():
-    """Run the parallel pipeline engine and cache results across all layers."""
+def _publish_wave(data: dict) -> None:
+    """Callback invoked after each progressive pipeline wave.
+    Serialises and caches the (partial) dashboard data so the frontend
+    can render immediately without waiting for the full pipeline."""
     global _CACHED_DASHBOARD_DATA
     try:
-        data = run_pipeline_sync(use_parallel=True)
-
         # Serialise once for all caches
         if HAS_ORJSON:
             raw = orjson.dumps(data, default=_orjson_default,
@@ -481,21 +488,37 @@ def _run_pipeline_background():
             stored = cache.set_charts_bulk(charts)
             print(f"  ✓ Cached {stored} ticker charts in Redis")
 
-        # 3. File fallback
-        out_path = PIPELINES_DIR / "momentum_data.json"
-        if HAS_ORJSON:
-            with open(out_path, "wb") as f:
-                f.write(orjson.dumps(data, default=_orjson_default,
-                                    option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
-                                           | orjson.OPT_INDENT_2))
-        else:
-            with open(out_path, "w") as f:
-                json.dump(data, f, cls=NumpyEncoder)
-        print(f"\n✓ Data written to {out_path.name}")
+        wave = data.get("_meta", {}).get("wave", "?")
+        is_complete = data.get("_meta", {}).get("is_complete", False)
+        n_tickers = data.get("_meta", {}).get("tickers_screened", 0)
+        print(f"  📡 Published wave {wave} — {n_tickers} tickers (complete={is_complete})")
 
-        # 4. Fire webhooks to invalidate frontend cache
-        _dispatch_webhooks(serialised)
+        # Only write file + fire webhooks on final wave
+        if is_complete:
+            out_path = PIPELINES_DIR / "momentum_data.json"
+            if HAS_ORJSON:
+                with open(out_path, "wb") as f:
+                    f.write(orjson.dumps(data, default=_orjson_default,
+                                        option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
+                                               | orjson.OPT_INDENT_2))
+            else:
+                with open(out_path, "w") as f:
+                    json.dump(data, f, cls=NumpyEncoder)
+            print(f"\n✓ Data written to {out_path.name}")
+            _dispatch_webhooks(serialised)
 
+    except Exception as e:
+        print(f"  ⚠ Wave publish failed: {e}")
+        traceback.print_exc()
+
+
+def _run_pipeline_background():
+    """Run the progressive pipeline engine — publishes partial results per wave."""
+    try:
+        run_pipeline_progressive(
+            publish_callback=_publish_wave,
+            use_parallel=True,
+        )
     except Exception as e:
         traceback.print_exc()
         _engine_status.update("error", str(e))
@@ -841,6 +864,59 @@ async def get_db_signal(ticker: str):
             return JSONResponse(content={"error": f"No signal data for {ticker}"}, status_code=404)
         return encode_response(signal)
     except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Weekly Top Momentum ──
+
+@app.get("/api/weekly-top-momentum")
+async def get_weekly_top_momentum(
+    week_start: str | None = None,
+    week_end: str | None = None,
+    top_n: int = 5,
+):
+    """
+    Return the top momentum stocks for the current trading week.
+    Shows daily composite score snapshots so users can track
+    whether momentum climbed or dropped through the week.
+    """
+    import datetime as _dt
+
+    try:
+        # Default to current trading week (Mon–Fri)
+        today = _dt.date.today()
+        if not week_start:
+            # Monday of the current week
+            monday = today - _dt.timedelta(days=today.weekday())
+            week_start = monday.strftime("%Y-%m-%d")
+        if not week_end:
+            week_end = today.strftime("%Y-%m-%d")
+
+        weekly = db.load_weekly_top(week_start, week_end)
+
+        if not weekly["tickers"]:
+            return encode_response({
+                "week_start": week_start,
+                "week_end": week_end,
+                "dates": [],
+                "top_tickers": [],
+                "message": "No daily snapshots found for this period. Pipeline must run at least once to populate data.",
+            })
+
+        # Rank tickers by latest composite, take top N
+        all_tickers = list(weekly["tickers"].values())
+        all_tickers.sort(key=lambda x: x.get("latest_composite", 0), reverse=True)
+        top_tickers = all_tickers[:top_n]
+
+        return encode_response({
+            "week_start": week_start,
+            "week_end": week_end,
+            "dates": weekly["dates"],
+            "top_tickers": top_tickers,
+        })
+
+    except Exception as e:
+        traceback.print_exc()
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
@@ -1290,7 +1366,20 @@ async def pipeline_status():
     cache = get_cache()
     cached_status = cache.get_pipeline_status()
     status = cached_status if cached_status else _engine_status.to_dict()
-    return {**status, "next_run": _next_pipeline_run, "last_run": _last_pipeline_run}
+    wave_version = get_wave_version()
+    # Include wave metadata so frontend knows when new data is available
+    meta = _CACHED_DASHBOARD_DATA.get("_meta", {}) if _CACHED_DASHBOARD_DATA else {}
+    return {
+        **status,
+        "next_run": _next_pipeline_run,
+        "last_run": _last_pipeline_run,
+        "wave_version": wave_version,
+        "wave": meta.get("wave", 0),
+        "total_waves": meta.get("total_waves", 3),
+        "is_complete": meta.get("is_complete", False),
+        "tickers_screened": meta.get("tickers_screened", 0),
+        "tickers_universe": meta.get("tickers_universe", 0),
+    }
 
 
 @app.post("/api/pipeline/trigger")
