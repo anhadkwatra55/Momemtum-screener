@@ -69,7 +69,7 @@ def db_session(db_path=None):
 #  SCHEMA INIT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_SQL = """
 -- OHLCV daily bars
@@ -212,6 +212,23 @@ CREATE TABLE IF NOT EXISTS indicator_system4 (
     bull_pct_10d        REAL,
     updated_at          TEXT DEFAULT (datetime('now'))
 );
+
+-- Daily top momentum snapshots (for weekly tracking)
+CREATE TABLE IF NOT EXISTS momentum_daily_top (
+    date        TEXT    NOT NULL,
+    rank        INTEGER NOT NULL,
+    ticker      TEXT    NOT NULL,
+    composite   REAL,
+    probability REAL,
+    price       REAL,
+    sector      TEXT,
+    sentiment   TEXT,
+    daily_change REAL,
+    return_20d  REAL,
+    PRIMARY KEY (date, rank)
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_date   ON momentum_daily_top(date);
+CREATE INDEX IF NOT EXISTS idx_mdt_ticker ON momentum_daily_top(ticker);
 """
 
 
@@ -715,3 +732,113 @@ def get_signals_count() -> int:
     with db_session() as conn:
         row = conn.execute("SELECT COUNT(*) as c FROM signals").fetchone()
         return row["c"] if row else 0
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  WEEKLY TOP MOMENTUM  (daily snapshots for tracking)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def upsert_daily_top(results: List[dict], top_n: int = 10, run_date: Optional[str] = None) -> int:
+    """
+    Snapshot today's top N momentum stocks by composite score.
+    Called at the end of each pipeline run.
+    """
+    if not results:
+        return 0
+
+    today = run_date or datetime.now().strftime("%Y-%m-%d")
+
+    # Sort by composite descending, take top N positive-composite stocks
+    ranked = sorted(
+        [r for r in results if r.get("composite", 0) > 0],
+        key=lambda x: x.get("composite", 0),
+        reverse=True,
+    )[:top_n]
+
+    rows = []
+    for i, r in enumerate(ranked, 1):
+        rows.append((
+            today, i, r["ticker"],
+            r.get("composite"), r.get("probability"), r.get("price"),
+            r.get("sector", "Unknown"), r.get("sentiment", "Neutral"),
+            r.get("daily_change", 0), r.get("return_20d", 0),
+        ))
+
+    with db_session() as conn:
+        # Delete existing rows for this date (idempotent re-runs)
+        conn.execute("DELETE FROM momentum_daily_top WHERE date = ?", (today,))
+        conn.executemany(
+            """INSERT INTO momentum_daily_top
+               (date, rank, ticker, composite, probability, price, sector, sentiment, daily_change, return_20d)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            rows,
+        )
+    return len(rows)
+
+
+def load_weekly_top(start_date: str, end_date: str) -> dict:
+    """
+    Load daily top momentum snapshots for a date range.
+    Returns { dates: [...], daily: { date: [rows] }, tickers: { ticker: { dates, composites, ... } } }
+    """
+    with db_session() as conn:
+        rows = conn.execute(
+            """SELECT * FROM momentum_daily_top
+               WHERE date >= ? AND date <= ?
+               ORDER BY date ASC, rank ASC""",
+            (start_date, end_date),
+        ).fetchall()
+
+    if not rows:
+        return {"dates": [], "daily": {}, "tickers": {}}
+
+    daily: Dict[str, List[dict]] = {}
+    ticker_data: Dict[str, dict] = {}
+
+    for r in rows:
+        row = dict(r)
+        d = row["date"]
+        t = row["ticker"]
+
+        daily.setdefault(d, []).append(row)
+
+        if t not in ticker_data:
+            ticker_data[t] = {
+                "ticker": t,
+                "sector": row.get("sector", "Unknown"),
+                "dates": [],
+                "composites": [],
+                "probabilities": [],
+                "prices": [],
+                "ranks": [],
+                "sentiments": [],
+            }
+        ticker_data[t]["dates"].append(d)
+        ticker_data[t]["composites"].append(row.get("composite", 0))
+        ticker_data[t]["probabilities"].append(row.get("probability", 0))
+        ticker_data[t]["prices"].append(row.get("price", 0))
+        ticker_data[t]["ranks"].append(row.get("rank", 0))
+        ticker_data[t]["sentiments"].append(row.get("sentiment", "Neutral"))
+
+    # Compute trend info per ticker
+    for t, info in ticker_data.items():
+        comps = info["composites"]
+        if len(comps) >= 2:
+            info["score_change"] = round(comps[-1] - comps[0], 4)
+            info["trend"] = "up" if comps[-1] > comps[0] else "down" if comps[-1] < comps[0] else "flat"
+        else:
+            info["score_change"] = 0
+            info["trend"] = "flat"
+        info["latest_composite"] = comps[-1] if comps else 0
+        info["latest_rank"] = info["ranks"][-1] if info["ranks"] else 0
+        info["latest_sentiment"] = info["sentiments"][-1] if info["sentiments"] else "Neutral"
+        info["latest_price"] = info["prices"][-1] if info["prices"] else 0
+        info["days_in_top"] = len(comps)
+
+    dates = sorted(daily.keys())
+
+    return {
+        "dates": dates,
+        "daily": daily,
+        "tickers": ticker_data,
+    }

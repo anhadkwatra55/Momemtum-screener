@@ -799,6 +799,29 @@ export async function fetchTickerChart(ticker: string): Promise<{ ticker: string
 }
 
 /**
+ * Fetches weekly top momentum data — daily snapshots of top tickers with trend info.
+ */
+export async function fetchWeeklyTopMomentum(topN: number = 5): Promise<unknown> {
+  return apiFetch<unknown>(`/api/weekly-top-momentum?top_n=${topN}`, { cache: true, cacheTTLSeconds: 120 });
+}
+
+/**
+ * Fetches hybrid prediction (legacy scores + async ML pipeline dispatch).
+ * Returns instant legacy 4-system scores and a job_id for SSE streaming.
+ * No caching — each prediction triggers a fresh ML pipeline run.
+ */
+export async function fetchHybridPrediction(ticker: string): Promise<{
+  legacy_scores: Record<string, unknown> | null;
+  job_id: string;
+  ml_dispatched: boolean;
+  dispatch_error: string | null;
+  status: string;
+  stream_url: string;
+}> {
+  return apiFetch(`/api/predict/hybrid/${ticker.toUpperCase()}`);
+}
+
+/**
  * Fetches derived signal lists (hidden gems, clusters, etc., ~500KB). Tier 3 — on demand.
  */
 export async function fetchDerived(): Promise<Record<string, Signal[]>> {

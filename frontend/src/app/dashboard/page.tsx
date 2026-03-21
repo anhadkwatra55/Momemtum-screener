@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { AppleButton } from "@/components/ui/apple-button";
 import { Card } from "@/components/ui/card";
+import { ConvictionBadge, ActionBadge, getTierConfig } from "@/components/momentum/conviction-badge";
 
 // ── Lazy-loaded heavy components (code-split per page) ──────────────────────
 const LazySignalTable = dynamic(() => import('@/components/momentum/signal-table').then(m => ({ default: m.SignalTable })), { ssr: false });
@@ -51,6 +52,7 @@ const LazyHiddenAlpha = dynamic(() => import('@/components/momentum/hidden-alpha
 const LazySectorRadar = dynamic(() => import('@/components/momentum/sector-radar').then(m => ({ default: m.SectorRadar })), { ssr: false });
 const LazyIncomeEngine = dynamic(() => import('@/components/momentum/income-engine').then(m => ({ default: m.IncomeEngine })), { ssr: false });
 const LazyMlPredictionPanel = dynamic(() => import('@/components/momentum/ml-prediction-panel').then(m => ({ default: m.MlPredictionPanel })), { ssr: false });
+const LazyWeeklyMomentumPanel = dynamic(() => import('@/components/momentum/weekly-momentum-panel').then(m => ({ default: m.WeeklyMomentumPanel })), { ssr: false });
 
 // ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
 const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
@@ -187,13 +189,14 @@ const DashboardPage = memo(() => {
 
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
+    const tierDist = data.summary.tier_distribution ?? {};
     return [
       { label: "Universe", value: data.summary.total_screened, color: "cyan" as PaletteColorKey },
-      { label: "Bullish", value: data.summary.bullish, color: "emerald" as PaletteColorKey },
-      { label: "Bearish", value: data.summary.bearish, color: "rose" as PaletteColorKey },
-      { label: "Avg Probability", value: `${data.summary.avg_probability}%`, color: "amber" as PaletteColorKey },
-      { label: "Top Bull", value: data.summary.top_bull, color: "emerald" as PaletteColorKey },
-      { label: "Top Bear", value: data.summary.top_bear, color: "rose" as PaletteColorKey },
+      { label: "Ultra Conviction", value: tierDist["Ultra Conviction"] ?? 0, color: "amber" as PaletteColorKey },
+      { label: "High Conviction", value: tierDist["High Conviction"] ?? 0, color: "emerald" as PaletteColorKey },
+      { label: "Moderate", value: tierDist["Moderate Conviction"] ?? 0, color: "cyan" as PaletteColorKey },
+      { label: "Low Conviction", value: tierDist["Low Conviction"] ?? 0, color: "slate" as PaletteColorKey },
+      { label: "Contrarian", value: tierDist["Contrarian"] ?? 0, color: "rose" as PaletteColorKey },
     ];
   }, [data?.summary]);
 
@@ -299,79 +302,144 @@ const DashboardPage = memo(() => {
                   <KPIStrip className="" items={kpiStripItems} />
                 </DataReveal>
 
-                <DataReveal
-                  loading={tierLoading.signals && !data.signals?.length}
-                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
-                  className="mb-4"
-                  delay={100}
-                >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                    <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                  </div>
-                </DataReveal>
-
-                <DataReveal
-                  loading={tierLoading.signals && !data.signals?.length}
-                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
-                  className="mb-4"
-                  delay={200}
-                >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                    <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                  </div>
-                </DataReveal>
-
-                {(data.hidden_gems || []).length > 0 && (
-                  <CardReveal loading={false} className="mb-4" delay={300}>
-                    <Card className="p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                          <SFIcon name="diamond.fill" size="text-lg" className="text-cyan-400" /> Hidden Gems — Underrated Picks
-                        </h2>
-                        <AppleButton variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300" onClick={() => setActivePage("hidden-alpha")} glowColor="cyan">
-                          View All <span className="ml-1 text-sm font-semibold">→</span>
-                        </AppleButton>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4 text-balance">
-                        Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
-                      </p>
-                      <div className="space-y-1">
-                        {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0], i: number) => (
-                          <motion.div
-                            key={s.ticker}
-                            className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
-                            onClick={() => handlePageTickerSelect(s.ticker)}
-                            whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.06 }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
-                              <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
-                              <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
-                              <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
-                            </div>
-                          </motion.div>
-                        ))}
+                {/* ── Headstart Top Picks ── */}
+                {(data.top_picks?.length > 0) && (
+                  <CardReveal loading={false} delay={150}>
+                    <Card className="mb-4 p-0 overflow-hidden relative">
+                      {/* Hero background image */}
+                      <div
+                        className="absolute inset-0 opacity-[0.12] bg-cover bg-center"
+                        style={{ backgroundImage: `url('/images/tiers/ultra.png')` }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-card via-card/80 to-transparent" />
+                      <div className="relative z-10 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                            <SFIcon name="star.fill" size="text-lg" className="text-amber-400" />
+                            Headstart Research — Top Picks
+                          </h2>
+                          <span className="text-[10px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold uppercase tracking-wider">
+                            Quant Screened
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground/60 mb-3">
+                          Highest conviction signals — multi-system agreement, trending regime, confirmed fresh momentum.
+                        </p>
+                        <div className="space-y-1">
+                          {(data.top_picks || []).slice(0, 8).map((s: typeof data.signals[0], i: number) => (
+                            <motion.div
+                              key={s.ticker}
+                              className="flex items-center justify-between py-2.5 cursor-pointer rounded-xl px-3 -mx-1 hover:bg-white/5 transition-colors"
+                              onClick={() => handlePageTickerSelect(s.ticker)}
+                              whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.04 }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-muted-foreground/40 font-mono-data w-4">{i + 1}</span>
+                                <span className="font-bold text-foreground font-mono-data text-sm w-14">{s.ticker}</span>
+                                <ConvictionBadge tier={(s as any).conviction_tier ?? 'High Conviction'} />
+                                <ActionBadge action={(s as any).action_category ?? 'Top Pick'} />
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono-data text-xs text-muted-foreground">{s.sector}</span>
+                                <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
+                                <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
+                                <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
                       </div>
                     </Card>
                   </CardReveal>
                 )}
 
-                <CardReveal loading={!data.sector_regimes} delay={400}>
-                  <Card className="p-3">
-                    <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                      <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
-                    </h2>
-                    <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
-                  </Card>
-                </CardReveal>
+                {/* Two-column layout: main content + weekly panel */}
+                <div className="flex flex-col xl:flex-row gap-4">
+                  {/* Left: main Market Pulse content */}
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <DataReveal
+                      loading={tierLoading.signals && !data.signals?.length}
+                      skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
+                      delay={100}
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                        <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                      </div>
+                    </DataReveal>
+
+                    <DataReveal
+                      loading={tierLoading.signals && !data.signals?.length}
+                      skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
+                      delay={200}
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
+                        <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
+                      </div>
+                    </DataReveal>
+
+                    {(data.hidden_gems || []).length > 0 && (
+                      <CardReveal loading={false} delay={300}>
+                        <Card className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                              <SFIcon name="diamond.fill" size="text-lg" className="text-cyan-400" /> Hidden Gems — Underrated Picks
+                            </h2>
+                            <AppleButton variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300" onClick={() => setActivePage("hidden-alpha")} glowColor="cyan">
+                              View All <span className="ml-1 text-sm font-semibold">→</span>
+                            </AppleButton>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-4 text-balance">
+                            Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
+                          </p>
+                          <div className="space-y-1">
+                            {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0], i: number) => (
+                              <motion.div
+                                key={s.ticker}
+                                className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
+                                onClick={() => handlePageTickerSelect(s.ticker)}
+                                whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.06 }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
+                                  <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
+                                  <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
+                                  <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </Card>
+                      </CardReveal>
+                    )}
+
+                    <CardReveal loading={!data.sector_regimes} delay={400}>
+                      <Card className="p-3">
+                        <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                          <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
+                        </h2>
+                        <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
+                      </Card>
+                    </CardReveal>
+                  </div>
+
+                  {/* Right: Weekly Top Momentum Panel (sticky on desktop) */}
+                  <div className="xl:w-[300px] xl:shrink-0">
+                    <div className="xl:sticky xl:top-[90px]">
+                      <LazyWeeklyMomentumPanel onSelectTicker={handlePageTickerSelect} />
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
 

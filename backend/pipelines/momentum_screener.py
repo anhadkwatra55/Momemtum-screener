@@ -79,6 +79,91 @@ def composite_sentiment(composite_score: float) -> str:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  QUANT RESEARCH CLASSIFICATION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Conviction Tiers — ordered by strength
+CONVICTION_TIERS = ["Ultra Conviction", "High Conviction", "Moderate Conviction", "Low Conviction", "Contrarian"]
+
+# Action Categories — ordered by bullishness
+ACTION_CATEGORIES = ["Top Pick", "Accumulate", "Hold & Monitor", "Caution", "Reduce Exposure", "Avoid"]
+
+
+def classify_conviction_tier(
+    composite: float,
+    probability: float,
+    regime: str,
+) -> str:
+    """
+    Assign a conviction tier based on composite score, probability,
+    and market regime. Pure quant logic — no sentiment heuristics.
+    """
+    if probability >= 80 and composite >= 1.5 and regime == "Trending":
+        return "Ultra Conviction"
+    elif probability >= 65 and composite >= 0.8:
+        return "High Conviction"
+    elif probability >= 50 and composite >= 0.3:
+        return "Moderate Conviction"
+    elif probability >= 35 and composite > 0:
+        return "Low Conviction"
+    else:
+        return "Contrarian"
+
+
+def classify_action_category(
+    conviction_tier: str,
+    momentum_phase: str,
+    regime: str,
+    smart_money_trigger: bool,
+    composite: float,
+) -> str:
+    """
+    Assign an action category by combining conviction tier with
+    momentum lifecycle phase and regime context.
+    """
+    # Top Pick: highest conviction + fresh trend confirmed
+    if conviction_tier in ("Ultra Conviction", "High Conviction") and momentum_phase == "Fresh" and regime == "Trending":
+        return "Top Pick"
+
+    # Accumulate: strong conviction + institutional accumulation signal
+    if conviction_tier in ("High Conviction", "Moderate Conviction") and smart_money_trigger:
+        return "Accumulate"
+
+    # Caution: any bullish conviction but momentum exhausting
+    if momentum_phase == "Exhausting" and composite > 0:
+        return "Caution"
+
+    # Reduce Exposure: weak conviction + declining
+    if conviction_tier == "Low Conviction" and momentum_phase == "Declining":
+        return "Reduce Exposure"
+
+    # Avoid: contrarian + broken trend
+    if conviction_tier == "Contrarian" and regime in ("Choppy", "Unknown") and momentum_phase == "Declining":
+        return "Avoid"
+
+    if conviction_tier == "Contrarian":
+        return "Reduce Exposure"
+
+    # Hold & Monitor: moderate conviction, mean-reverting, or neutral phase
+    return "Hold & Monitor"
+
+
+def classify_signal(
+    composite: float,
+    probability: float,
+    regime: str,
+    momentum_phase: str,
+    smart_money_trigger: bool,
+) -> tuple[str, str]:
+    """
+    Full classification pipeline. Returns (conviction_tier, action_category).
+    """
+    tier = classify_conviction_tier(composite, probability, regime)
+    action = classify_action_category(tier, momentum_phase, regime, smart_money_trigger, composite)
+    return tier, action
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PROBABILITY CALCULATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -224,6 +309,11 @@ def screen_ticker(ticker: str, df: pd.DataFrame) -> dict | None:
         # Chart data
         charts = extract_chart_data(df)
 
+        # Quant research classification
+        conviction_tier, action_category = classify_signal(
+            composite, probability, regime, momentum_phase, sm_trigger
+        )
+
         return {
             "ticker": ticker,
             "company_name": company_name,
@@ -247,6 +337,10 @@ def screen_ticker(ticker: str, df: pd.DataFrame) -> dict | None:
             "momentum_shock": {"trigger": shock_trigger, "shock_strength": shock_strength},
             "smart_money": {"trigger": sm_trigger, "score": sm_score},
             "continuation": {"probability": cont_prob},
+
+            # Quant Research Classification
+            "conviction_tier": conviction_tier,
+            "action_category": action_category,
 
             # System details
             "sys1": s1,

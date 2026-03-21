@@ -363,6 +363,11 @@ def _compute_derived_lists(results: List[dict]) -> dict:
             [r for r in results if r["probability"] >= 95],
             key=lambda x: x["probability"], reverse=True
         )),
+        # Quant Research: Top Picks (Top Pick + Accumulate action categories)
+        "top_picks": _slim(sorted(
+            [r for r in results if r.get("action_category") in ("Top Pick", "Accumulate")],
+            key=lambda x: x["composite"], reverse=True
+        )[:50]),
     }
 
 
@@ -379,6 +384,18 @@ def _compute_summary(results: List[dict]) -> dict:
     top_bull = max(bull_results, key=lambda x: x["composite"]) if bull_results else None
     top_bear = min(bear_results, key=lambda x: x["composite"]) if bear_results else None
 
+    # Conviction tier distribution
+    tier_counts: Dict[str, int] = {}
+    for r in results:
+        tier = r.get("conviction_tier", "Contrarian")
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+    # Action category distribution
+    action_counts: Dict[str, int] = {}
+    for r in results:
+        action = r.get("action_category", "Hold & Monitor")
+        action_counts[action] = action_counts.get(action, 0) + 1
+
     return {
         "total_screened": len(results),
         "total_universe": len(cfg.ALL_TICKERS),
@@ -389,6 +406,8 @@ def _compute_summary(results: List[dict]) -> dict:
         "avg_composite": round(float(np.mean(composites)), 2) if composites else 0,
         "top_bull": top_bull["ticker"] if top_bull else "—",
         "top_bear": top_bear["ticker"] if top_bear else "—",
+        "tier_distribution": tier_counts,
+        "action_distribution": action_counts,
     }
 
 
