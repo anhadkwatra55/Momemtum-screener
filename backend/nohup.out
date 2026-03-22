@@ -1235,3 +1235,941 @@ $MODG: possibly delisted; no price data found  (1d 2025-03-22 -> 2026-03-22) (Ya
 ['MODG']: possibly delisted; no price data found  (1d 2025-03-22 -> 2026-03-22) (Yahoo error = "No data found, symbol may be delisted")
 INFO:     127.0.0.1:53848 - "GET /api/summary HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53848 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53952 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53952 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/insider-buys?limit=20&lookback_days=180 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/insider-buys?limit=20&lookback_days=180 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54130 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54130 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+    ✓ Stored 229,140 rows in DB.
+    ✓ Loaded 919/919 tickers from DB.
+INFO:     127.0.0.1:54175 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54175 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54175 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+    ⚡ Parallel screening: 919 tickers across 7 processes …
+    Processed 50/919 (4 tickers/sec) …
+    Processed 100/919 (7 tickers/sec) …
+    Processed 150/919 (9 tickers/sec) …
+    Processed 200/919 (11 tickers/sec) …
+    Processed 250/919 (13 tickers/sec) …
+    Processed 300/919 (15 tickers/sec) …
+    Processed 350/919 (17 tickers/sec) …
+    Processed 400/919 (18 tickers/sec) …
+    Processed 450/919 (19 tickers/sec) …
+    Processed 500/919 (20 tickers/sec) …
+    Processed 550/919 (21 tickers/sec) …
+    Processed 600/919 (22 tickers/sec) …
+    Processed 650/919 (23 tickers/sec) …
+    Processed 700/919 (24 tickers/sec) …
+    Processed 750/919 (25 tickers/sec) …
+    Processed 800/919 (26 tickers/sec) …
+    Processed 850/919 (27 tickers/sec) …
+    Processed 900/919 (27 tickers/sec) …
+    ✓ Screened 919 tickers in 33.8s (27 tickers/sec)
+
+  Fetching yield data for ETFs & dividend stocks …
+    ✓ Fetched yield for 30 tickers in 1.0s
+    ✓ Fetched yield for 30 tickers in 0.7s
+    ✓ Snapshotted top 10 daily momentum leaders
+  ✓ Cached 0 ticker charts in Redis
+  📡 Published wave 3 — 1535 tickers (complete=True)
+
+✓ Data written to momentum_data.json
+  📊 Pipeline: done — Pipeline complete — 1535 tickers in 645.2s
+
+✓ Progressive pipeline complete: 1535 tickers in 645.2s
+  Workers: 7 CPU / 20 I/O
+INFO:     127.0.0.1:54267 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54267 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54267 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54277 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54277 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54279 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54279 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54279 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54279 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54279 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54291 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54291 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54300 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54300 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54302 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54300 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection closed
+INFO:     127.0.0.1:54325 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:54330 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54332 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54334 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54336 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54336 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54340 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54341 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54336 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54336 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54336 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54336 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54343 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54343 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection closed
+INFO:     127.0.0.1:54343 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54343 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     127.0.0.1:54354 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54355 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54354 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54354 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54364 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54362 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54368 - "OPTIONS /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54369 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54354 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54362 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54381 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54381 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54381 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54381 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54381 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54381 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54389 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54389 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54389 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54389 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54389 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54389 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54401 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54412 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54412 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54412 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54412 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54412 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54412 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54419 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54419 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54419 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54419 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54419 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54421 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54419 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54427 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54427 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54427 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54427 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54427 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54427 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54440 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:54451 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54452 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54451 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54451 - "OPTIONS /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54454 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54454 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54454 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54464 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54464 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54466 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54466 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54466 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54466 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54466 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54477 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54477 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54483 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54483 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54483 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54483 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54485 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54485 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54498 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54498 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54500 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54500 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54500 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54500 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54500 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54502 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54502 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54516 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54516 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54516 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54516 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54518 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54518 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54526 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54526 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54526 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54526 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54526 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54528 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54528 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54537 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54537 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54537 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54537 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54537 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54539 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54539 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54543 - "GET /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54552 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54552 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54552 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54552 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54552 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54554 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54554 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54561 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54563 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54563 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54563 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54565 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54565 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54565 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54565 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54565 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54574 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54577 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54577 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54577 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54577 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54579 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54579 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54579 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54584 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54591 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54591 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54591 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54591 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54591 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54593 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54593 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54598 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54601 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54601 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54601 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54601 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54601 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54603 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54603 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54603 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54605 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     connection closed
+INFO:     127.0.0.1:54622 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54623 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54622 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54622 - "OPTIONS /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54622 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54622 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54622 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54625 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54625 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54627 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54627 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54627 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54627 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54630 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54630 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54630 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54637 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54643 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54643 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54643 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54643 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54643 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54645 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54645 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54645 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54648 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54651 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54651 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54651 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54651 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54677 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54677 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54677 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54682 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54689 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54689 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54689 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54689 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54691 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54691 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54691 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54691 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54695 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54701 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54701 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54701 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54701 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54703 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54703 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54703 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54703 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54709 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54711 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54711 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54711 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54711 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54719 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54719 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54719 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54727 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54729 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54729 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54729 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54729 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54729 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54731 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54731 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54731 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54735 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54737 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54737 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54737 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54737 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54741 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54741 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54741 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54744 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54750 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54750 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54750 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54750 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54760 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54760 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54760 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54760 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54763 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54763 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54763 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54763 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54763 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54765 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54765 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54768 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54775 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54775 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54775 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54775 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54775 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54775 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54777 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54777 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54784 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54787 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54787 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54787 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54787 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54787 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54795 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54795 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54795 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54797 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54801 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54801 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54801 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54801 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54801 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54803 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54803 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54806 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54812 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54812 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54812 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54812 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54812 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54815 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54815 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:54815 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54825 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:54815 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:54815 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54815 - "OPTIONS /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54815 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54815 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54815 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54827 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54827 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54829 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55279 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54829 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54829 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54829 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55535 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55535 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55535 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55608 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55608 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55663 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55663 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55663 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55666 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55705 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55705 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55823 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55825 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55825 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55825 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55825 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55842 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55842 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55842 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55844 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55858 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55858 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55863 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55863 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55870 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55870 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55870 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55874 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55878 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55878 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55883 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55883 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55889 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55889 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55889 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55892 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55892 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55896 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55896 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55899 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55903 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55903 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55906 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55906 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55906 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55913 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55913 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55913 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55922 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55924 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55924 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55927 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55927 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55929 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55929 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55929 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55941 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55944 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55944 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55944 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55946 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55946 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55949 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55949 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55949 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55952 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55955 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55955 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55968 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55968 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55968 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55970 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55973 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55975 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55975 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55977 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55977 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55980 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55980 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55980 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55989 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55991 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55991 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55995 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55995 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55998 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55998 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55998 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56005 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56007 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56007 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56007 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56009 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56009 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56017 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56017 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56017 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56020 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56024 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56024 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56024 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56026 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56026 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56028 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56028 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56028 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56031 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56036 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56036 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56041 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56041 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56043 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56043 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56043 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56046 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56046 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56048 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56048 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56051 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56051 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56058 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56058 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56058 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     connection closed
+INFO:     127.0.0.1:56069 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56070 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56069 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56072 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56072 - "OPTIONS /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56069 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56074 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56074 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56083 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56083 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56083 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56083 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56083 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56166 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56171 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56171 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56171 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56173 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56173 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56173 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56173 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56173 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56214 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56216 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56216 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56216 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56233 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56233 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56233 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56236 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56236 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56238 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56238 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56243 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56243 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56245 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56245 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56248 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56248 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56248 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56248 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56248 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56251 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56253 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56253 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56261 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56261 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56261 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56261 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56261 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56269 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56272 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56272 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56274 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56279 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56282 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56282 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56284 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56289 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56295 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56295 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56302 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56302 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56302 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56302 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56302 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56305 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56305 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56308 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56308 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56311 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56311 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56313 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56313 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56313 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56320 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56322 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56322 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56325 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56325 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56325 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56325 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56325 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56331 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56333 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56333 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56344 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56344 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56344 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56344 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56344 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56346 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56349 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56349 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56352 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56352 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56352 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56352 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56352 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56352 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56357 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56363 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56363 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56366 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56366 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56366 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56366 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56366 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56369 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56369 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56371 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56371 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56379 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56379 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56379 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56379 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56379 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56382 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56385 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56385 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56387 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56387 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56390 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56390 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56390 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56398 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56400 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56400 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56404 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56410 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56410 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56410 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56420 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56425 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56432 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56432 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56434 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56434 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56434 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56434 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56434 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56438 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56449 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56449 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56449 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56451 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56462 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56464 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56467 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56467 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56470 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56470 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56470 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56475 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56484 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56492 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56492 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56494 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56502 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:56506 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56502 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56504 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56509 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56512 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection open
+INFO:     127.0.0.1:56514 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56512 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "OPTIONS /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56520 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56502 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56512 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56521 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56524 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     connection closed
+INFO:     127.0.0.1:56527 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56529 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56527 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56533 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56535 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56544 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56544 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56544 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56544 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56546 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56544 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56556 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56556 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56561 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56563 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56568 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56570 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56568 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     127.0.0.1:56595 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56599 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56600 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56601 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56610 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56610 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56612 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56643 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56653 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56658 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56661 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56678 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56679 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56681 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56681 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56681 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56681 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56724 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56681 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56732 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     127.0.0.1:56733 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56681 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56732 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56734 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56681 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56738 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     connection open
+INFO:     127.0.0.1:56732 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56741 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56743 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56747 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56743 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56748 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56749 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:56751 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56754 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56745 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:56762 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56764 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56766 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:56766 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56766 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56772 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56774 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56774 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56774 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56774 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56777 - "WebSocket /ws/pipeline" [accepted]
+INFO:     127.0.0.1:56779 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:56783 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56785 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     connection closed
+INFO:     127.0.0.1:56795 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56797 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56795 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56801 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56795 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56807 - "WebSocket /ws/pipeline" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56795 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56810 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56795 - "OPTIONS /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56813 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56810 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56813 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56813 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56810 - "GET /api/charts/OKE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56836 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56838 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56836 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56838 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56836 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56838 - "GET /api/pipeline/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56836 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56836 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56836 - "GET /api/weekly-top-momentum?top_n=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56843 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56845 - "OPTIONS /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56843 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56843 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56843 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56845 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56845 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56848 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56857 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56863 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56863 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56863 - "OPTIONS /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56863 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56865 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56865 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56865 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56871 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56877 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56877 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56877 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56879 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56879 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56879 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56879 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56883 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56888 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56888 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56888 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56890 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56890 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56890 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56890 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56893 - "OPTIONS /momentum_data.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56893 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56919 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56919 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56921 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56919 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56919 - "GET /api/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56919 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56921 - "GET /momentum_data.json HTTP/1.1" 304 Not Modified

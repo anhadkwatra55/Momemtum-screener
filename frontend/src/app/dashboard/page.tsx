@@ -55,6 +55,8 @@ const LazyMlPredictionPanel = dynamic(() => import('@/components/momentum/ml-pre
 const LazyWeeklyMomentumPanel = dynamic(() => import('@/components/momentum/weekly-momentum-panel').then(m => ({ default: m.WeeklyMomentumPanel })), { ssr: false });
 import { ResearchCardGrid } from "@/components/momentum/research-card";
 import { DailyMovers } from "@/components/momentum/daily-movers";
+import { TodayView } from "@/components/momentum/today-view";
+const LazyAlphaCallsBlotter = dynamic(() => import('@/components/momentum/alpha-calls-blotter').then(m => ({ default: m.AlphaCallsBlotter })), { ssr: false });
 
 // ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
 const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
@@ -282,7 +284,14 @@ const DashboardPage = memo(() => {
 
         return (
           <AnimatePresence mode="wait" initial={false}>
-            {/* ══════ MARKET PULSE (was Intelligence) ══════ */}
+            {/* ══════ TODAY (Moby.invest-style landing) ══════ */}
+            {activePage === "today" && (
+              <motion.div key="today" {...PAGE_MOTION_VARIANTS}>
+                <TodayView data={data} onTickerSelect={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ MARKET PULSE ══════ */}
             {activePage === "market-pulse" && (
               <motion.div
                 key="market-pulse"
@@ -763,6 +772,16 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
+            {/* ══════ ALPHA CALLS OPTIONS ══════ */}
+            {activePage === "alpha-calls" && (
+              <motion.div
+                key="alpha-calls"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyAlphaCallsBlotter onTickerSelect={handlePageTickerSelect} />
+              </motion.div>
+            )}
 
 
             {/* ══════ EARNINGS GROWERS ══════ */}

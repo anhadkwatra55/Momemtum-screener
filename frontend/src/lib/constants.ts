@@ -65,6 +65,7 @@ export interface NavItem {
 
 export const SIDEBAR_NAV: NavItem[] = [
   // TODAY — "What's happening right now?"
+  { label: "Today", icon: "house.fill", pageId: "today", section: "TODAY" },
   { label: "Market Pulse", icon: "bolt.fill", pageId: "market-pulse", section: "TODAY" },
   { label: "Sector Radar", icon: "antenna.radiowaves.left.and.right", pageId: "sector-radar", section: "TODAY" },
   // RESEARCH — "What should I be watching?"
@@ -76,6 +77,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Income Engine", icon: "dollarsign.circle.fill", pageId: "income-engine", section: "PORTFOLIO" },
   // STRATEGY — "Can I prove this works?"
   { label: "Strategy Lab", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
+  { label: "Alpha Calls", icon: "chart.line.uptrend.xyaxis", pageId: "alpha-calls", section: "STRATEGY" },
   { label: "Signals & Evidence", icon: "radar.fill", pageId: "signals", section: "STRATEGY" },
   // INTELLIGENCE — "What am I missing?"
   { label: "Insider & Institutional", icon: "person.badge.key.fill", pageId: "insider-buys", section: "INTELLIGENCE" },

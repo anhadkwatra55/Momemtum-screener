@@ -827,6 +827,41 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+# ── Alpha Call Options Screener ──
+_CACHED_ALPHA_CALLS: dict | None = None
+_ALPHA_CACHE_TIME: float = 0
+ALPHA_CACHE_TTL = 1800  # 30 minutes
+
+
+@app.get("/api/screener/alpha-calls")
+async def get_alpha_calls_endpoint(
+    min_price: float = 50.0,
+    min_ensemble: float = 1.5,
+    refresh: bool = False,
+):
+    """Alpha Call Options Screener — institutional long call filter."""
+    global _CACHED_ALPHA_CALLS, _ALPHA_CACHE_TIME
+    import time as _time
+
+    # Return cache if fresh
+    if _CACHED_ALPHA_CALLS and not refresh and (_time.time() - _ALPHA_CACHE_TIME) < ALPHA_CACHE_TTL:
+        return encode_response(_CACHED_ALPHA_CALLS)
+
+    try:
+        from options_alpha import get_alpha_calls
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: get_alpha_calls(min_price=min_price, min_ensemble=min_ensemble)
+        )
+        _CACHED_ALPHA_CALLS = result
+        _ALPHA_CACHE_TIME = _time.time()
+        return encode_response(result)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 @app.get("/api/db/signals")
 async def get_db_signals(
     sector: str | None = None,
