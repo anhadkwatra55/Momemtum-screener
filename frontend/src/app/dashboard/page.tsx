@@ -53,6 +53,8 @@ const LazySectorRadar = dynamic(() => import('@/components/momentum/sector-radar
 const LazyIncomeEngine = dynamic(() => import('@/components/momentum/income-engine').then(m => ({ default: m.IncomeEngine })), { ssr: false });
 const LazyMlPredictionPanel = dynamic(() => import('@/components/momentum/ml-prediction-panel').then(m => ({ default: m.MlPredictionPanel })), { ssr: false });
 const LazyWeeklyMomentumPanel = dynamic(() => import('@/components/momentum/weekly-momentum-panel').then(m => ({ default: m.WeeklyMomentumPanel })), { ssr: false });
+import { ResearchCardGrid } from "@/components/momentum/research-card";
+import { DailyMovers } from "@/components/momentum/daily-movers";
 
 // ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
 const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
@@ -189,16 +191,32 @@ const DashboardPage = memo(() => {
 
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
-    const tierDist = data.summary.tier_distribution ?? {};
+    let tierDist = data.summary.tier_distribution;
+
+    // Fallback: compute tier counts from signals if tier_distribution is absent or all zeros
+    if (!tierDist || Object.values(tierDist).every(v => !v)) {
+      if (data.signals?.length) {
+        const computed: Record<string, number> = {};
+        for (const s of data.signals) {
+          const tier = (s as any).conviction_tier;
+          if (tier) computed[tier] = (computed[tier] || 0) + 1;
+        }
+        if (Object.keys(computed).length > 0) {
+          tierDist = computed as any;
+        }
+      }
+    }
+
+    const td = tierDist ?? {};
     return [
-      { label: "Universe", value: data.summary.total_screened, color: "cyan" as PaletteColorKey },
-      { label: "Ultra Conviction", value: tierDist["Ultra Conviction"] ?? 0, color: "amber" as PaletteColorKey },
-      { label: "High Conviction", value: tierDist["High Conviction"] ?? 0, color: "emerald" as PaletteColorKey },
-      { label: "Moderate", value: tierDist["Moderate Conviction"] ?? 0, color: "cyan" as PaletteColorKey },
-      { label: "Low Conviction", value: tierDist["Low Conviction"] ?? 0, color: "slate" as PaletteColorKey },
-      { label: "Contrarian", value: tierDist["Contrarian"] ?? 0, color: "rose" as PaletteColorKey },
+      { label: "Universe", value: data.summary.total_screened, colorKey: "cyan" as PaletteColorKey },
+      { label: "Ultra Conviction", value: td["Ultra Conviction"] ?? 0, colorKey: "amber" as PaletteColorKey },
+      { label: "High Conviction", value: td["High Conviction"] ?? 0, colorKey: "emerald" as PaletteColorKey },
+      { label: "Moderate", value: td["Moderate Conviction"] ?? 0, colorKey: "cyan" as PaletteColorKey },
+      { label: "Low Conviction", value: td["Low Conviction"] ?? 0, colorKey: "slate" as PaletteColorKey },
+      { label: "Contrarian", value: td["Contrarian"] ?? 0, colorKey: "rose" as PaletteColorKey },
     ];
-  }, [data?.summary]);
+  }, [data?.summary, data?.signals]);
 
   const handlePageTickerSelect = useCallback((ticker: string) => {
     handleSelectTicker(ticker);
@@ -272,8 +290,8 @@ const DashboardPage = memo(() => {
                 className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                  <h1 className={cn("text-2xl font-extrabold md:text-3xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="bolt.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
+                  <h1 className="text-[20px] font-bold md:text-[24px] flex items-center gap-3 font-mono-data tracking-[0.06em] text-[#E8E8E8]">
+                    <span className="text-[#00FF66]">⚡</span>
                     Market Pulse
                   </h1>
                   <div className="flex items-center gap-3">
@@ -281,9 +299,9 @@ const DashboardPage = memo(() => {
                       onSelectTicker={handlePageTickerSelect}
                       onDataRefresh={refresh}
                     />
-                    <div className="flex items-center gap-3 bg-cyan-500/10 border border-cyan-500/25 rounded-full px-3 py-1 text-cyan-400 text-xs font-semibold tracking-[0.1em] uppercase">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse-glow" />
-                      {pipeline.connected ? "Live" : "Offline"}
+                    <div className="flex items-center gap-2 bg-[#111111] border border-[#2A2A2A] rounded-[2px] px-2.5 py-1 text-[#00FF66] text-[10px] font-mono-data tracking-[0.1em] uppercase">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#00FF66] ct-pulse" />
+                      {pipeline.connected ? "LIVE" : "OFFLINE"}
                     </div>
                   </div>
                 </div>
@@ -302,58 +320,28 @@ const DashboardPage = memo(() => {
                   <KPIStrip className="" items={kpiStripItems} />
                 </DataReveal>
 
-                {/* ── Headstart Top Picks ── */}
+                {/* ── Research Cards (Moby.invest-style) ── */}
                 {(data.top_picks?.length > 0) && (
-                  <CardReveal loading={false} delay={150}>
-                    <Card className="mb-4 p-0 overflow-hidden relative">
-                      {/* Hero background image */}
-                      <div
-                        className="absolute inset-0 opacity-[0.12] bg-cover bg-center"
-                        style={{ backgroundImage: `url('/images/tiers/ultra.png')` }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-card via-card/80 to-transparent" />
-                      <div className="relative z-10 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                            <SFIcon name="star.fill" size="text-lg" className="text-amber-400" />
-                            Headstart Research — Top Picks
-                          </h2>
-                          <span className="text-[10px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold uppercase tracking-wider">
-                            Quant Screened
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground/60 mb-3">
-                          Highest conviction signals — multi-system agreement, trending regime, confirmed fresh momentum.
-                        </p>
-                        <div className="space-y-1">
-                          {(data.top_picks || []).slice(0, 8).map((s: typeof data.signals[0], i: number) => (
-                            <motion.div
-                              key={s.ticker}
-                              className="flex items-center justify-between py-2.5 cursor-pointer rounded-xl px-3 -mx-1 hover:bg-white/5 transition-colors"
-                              onClick={() => handlePageTickerSelect(s.ticker)}
-                              whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.04 }}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-muted-foreground/40 font-mono-data w-4">{i + 1}</span>
-                                <span className="font-bold text-foreground font-mono-data text-sm w-14">{s.ticker}</span>
-                                <ConvictionBadge tier={(s as any).conviction_tier ?? 'High Conviction'} />
-                                <ActionBadge action={(s as any).action_category ?? 'Top Pick'} />
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="font-mono-data text-xs text-muted-foreground">{s.sector}</span>
-                                <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
-                                <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
-                                <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      </div>
-                    </Card>
-                  </CardReveal>
+                  <div className="mb-4">
+                    <ResearchCardGrid
+                      signals={data.top_picks || []}
+                      title="HEADSTART RESEARCH"
+                      subtitle="Highest conviction signals — multi-system agreement, trending regime, confirmed fresh momentum"
+                      maxCards={6}
+                      onViewChart={handlePageTickerSelect}
+                      onViewDetail={handlePageTickerSelect}
+                    />
+                  </div>
+                )}
+
+                {/* ── Daily Movers ── */}
+                {data.signals?.length > 0 && (
+                  <div className="mb-4">
+                    <h2 className="text-[13px] font-bold text-[#E8E8E8] font-mono-data tracking-[0.08em] uppercase flex items-center gap-2 mb-3">
+                      <span className="text-[#FFD600]">◆</span> DAILY MOVERS
+                    </h2>
+                    <DailyMovers signals={data.signals} maxItems={5} />
+                  </div>
                 )}
 
                 {/* Two-column layout: main content + weekly panel */}

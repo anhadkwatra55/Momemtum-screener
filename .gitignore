@@ -2,8 +2,13 @@
 venv/
 __pycache__/
 *.pyc
-legacy/__pycache__/
-legacy/momentum_data.json
+.pytest_cache/
+
+# Large data artifacts (runtime-generated, not source code)
+backend/pipelines/quant_screener.db
+backend/pipelines/momentum_data.json
+backend/pipelines/features_latest.parquet
+backend/pipelines/xgb_model.json
 
 # Next.js / Node
 frontend/node_modules/
@@ -11,6 +16,7 @@ frontend/.next/
 frontend/out/
 frontend/.env.local
 frontend/.env*.local
+frontend/tsconfig.tsbuildinfo
 
 # IDE
 .DS_Store
@@ -18,4 +24,5 @@ frontend/.env*.local
 .vscode/
 *.swp
 
-# DB (keep quant_screener.db committed for seeding)
+# Logs
+*.log

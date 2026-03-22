@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useCallback, useState, useEffect, useRef } from "react";
 import { COLORS, FLASH_VARIANTS, ITEM_WHILE_HOVER, SPRING_TRANSITION, PAGE_TRANSITION_INITIAL, PAGE_TRANSITION_ANIMATE } from "@/lib/constants";
-import { SentimentBadge } from "./sentiment-badge";
+import { ConvictionBadge, ActionBadge } from "./conviction-badge";
 import type { Signal } from "@/types/momentum";
 import { AppleCard } from "@/components/ui/apple-card";
 import { motion, AnimatePresence } from "framer-motion";
@@ -95,19 +95,20 @@ const NoSignalsPlaceholder = memo(function NoSignalsPlaceholder() {
       className="flex flex-col items-center justify-center p-8 text-center bg-card/30 rounded-2xl shadow-[var(--shadow-soft)] glass-subtle min-h-[200px]" // Added min-h for consistent presence
     >
       <SFIcon name="no-data" size="4xl" color="text-slate-500" />
-      <h3 className="text-xl font-semibold text-foreground mb-2 mt-4 tracking-[-0.03em]">No Bullish Signals Found</h3>
-      <p className="text-muted-foreground text-base max-w-xs leading-relaxed"> {/* Adjusted text size and line-height for better readability */}
-        It seems there are no strong bullish momentum signals in the current market conditions. Try adjusting your scan parameters.
+      <h3 className="text-xl font-semibold text-foreground mb-2 mt-4 tracking-[-0.03em]">No High Conviction Signals</h3>
+      <p className="text-muted-foreground text-base max-w-xs leading-relaxed">
+        No ultra or high conviction momentum signals in the current scan. Check back when market conditions shift.
       </p>
     </motion.div>
   );
 });
 
 export const TopSignals = memo(function TopSignals({ signals, onSelectTicker, isLoading }: TopSignalsProps) {
-  const bulls = useMemo(() => {
+  const topConviction = useMemo(() => {
     if (!signals) return [];
+    const HIGH_TIERS = new Set(["Ultra Conviction", "High Conviction", "Moderate Conviction"]);
     return [...signals]
-      .filter((s) => (s.sentiment || "").toLowerCase().includes("bull"))
+      .filter((s) => HIGH_TIERS.has(s.conviction_tier ?? ""))
       .sort((a, b) => b.composite - a.composite)
       .slice(0, 10);
   }, [signals]);
@@ -129,10 +130,10 @@ export const TopSignals = memo(function TopSignals({ signals, onSelectTicker, is
           <TopSignalsSkeleton />
         ) : (
           <AnimatePresence mode="sync">
-            {bulls.length === 0 ? (
+            {topConviction.length === 0 ? (
               <NoSignalsPlaceholder key="no-signals" />
             ) : (
-              bulls.map((s) => {
+              topConviction.map((s) => {
                 let dailyChangeColorKey: PaletteColorKey;
                 if (s.daily_change > 0) {
                   dailyChangeColorKey = 'emerald';
@@ -174,9 +175,8 @@ export const TopSignals = memo(function TopSignals({ signals, onSelectTicker, is
                     }}
                   >
                     <div className="flex items-center gap-3">
-                      {/* Ticker: Elevated to text-base, font-bold for prominence, per "numbers are art" for key identifiers */}
                       <div className="font-bold text-base text-cyan-400 font-mono-data">{s.ticker}</div>
-                      <SentimentBadge sentiment={s.sentiment} />
+                      <ConvictionBadge tier={s.conviction_tier ?? 'Contrarian'} />
                       {aura}
                     </div>
                     <div className="flex items-center gap-3">

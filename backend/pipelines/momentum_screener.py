@@ -164,6 +164,128 @@ def classify_signal(
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  AUTO-GENERATED RESEARCH THESIS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def generate_thesis(signal: dict) -> str:
+    """
+    Generate a 2-3 sentence research thesis explaining why this stock
+    is classified the way it is. Uses indicator data to produce
+    Moby.invest-style readable explanations.
+    """
+    parts = []
+    ticker = signal.get("ticker", "")
+    composite = signal.get("composite", 0)
+    probability = signal.get("probability", 0)
+    regime = signal.get("regime", "Unknown")
+    phase = signal.get("momentum_phase", "Neutral")
+    tier = signal.get("conviction_tier", "Contrarian")
+    action = signal.get("action_category", "Hold & Monitor")
+    sector = signal.get("sector", "Unknown")
+    daily_change = signal.get("daily_change", 0)
+    vol_spike = signal.get("vol_spike", 1.0)
+    sm = signal.get("smart_money", {})
+    shock = signal.get("momentum_shock", {})
+
+    # Opening — conviction context
+    if tier == "Ultra Conviction":
+        parts.append(f"{ticker} shows rare 4-system alignment with {probability}% confidence in a strong trending regime")
+    elif tier == "High Conviction":
+        parts.append(f"{ticker} is showing strong momentum with {probability}% confidence across multiple indicator systems")
+    elif tier == "Moderate Conviction":
+        parts.append(f"{ticker} has moderate momentum signals with {probability}% confidence")
+    elif tier == "Low Conviction":
+        parts.append(f"{ticker} has weak directional signals with only {probability}% confidence")
+    else:
+        parts.append(f"{ticker} is showing contrarian signals at {probability}% confidence — momentum is against the trend")
+
+    # Regime context
+    if regime == "Trending":
+        parts.append(f"The {sector} sector is in a trending regime, which historically favors momentum strategies")
+    elif regime == "Mean-Reverting":
+        parts.append(f"The {sector} sector is mean-reverting — oscillator-based strategies may outperform here")
+    elif regime == "Choppy":
+        parts.append(f"The {sector} sector is choppy — consider reduced position sizing and wider stops")
+
+    # Phase-specific insights
+    if phase == "Fresh":
+        parts.append("This is early-stage momentum — maximum upside potential before the crowd catches on")
+    elif phase == "Exhausting":
+        parts.append("Momentum is exhausting — consider taking partial profits or tightening stops")
+
+    # Smart money / volume signals
+    if sm.get("trigger"):
+        parts.append("Institutional volume accumulation detected — smart money is moving in")
+    elif vol_spike and vol_spike > 1.5:
+        parts.append(f"Volume is {vol_spike:.1f}x above average, signaling heightened institutional interest")
+
+    # Momentum shock
+    if shock.get("trigger"):
+        strength = shock.get("shock_strength", 0)
+        direction = "upside" if strength > 0 else "downside"
+        parts.append(f"Price has broken {abs(strength):.1f}σ to the {direction} — a momentum shock event")
+
+    return ". ".join(parts) + "."
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  PRICE TARGET & STOP LOSS (ATR-based)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def compute_price_target(
+    df: pd.DataFrame,
+    composite: float,
+    sentiment: str,
+) -> dict:
+    """
+    Compute ATR-based price target and stop loss.
+    
+    Bullish: target = price + 2.5×ATR, stop = price - 1.5×ATR
+    Bearish: target = price - 2.5×ATR, stop = price + 1.5×ATR
+    
+    Returns dict with price_target, stop_loss, upside_pct, risk_reward.
+    """
+    if len(df) < 21:
+        return {"price_target": None, "stop_loss": None, "upside_pct": None, "risk_reward": None}
+
+    try:
+        # Compute 14-period ATR
+        high = df["High"].iloc[-14:]
+        low = df["Low"].iloc[-14:]
+        close = df["Close"].iloc[-15:-1]
+        
+        tr = pd.concat([
+            high - low,
+            (high - close).abs(),
+            (low - close).abs()
+        ], axis=1).max(axis=1)
+        
+        atr = float(tr.mean())
+        last_close = float(df["Close"].iloc[-1])
+        
+        if "Bull" in sentiment or composite > 0:
+            price_target = round(last_close + 2.5 * atr, 2)
+            stop_loss = round(last_close - 1.5 * atr, 2)
+        else:
+            price_target = round(last_close - 2.5 * atr, 2)
+            stop_loss = round(last_close + 1.5 * atr, 2)
+        
+        upside_pct = round((price_target - last_close) / last_close * 100, 1)
+        risk = abs(last_close - stop_loss)
+        reward = abs(price_target - last_close)
+        risk_reward = round(reward / risk, 2) if risk > 0 else 0
+        
+        return {
+            "price_target": price_target,
+            "stop_loss": stop_loss,
+            "upside_pct": upside_pct,
+            "risk_reward": risk_reward,
+        }
+    except Exception:
+        return {"price_target": None, "stop_loss": None, "upside_pct": None, "risk_reward": None}
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PROBABILITY CALCULATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -314,7 +436,10 @@ def screen_ticker(ticker: str, df: pd.DataFrame) -> dict | None:
             composite, probability, regime, momentum_phase, sm_trigger
         )
 
-        return {
+        # Price target & stop loss (ATR-based)
+        pt_data = compute_price_target(df, composite, sentiment)
+
+        result = {
             "ticker": ticker,
             "company_name": company_name,
             "sector": sector,
@@ -342,6 +467,12 @@ def screen_ticker(ticker: str, df: pd.DataFrame) -> dict | None:
             "conviction_tier": conviction_tier,
             "action_category": action_category,
 
+            # Price Targets (Moby.invest-style)
+            "price_target": pt_data["price_target"],
+            "stop_loss": pt_data["stop_loss"],
+            "upside_pct": pt_data["upside_pct"],
+            "risk_reward": pt_data["risk_reward"],
+
             # System details
             "sys1": s1,
             "sys2": s2,
@@ -356,6 +487,11 @@ def screen_ticker(ticker: str, df: pd.DataFrame) -> dict | None:
             # Charts
             "charts": charts,
         }
+
+        # Auto-generated research thesis (Moby.invest-style)
+        result["thesis"] = generate_thesis(result)
+
+        return result
 
     except Exception as e:
         return None

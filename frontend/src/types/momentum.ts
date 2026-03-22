@@ -178,6 +178,12 @@ export interface Signal extends BaseSignal {
   cluster_size?: Count; // Number of signals or assets in a detected cluster.
   conviction_tier?: ConvictionTier; // Quant research conviction tier.
   action_category?: ActionCategory; // Quant research action category.
+  // Moby.invest-style research fields
+  thesis?: string; // Auto-generated 2-3 sentence research brief.
+  price_target?: number | null; // ATR-based price target.
+  stop_loss?: number | null; // ATR-based stop loss.
+  upside_pct?: number | null; // Target upside percentage.
+  risk_reward?: number | null; // Risk/reward ratio.
   // Advanced signal triggers, using dedicated interfaces for structured data.
   momentum_shock?: MomentumShockSignalTrigger;
   smart_money?: SmartMoneySignalTrigger;

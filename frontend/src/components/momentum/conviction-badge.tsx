@@ -4,49 +4,43 @@ import React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Conviction tier configuration — maps each tier to its visual style.
- * No emojis — pure color-coded gradients with tracked typography.
+ * Carbon Terminal Conviction Tier Configuration
+ * Monochrome base with signal colors only: green, red, yellow
  */
 const TIER_CONFIG: Record<string, {
-  gradient: string;
   text: string;
-  border: string;
   bg: string;
+  border: string;
   image: string;
 }> = {
   "Ultra Conviction": {
-    gradient: "from-amber-500/20 to-yellow-600/10",
-    text: "text-amber-400",
-    border: "border-amber-500/30",
-    bg: "bg-amber-500/10",
+    text: "text-[#00FF66]",
+    bg: "bg-[#00FF66]/10",
+    border: "border-[#00FF66]/30",
     image: "/images/tiers/ultra.png",
   },
   "High Conviction": {
-    gradient: "from-emerald-500/20 to-teal-600/10",
-    text: "text-emerald-400",
-    border: "border-emerald-500/30",
-    bg: "bg-emerald-500/10",
+    text: "text-[#00FF66]",
+    bg: "bg-[#00FF66]/8",
+    border: "border-[#00FF66]/25",
     image: "/images/tiers/high.png",
   },
   "Moderate Conviction": {
-    gradient: "from-cyan-500/20 to-blue-600/10",
-    text: "text-cyan-400",
-    border: "border-cyan-500/30",
-    bg: "bg-cyan-500/10",
+    text: "text-[#C0C0C0]",
+    bg: "bg-[#C0C0C0]/8",
+    border: "border-[#2A2A2A]",
     image: "/images/tiers/moderate.png",
   },
   "Low Conviction": {
-    gradient: "from-slate-400/20 to-zinc-500/10",
-    text: "text-slate-400",
-    border: "border-slate-400/30",
-    bg: "bg-slate-500/10",
+    text: "text-[#6B6B6B]",
+    bg: "bg-[#6B6B6B]/8",
+    border: "border-[#2A2A2A]",
     image: "/images/tiers/low.png",
   },
   "Contrarian": {
-    gradient: "from-rose-500/20 to-fuchsia-600/10",
-    text: "text-rose-400",
-    border: "border-rose-500/30",
-    bg: "bg-rose-500/10",
+    text: "text-[#FF3333]",
+    bg: "bg-[#FF3333]/8",
+    border: "border-[#FF3333]/25",
     image: "/images/tiers/contrarian.png",
   },
 };
@@ -56,17 +50,17 @@ const ACTION_CONFIG: Record<string, {
   bg: string;
   border: string;
 }> = {
-  "Top Pick": { text: "text-amber-300", bg: "bg-amber-500/15", border: "border-amber-500/25" },
-  "Accumulate": { text: "text-emerald-400", bg: "bg-emerald-500/15", border: "border-emerald-500/25" },
-  "Hold & Monitor": { text: "text-cyan-400", bg: "bg-cyan-500/15", border: "border-cyan-500/25" },
-  "Caution": { text: "text-orange-400", bg: "bg-orange-500/15", border: "border-orange-500/25" },
-  "Reduce Exposure": { text: "text-rose-400", bg: "bg-rose-500/15", border: "border-rose-500/25" },
-  "Avoid": { text: "text-rose-500", bg: "bg-rose-600/15", border: "border-rose-600/25" },
+  "Top Pick": { text: "text-[#00FF66]", bg: "bg-[#00FF66]/10", border: "border-[#00FF66]/25" },
+  "Accumulate": { text: "text-[#00FF66]", bg: "bg-[#00FF66]/8", border: "border-[#00FF66]/20" },
+  "Hold & Monitor": { text: "text-[#C0C0C0]", bg: "bg-[#C0C0C0]/8", border: "border-[#2A2A2A]" },
+  "Caution": { text: "text-[#FFD600]", bg: "bg-[#FFD600]/8", border: "border-[#FFD600]/25" },
+  "Reduce Exposure": { text: "text-[#FF3333]", bg: "bg-[#FF3333]/8", border: "border-[#FF3333]/20" },
+  "Avoid": { text: "text-[#FF3333]", bg: "bg-[#FF3333]/10", border: "border-[#FF3333]/25" },
 };
 
 /** Get tier config with fallback */
 export function getTierConfig(tier: string) {
-  return TIER_CONFIG[tier] ?? TIER_CONFIG["Contrarian"];
+  return TIER_CONFIG[tier] ?? TIER_CONFIG["Low Conviction"];
 }
 
 /** Get action config with fallback */
@@ -87,8 +81,7 @@ interface ConvictionBadgeProps {
 }
 
 /**
- * Pill-shaped conviction tier badge with gradient border.
- * No emojis — bold text with color-coded background.
+ * Carbon Terminal conviction badge — tight 2px radius, monospace, uppercase.
  */
 export const ConvictionBadge = React.memo(function ConvictionBadge({
   tier,
@@ -100,11 +93,11 @@ export const ConvictionBadge = React.memo(function ConvictionBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border font-semibold uppercase tracking-[0.08em] whitespace-nowrap",
+        "inline-flex items-center rounded-[2px] border font-mono-data font-semibold uppercase tracking-[0.1em] whitespace-nowrap",
         config.bg,
         config.border,
         config.text,
-        size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-xs",
+        size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2.5 py-1 text-[10px]",
         className,
       )}
     >
@@ -120,7 +113,7 @@ interface ActionBadgeProps {
 }
 
 /**
- * Action category badge — minimal pill with color accent.
+ * Carbon Terminal action badge — tight 2px radius, monospace.
  */
 export const ActionBadge = React.memo(function ActionBadge({
   action,
@@ -132,11 +125,11 @@ export const ActionBadge = React.memo(function ActionBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border font-semibold uppercase tracking-[0.06em] whitespace-nowrap",
+        "inline-flex items-center rounded-[2px] border font-mono-data font-medium uppercase tracking-[0.08em] whitespace-nowrap",
         config.bg,
         config.border,
         config.text,
-        size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-xs",
+        size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2.5 py-1 text-[10px]",
         className,
       )}
     >

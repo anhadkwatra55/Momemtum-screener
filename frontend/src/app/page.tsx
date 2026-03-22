@@ -55,9 +55,9 @@ function CommandCenterSkeleton() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col items-center gap-6">
-        <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 animate-pulse" />
-        <div className="w-48 h-4 rounded-lg bg-muted/30 animate-pulse" />
-        <div className="w-32 h-3 rounded-lg bg-muted/20 animate-pulse" />
+        <div className="w-16 h-16 rounded-[3px] bg-[#00FF66]/20 animate-pulse" />
+        <div className="w-48 h-4 rounded-[2px] bg-[#1C1C1C] animate-pulse" />
+        <div className="w-32 h-3 rounded-[2px] bg-[#1C1C1C] animate-pulse" />
       </div>
     </div>
   );
@@ -66,14 +66,14 @@ function CommandCenterSkeleton() {
 // ── Rating Badge ──
 function RatingBadge({ sentiment }: { sentiment: string }) {
   const styles = {
-    "Strong Bullish": "bg-emerald-500/15 text-emerald-400",
-    "Bullish": "bg-lime-500/12 text-lime-400",
-    "Neutral": "bg-slate-500/10 text-slate-400",
-    "Bearish": "bg-orange-500/12 text-orange-400",
-    "Strong Bearish": "bg-rose-500/15 text-rose-400",
+    "Strong Bullish": "bg-[#00FF66]/10 text-[#00FF66]",
+    "Bullish": "bg-[#00FF66]/8 text-[#00FF66]",
+    "Neutral": "bg-[#6B6B6B]/10 text-[#6B6B6B]",
+    "Bearish": "bg-[#FFD600]/8 text-[#FFD600]",
+    "Strong Bearish": "bg-[#FF3333]/10 text-[#FF3333]",
   };
   return (
-    <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", styles[sentiment as keyof typeof styles] || styles.Neutral)}>
+    <span className={cn("text-[9px] font-mono-data font-semibold px-1.5 py-0.5 rounded-[2px] uppercase tracking-[0.08em]", styles[sentiment as keyof typeof styles] || styles.Neutral)}>
       {sentiment}
     </span>
   );
@@ -101,8 +101,8 @@ function FeatureCard({ icon, title, desc, tags, href, color, delay }: FeatureCar
         <AppleCard glowColor={color} className="h-full group flex flex-col justify-between p-5">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-violet-500/20 flex items-center justify-center">
-                <SFIcon icon={icon} size={20} className="text-cyan-400" />
+              <div className="w-10 h-10 rounded-[3px] bg-[#00FF66]/10 border border-[#2A2A2A] flex items-center justify-center">
+                <SFIcon icon={icon} size={20} className="text-[#00FF66]" />
               </div>
               <SFIcon icon="arrow.right" size={16} className="text-muted-foreground/30 group-hover:text-foreground/60 transition-all group-hover:translate-x-1 duration-200" />
             </div>
@@ -111,7 +111,7 @@ function FeatureCard({ icon, title, desc, tags, href, color, delay }: FeatureCar
           </div>
           <div className="flex flex-wrap gap-1.5">
             {tags.map(t => (
-              <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-muted-foreground/50 font-medium uppercase tracking-wider">{t}</span>
+              <span key={t} className="text-[10px] px-2 py-0.5 rounded-[2px] bg-[#1C1C1C] text-[#6B6B6B] font-mono-data font-medium uppercase tracking-[0.08em] border border-[#2A2A2A]">{t}</span>
             ))}
           </div>
         </AppleCard>
@@ -146,12 +146,12 @@ export default function CommandCenter() {
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
     return [
-      { label: "Universe", value: data.summary.total_screened, color: getTextColorClass("cyan", "400") },
-      { label: "Bullish", value: data.summary.bullish, color: getTextColorClass("emerald", "400") },
-      { label: "Bearish", value: data.summary.bearish, color: getTextColorClass("rose", "400") },
-      { label: "Avg Confidence", value: `${data.summary.avg_probability}%`, color: getTextColorClass("amber", "400") },
-      { label: "Top Bull", value: data.summary.top_bull, color: getTextColorClass("emerald", "400") },
-      { label: "Top Bear", value: data.summary.top_bear, color: getTextColorClass("rose", "400") },
+      { label: "Universe", value: data.summary.total_screened, colorKey: "cyan" as const },
+      { label: "Bullish", value: data.summary.bullish, colorKey: "emerald" as const },
+      { label: "Bearish", value: data.summary.bearish, colorKey: "rose" as const },
+      { label: "Avg Confidence", value: `${data.summary.avg_probability}%`, colorKey: "amber" as const },
+      { label: "Top Bull", value: data.summary.top_bull, colorKey: "emerald" as const },
+      { label: "Top Bear", value: data.summary.top_bear, colorKey: "rose" as const },
     ];
   }, [data?.summary]);
 
@@ -195,13 +195,13 @@ export default function CommandCenter() {
               4-System Momentum · Real-Time Screening · Strategy Backtesting
             </div>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-[-0.04em] mb-6 leading-[1.05]">
-              <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent">
+              <span className="text-[#00FF66]">
                 HEADSTART
               </span>
-              <span className="text-foreground/20 font-light ml-2 text-3xl sm:text-4xl lg:text-5xl align-middle">AI</span>
+              <span className="text-[#6B6B6B] font-light ml-2 text-3xl sm:text-4xl lg:text-5xl align-middle">AI</span>
             </h1>
             <p className="text-muted-foreground/60 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed mb-8 font-light">
-              Turns real-time market data into simple, actionable intelligence for stocks, ETFs, and AI-driven investments. Screening <span className="font-mono-data font-bold text-cyan-400">{data.summary.total_screened}+</span> tickers across momentum, fundamentals, and thematic strategies.
+              Turns real-time market data into simple, actionable intelligence for stocks, ETFs, and AI-driven investments. Screening <span className="font-mono-data font-bold text-[#00FF66]">{data.summary.total_screened}+</span> tickers across momentum, fundamentals, and thematic strategies.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-3">
               <AppleButton variant="primary" size="lg" onClick={navigateToDashboard}>
@@ -220,8 +220,8 @@ export default function CommandCenter() {
                 { icon: "percent", label: "Probability Engine", desc: "0–98% confidence from directional agreement across all 4 systems with 1.2x unanimity bonus" },
                 { icon: "cylinder.fill", label: "Persisted Indicators", desc: "All data stored in 5 SQL tables — signals survive restarts, fast filtered queries" },
               ].map((item) => (
-                <div key={item.label} className="flex items-start gap-2.5 rounded-xl bg-white/[0.02] border border-white/[0.03] px-3.5 py-3">
-                  <SFIcon icon={item.icon} size={14} className="text-cyan-400/50 mt-0.5 shrink-0" />
+                <div key={item.label} className="flex items-start gap-2.5 rounded-[3px] bg-[#111111] border border-[#2A2A2A] px-3.5 py-3">
+                  <SFIcon icon={item.icon} size={14} className="text-[#00FF66]/50 mt-0.5 shrink-0" />
                   <div>
                     <div className="text-[11px] font-semibold text-foreground/70 mb-0.5">{item.label}</div>
                     <div className="text-[10px] text-muted-foreground/45 leading-relaxed">{item.desc}</div>
@@ -247,7 +247,7 @@ export default function CommandCenter() {
               <AppleCard interactive={false} className="overflow-hidden">
                 <div className="flex items-center justify-between mb-4 px-1">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-[#00FF66] ct-pulse" />
                     <h2 className="text-lg font-bold tracking-tight">Stocks with Bullish Momentum Right Now</h2>
                   </div>
                   <AppleButton variant="ghost" size="sm" onClick={() => navigateToDashboardWithView("bullish-momentum")}>
@@ -260,7 +260,7 @@ export default function CommandCenter() {
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left min-w-[600px]">
                     <thead>
-                      <tr className="border-b border-white/5">
+                      <tr className="border-b border-[#2A2A2A]">
                         {["Ticker", "Sentiment", "Composite", "Probability", "Δ Day", "Price"].map(h => (
                           <th key={h} className="py-2.5 px-3 text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40">{h}</th>
                         ))}
@@ -270,18 +270,18 @@ export default function CommandCenter() {
                       {bullishMomentum.map((s: Signal, i: number) => (
                         <motion.tr
                           key={s.ticker}
-                          className="border-b border-white/[0.02] hover:bg-white/[0.02] cursor-pointer transition-colors"
+                          className="border-b border-[#2A2A2A]/50 hover:bg-[#1C1C1C] cursor-pointer transition-all duration-[50ms]"
                           onClick={() => navigateToDashboardWithTicker(s.ticker)}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.25 + i * 0.05 }}
                         >
-                          <td className="py-2.5 px-3 font-mono-data font-bold text-cyan-400 text-sm">{s.ticker}</td>
+                          <td className="py-2.5 px-3 font-mono-data font-bold text-[#00FF66] text-sm">{s.ticker}</td>
                           <td className="py-2.5 px-3"><RatingBadge sentiment={s.sentiment} /></td>
-                          <td className={cn("py-2.5 px-3 font-mono-data text-sm font-semibold", s.composite > 0 ? "text-emerald-400" : "text-rose-400")}>{s.composite.toFixed(2)}</td>
-                          <td className="py-2.5 px-3 font-mono-data text-sm text-amber-400">{s.probability}%</td>
-                          <td className={cn("py-2.5 px-3 font-mono-data text-sm", s.daily_change > 0 ? "text-emerald-400" : "text-rose-400")}>{s.daily_change > 0 ? "+" : ""}{s.daily_change}%</td>
-                          <td className="py-2.5 px-3 font-mono-data text-sm text-foreground/80">${s.price.toFixed(2)}</td>
+                          <td className={cn("py-2.5 px-3 font-mono-data text-sm font-semibold", s.composite > 0 ? "text-[#00FF66]" : "text-[#FF3333]")}>{s.composite.toFixed(2)}</td>
+                          <td className="py-2.5 px-3 font-mono-data text-sm text-[#FFD600]">{s.probability}%</td>
+                          <td className={cn("py-2.5 px-3 font-mono-data text-sm", s.daily_change > 0 ? "text-[#00FF66]" : "text-[#FF3333]")}>{s.daily_change > 0 ? "+" : ""}{s.daily_change}%</td>
+                          <td className="py-2.5 px-3 font-mono-data text-sm text-[#E8E8E8]">${s.price.toFixed(2)}</td>
                         </motion.tr>
                       ))}
                     </tbody>

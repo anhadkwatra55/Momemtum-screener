@@ -266,7 +266,7 @@ PIPELINE_SCHEDULE_TZ=America/New_York        # Timezone for scheduler
 │   /dashboard  (Intelligence — 12 pg) │
 │   /receipts   (Performance)          │
 │                                      │
-│  Theme: Apple-style Glassmorphism    │
+│  Theme: Carbon Terminal (F1/Bloomberg) │
 │  Fonts: Inter + JetBrains Mono       │
 │  Charts: TradingView Lightweight     │
 │  Animations: Framer Motion           │
@@ -326,7 +326,7 @@ quant_screener/
 │   │   │   ├── dashboard/page.tsx # Intelligence Dashboard (12 sidebar pages)
 │   │   │   ├── receipts/page.tsx  # Receipts Ledger (backtest performance history)
 │   │   │   ├── layout.tsx         # Root layout (Inter + JetBrains Mono)
-│   │   │   └── globals.css        # Design system (glassmorphism, shadows, bento)
+│   │   │   └── globals.css        # Design system (Carbon Terminal, carbon-weave)
 │   │   ├── components/
 │   │   │   ├── ui/                # Primitives (AppleCard, AppleButton, DataTable, SFIcon)
 │   │   │   ├── layout/            # TopNav, app-sidebar
@@ -341,7 +341,6 @@ quant_screener/
 │   ├── package.json
 │   └── next.config.ts
 │
-├── legacy/                        # Original vanilla JS/HTML (reference only)
 ├── Dockerfile                     # Container deployment
 ├── railway.toml                   # Railway deployment config
 └── README.md
@@ -559,16 +558,20 @@ Full analysis platform with **12 sidebar pages** organized into 5 workflow secti
 | **`regime-badge.tsx`** | Regime label (Trending/Mean-Reverting/Choppy) |
 | **`quote-rotator.tsx`** | Rotating finance quotes |
 
-### Design System
+### Design System — Carbon Terminal
 
 | Token | Value |
 |-------|-------|
-| **Fonts** | Inter (sans), JetBrains Mono (mono) |
-| **Theme** | Deep navy (`#050a12`) with translucent overlays |
-| **Border radius** | `rounded-xl` (cards), `rounded-2xl` (modals) |
-| **Shadows** | CSS custom properties (`--shadow-soft`, `--shadow-elevated`, `--shadow-glow-cyan`) |
-| **Colors** | `cyan` (primary), `emerald` (bullish), `rose` (bearish), `amber` (neutral), `violet` (secondary) |
-| **Icons** | `lucide-react` via `SFIcon.tsx` — **zero emojis** |
+| **Fonts** | Inter (UI), JetBrains Mono (data/numbers) |
+| **Theme** | Pure black (#000000) with carbon-weave grid texture |
+| **Card surfaces** | Opaque #111111 with 1px #2A2A2A borders |
+| **Border radius** | 2–4px (chamfered, no rounded-full) |
+| **Shadows** | None — border-only depth system |
+| **Signal colors** | Green (#00FF66) · Red (#FF3333) · Yellow (#FFD600) — 3 only |
+| **Neutral grays** | #0A0A0A · #111111 · #1C1C1C · #2A2A2A · #6B6B6B · #C0C0C0 · #E8E8E8 |
+| **Transitions** | 50–100ms ease-out (mechanical, no spring physics) |
+| **Icons** | `lucide-react` via `SFIcon.tsx` — zero emojis |
+| **Aesthetic** | F1 telemetry / Bloomberg terminal — data-dense, mechanical, no glassmorphism |
 
 ---
 
@@ -800,7 +803,7 @@ Each wave publishes partial results to Redis + in-memory cache → frontend rend
 | **Backend** | Python 3.11+ · FastAPI v3 · uvicorn · orjson |
 | **Frontend** | Next.js 16 · TypeScript · Tailwind CSS v4 |
 | **UI Components** | shadcn/ui · Framer Motion · TradingView Lightweight Charts |
-| **Design System** | Apple-style glassmorphism · Bento Grid · Spring animations |
+| **Design System** | Carbon Terminal (F1/Bloomberg) · Monochrome · JetBrains Mono |
 | **Database** | SQLite (single file, WAL mode) |
 | **Cache** | Redis (optional — falls back to in-memory) |
 | **ML** | XGBoost · scikit-learn · scipy |
@@ -835,6 +838,105 @@ Each wave publishes partial results to Redis + in-memory cache → frontend rend
 | `@tanstack/react-virtual` | Virtualized tables (500+ rows) |
 
 ---
+
+## Research Papers & References
+
+This section documents the academic research underpinning every quantitative method implemented in HEADSTART. These links are designed for ingestion into **NotebookLLM** and similar research tools for deeper study.
+
+### Momentum & Technical Analysis
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Returns to Buying Winners and Selling Losers](https://doi.org/10.1111/j.1540-6261.1993.tb04702.x) | Jegadeesh & Titman | 1993 | Foundation for cross-sectional momentum — our 4-system ensemble is built on this thesis |
+| [Momentum Strategies](https://doi.org/10.1111/0022-1082.00349) | Chan, Jegadeesh & Lakonishok | 1996 | Earnings momentum vs price momentum decomposition |
+| [Price Momentum and Trading Volume](https://doi.org/10.1111/0022-1082.00280) | Lee & Swaminathan | 2000 | Volume-momentum interaction — basis for our "Smart Money Accumulation" screener |
+| [The 52-Week High and Momentum Investing](https://doi.org/10.1111/j.1540-6261.2004.00695.x) | George & Hwang | 2004 | Anchor-based momentum that explains return predictability |
+| [Momentum Crashes](https://doi.org/10.1016/j.jfineco.2015.12.002) | Daniel & Moskowitz | 2016 | Momentum crash risk and regime-dependent performance — our regime classification addresses this |
+| [Time Series Momentum](https://doi.org/10.1016/j.jfineco.2011.11.003) | Moskowitz, Ooi & Pedersen | 2012 | Time-series vs cross-sectional momentum — relevant to our per-ticker composite scores |
+| [Fact, Fiction, and Momentum Investing](https://doi.org/10.3905/jpm.2014.40.5.075) | Asness, Frazzini & Pedersen | 2014 | Clearing up common misconceptions about momentum |
+
+### Regime Classification & Market States
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [New Concepts in Technical Trading Systems](https://archive.org/details/newconceptsintec00wild) | Welles Wilder Jr. | 1978 | Original ADX paper — basis for our Trending/Mean-Reverting/Choppy regime classification |
+| [Regime Switching Models](https://doi.org/10.1002/jae.764) | Hamilton | 2005 | HMM regime detection theory — config.py HMM window parameter foundation |
+| [Detecting Mean Reversion in Financial Markets](https://doi.org/10.1016/S0927-5398(98)00011-8) | Bali & Demirtas | 2008 | Statistical tests for mean-reversion detection used in regime classification |
+
+### Machine Learning in Finance
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Advances in Financial Machine Learning](https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482109) | Marcos López de Prado | 2018 | **Primary ML reference** — Purged K-Fold, fractional differencing, triple barrier, feature importance |
+| [XGBoost: A Scalable Tree Boosting System](https://doi.org/10.1145/2939672.2939785) | Chen & Guestrin | 2016 | XGBoost algorithm — our ML predictor |
+| [Fractional Differencing — Balancing Memory and Stationarity](https://doi.org/10.2139/ssrn.3104816) | López de Prado | 2018 | Fractional differencing (d=0.4) — retains long-memory while achieving stationarity |
+| [The Dangers of Overfitting in Financial ML](https://doi.org/10.1080/14697688.2015.1070960) | Bailey, Borwein, López de Prado & Zhu | 2015 | Why purged cross-validation is essential — standard k-fold leaks information |
+| [Cross-Validation in Finance: Problems and Solutions](https://doi.org/10.2139/ssrn.3257420) | de Prado & Lewis | 2018 | Detailed treatment of purged k-fold with embargo — exact method in `train_model.py` |
+
+### Feature Engineering
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Gaussian Rank Transformation](https://doi.org/10.1016/j.csda.2009.09.005) | Conover & Iman | 1981 | Rank-based normalization — our cross-sectional Gaussian rank in `features.py` |
+| [Fractionally Differenced ARFIMA Models](https://doi.org/10.1111/j.1467-9892.1980.tb00297.x) | Granger & Joyeux | 1980 | Original ARFIMA / fractional integration theory |
+| [Long Memory in Stock Market Returns](https://doi.org/10.1016/0304-405X(93)90023-5) | Lo | 1991 | Evidence for long-memory in financial time series — motivation for FFD |
+
+### Position Sizing & Risk Management
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [A New Interpretation of Information Rate](https://doi.org/10.1002/j.1538-7305.1956.tb03809.x) | Kelly | 1956 | Kelly Criterion — our Half-Kelly position sizing |
+| [The Kelly Criterion in Practice](https://doi.org/10.3905/jpm.2007.681826) | Thorp | 2006 | Practical Kelly including Half-Kelly and risk budget — our implementation |
+| [Optimal Position Sizing for Momentum Strategies](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3425736) | Clenow | 2019 | ATR-normalized sizing similar to our NATR-20 volatility adjustment |
+
+### Event Studies & Abnormal Returns
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Event Studies in Economics and Finance](https://doi.org/10.1257/jel.35.1.13) | MacKinlay | 1997 | Standard event study methodology — basis for our CAR analysis in `event_study.py` |
+| [Using Daily Stock Returns in Event Studies](https://doi.org/10.1016/0304-405X(85)90042-X) | Brown & Warner | 1985 | Daily return event study design — estimation + event window approach |
+
+### Insider Trading Signals
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Insider Trading, Earnings Quality, and Accrual Mispricing](https://doi.org/10.2308/accr.2005.80.4.1131) | Beneish & Vargus | 2002 | Insider trade informativeness — basis for our seniority-weighted scoring |
+| [Are Insider Trades Informative?](https://doi.org/10.1093/rfs/hhn054) | Cohen, Malloy & Pomorski | 2012 | "Routine" vs "opportunistic" insider trades — supports filtering by transaction type |
+| [Aggregate Insider Trading and Market Returns](https://doi.org/10.2307/j.ctt7t0n6) | Seyhun | 1998 | Comprehensive study on insider trading predictive power |
+
+### Backtesting Methodology
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Backtesting](https://doi.org/10.3905/jpm.2019.1.092) | Harvey & Liu | 2015 | False discovery rate in backtesting — why robust methodology matters |
+| [The Probability of Backtest Overfitting](https://doi.org/10.1515/jtse-2013-0010) | Bailey, Borwein, López de Prado & Zhu | 2017 | Combinatorial purged cross-validation for strategy testing |
+| [Monte Carlo Methods in Financial Engineering](https://doi.org/10.1007/978-0-387-21617-1) | Glasserman | 2003 | Monte Carlo simulation theory — our 500-sim forward P&L projections |
+
+### Sector Rotation & Factor Investing
+
+| Paper | Authors | Year | Relevance to HEADSTART |
+|-------|---------|------|-----------------------|
+| [Industry Momentum](https://doi.org/10.1111/0022-1082.00146) | Moskowitz & Grinblatt | 1999 | Sector-level momentum — basis for our sector rotation signals |
+| [Value and Momentum Everywhere](https://doi.org/10.1111/jofi.12021) | Asness, Moskowitz & Pedersen | 2013 | Value-momentum interaction across asset classes |
+
+### Additional Resources for NotebookLLM
+
+**Books** (recommended for deep dives):
+- López de Prado, M. (2018). *[Advances in Financial Machine Learning](https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482109)*. Wiley. — **Essential** for Purged K-Fold, FFD, triple barrier method
+- Jansen, S. (2020). *[Machine Learning for Algorithmic Trading](https://www.packtpub.com/product/machine-learning-for-algorithmic-trading-second-edition/9781839217715)*. Packt. — Feature engineering, XGBoost for alpha signals
+- Chan, E. (2013). *[Algorithmic Trading](https://www.wiley.com/en-us/Algorithmic+Trading%3A+Winning+Strategies+and+Their+Rationale-p-9781118460146)*. Wiley. — Mean-reversion vs momentum strategy selection by regime
+- Clenow, A. (2015). *[Stocks on the Move](https://www.followingthetrend.com/stocks-on-the-move/)*. — Practical momentum screening methodology
+- Narang, R. (2013). *[Inside the Black Box](https://www.wiley.com/en-us/Inside+the+Black+Box%3A+A+Simple+Guide+to+Quantitative+and+High+Frequency+Trading%2C+2nd+Edition-p-9781118362419)*. Wiley. — Systematic trading system architecture
+
+**Online Courses**:
+- [Computational Investing (Georgia Tech)](https://www.coursera.org/learn/computational-investing) — Factor models, alpha signal construction
+- [Machine Learning for Trading (Georgia Tech)](https://www.udacity.com/course/machine-learning-for-trading--ud501) — ML in portfolio management
+- [Quantitative Finance & Algorithmic Trading (WorldQuant)](https://www.worldquant.com/mscfe/) — Professional quant finance curriculum
+
+**Data Sources**:
+- [yfinance Python library](https://github.com/ranaroussi/yfinance) — Our primary market data source
+- [SEC EDGAR](https://www.sec.gov/edgar) — Insider transaction filings (Form 4)
+- [FRED (Federal Reserve Economic Data)](https://fred.stlouisfed.org/) — Macro data for regime analysis
 
 ## Roadmap / Future Updates
 
