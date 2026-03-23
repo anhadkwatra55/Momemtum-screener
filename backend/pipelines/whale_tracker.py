@@ -5,10 +5,10 @@ Standalone institutional order flow engine. Completely independent
 from Momentum and Alpha Options verticals.
 
 Logic:
-  1. Insider Scan: SEC Form 4 open-market purchases
-  2. UOA Trigger: Call options where Vol/OI > 2.5
-  3. Fusion Gate: Insider buy ≥$50k within 7 days of whale option activity
-  4. FlowProtocol: 4 institutional guardrails on every candidate
+  1. UOA Scan: Call options where Vol/OI > 2.0 (primary driver)
+  2. Insider Enrichment: If SEC Form 4 insider buy exists, enrich the signal
+  3. FlowProtocol: 4 institutional guardrails on every candidate
+  NOTE: Insider data is OPTIONAL enrichment, not a hard requirement.
 
 Data Sources: yfinance (option chains), insider_signals.py (SEC Form 4)
 """
@@ -45,14 +45,13 @@ from flow_audit import FlowAuditLogger
 MOMENTUM_DATA_PATH = Path(__file__).parent / "momentum_data.json"
 
 # ── Configuration ──
-MIN_INSIDER_VALUE = 50_000       # $50k minimum insider purchase
-SYNC_WINDOW_DAYS = 7             # 7 trading day sync window
-UOA_VOL_OI_THRESHOLD = 2.5      # Vol/OI ratio for unusual activity
-MIN_WHALE_ORDER_VALUE = 100_000  # $100k minimum whale option value
+MIN_INSIDER_VALUE = 25_000       # $25k minimum insider purchase (relaxed)
+UOA_VOL_OI_THRESHOLD = 2.0      # Vol/OI ratio for unusual activity (relaxed from 2.5)
+MIN_WHALE_ORDER_VALUE = 50_000   # $50k minimum whale option value (relaxed from 100k)
 MAX_IV_PERCENTILE = 70           # IV ceiling
-MIN_DTE = 30                     # Minimum days to expiration
-MAX_DTE = 180                    # Cap expiration
-MAX_SPREAD_PCT = 10              # Bid/Ask spread cap
+MIN_DTE = 7                      # Minimum days to expiration (relaxed from 30)
+MAX_DTE = 365                    # Cap expiration (expanded from 180)
+MAX_SPREAD_PCT = 15              # Bid/Ask spread cap (relaxed from 10)
 MAX_WORKERS = 8
 
 
@@ -248,112 +247,120 @@ def _scan_unusual_options(ticker: str, stock_price: float) -> list[dict]:
 
 def _fuse_ticker(ticker: str, stock_price: float) -> list[dict]:
     """
-    Core fusion logic for a single ticker:
-    1. Fetch insider buys
-    2. Scan for UOA on call options
-    3. Check 7-day sync window
-    4. Run FlowProtocol guardrails
+    Core logic for a single ticker:
+    1. Scan for UOA on call options (primary — always runs)
+    2. Optionally fetch insider buys for enrichment
+    3. Run FlowProtocol guardrails
+    No sync-window gate — UOA alone is enough to surface signals.
     """
-    insider_buys = _fetch_insider_buys(ticker)
-    if not insider_buys:
-        return []
-
+    # UOA is the primary driver — scan first
     uoa_options = _scan_unusual_options(ticker, stock_price)
     if not uoa_options:
         return []
 
+    # Insider data is optional enrichment
+    insider_buys = _fetch_insider_buys(ticker)
+    best_insider = None
+    if insider_buys:
+        # Pick the largest insider purchase
+        best_insider = max(insider_buys, key=lambda x: x.get("value", 0))
+
     auditor = FlowAuditLogger()
     results = []
 
-    for insider in insider_buys:
-        insider_date_str = insider.get("date", "")
-        try:
-            insider_date = datetime.strptime(insider_date_str, "%Y-%m-%d")
-        except ValueError:
-            continue
+    for opt in uoa_options:
+        # Run FlowProtocol
+        ticker_data = {"symbol": ticker, "price": stock_price}
+        option_data = {
+            "bid": opt["bid"],
+            "ask": opt["ask"],
+            "volume": opt["volume"],
+            "open_interest": opt["open_interest"],
+            "dte": opt["dte"],
+            "iv_percentile": opt.get("iv_percentile"),
+            "delta": opt["delta"],
+            "strike": opt["strike"],
+            "expiration": opt["expiration"],
+        }
 
-        for opt in uoa_options:
-            # Check sync window — UOA within 7 days of insider buy
-            # Since we can't know exact UOA date, we use current date proximity
-            now = datetime.now()
-            days_since_insider = (now - insider_date).days
-            if days_since_insider > SYNC_WINDOW_DAYS:
+        protocol = FlowProtocol(ticker_data, option_data)
+        is_verified, guardrails = protocol.validate_sync_signal()
+        whale_value = protocol.get_order_value()
+
+        # Risk tier: S-TIER if protocol passes AND insider data exists
+        if is_verified and best_insider:
+            risk_tier = "S-TIER SYNC"
+        elif is_verified:
+            risk_tier = "WHALE VERIFIED"
+        elif best_insider:
+            risk_tier = protocol.get_risk_tier()  # Has insider but fails some guard
+        else:
+            risk_tier = protocol.get_risk_tier()
+
+        # Days since insider (0 if no insider)
+        days_apart = 0
+        if best_insider:
+            try:
+                insider_date = datetime.strptime(best_insider.get("date", ""), "%Y-%m-%d")
+                days_apart = (datetime.now() - insider_date).days
+            except ValueError:
+                pass
+
+        signal = {
+            "ticker": ticker,
+            "stock_price": round(stock_price, 2),
+            "insider_name": best_insider["name"] if best_insider else "—",
+            "insider_title": best_insider.get("title", "—") if best_insider else "—",
+            "insider_shares": best_insider["shares"] if best_insider else 0,
+            "insider_value": best_insider["value"] if best_insider else 0,
+            "insider_date": best_insider.get("date", "—") if best_insider else "—",
+            "option_strike": opt["strike"],
+            "option_expiry": opt["expiration"],
+            "option_dte": opt["dte"],
+            "option_bid": opt["bid"],
+            "option_ask": opt["ask"],
+            "option_mid": opt["mid"],
+            "option_volume": opt["volume"],
+            "option_oi": opt["open_interest"],
+            "option_iv": opt["iv"],
+            "option_delta": opt["delta"],
+            "option_spread_pct": opt["spread_pct"],
+            "vol_oi_ratio": opt["vol_oi_ratio"],
+            "whale_value_usd": whale_value,
+            "breakeven": opt["breakeven"],
+            "breakeven_pct": opt["breakeven_pct"],
+            "risk_tier": risk_tier,
+            "guardrail_liquid": guardrails["liquid"],
+            "guardrail_low_vol": guardrails["low_vol"],
+            "guardrail_stable_time": guardrails["stable_time"],
+            "guardrail_is_whale": guardrails["is_whale"],
+            "days_apart": days_apart,
+        }
+
+        # Pydantic validation
+        if HAS_PYDANTIC:
+            try:
+                validated = WhaleSignal(**signal)
+                signal = validated.dict()
+            except (ValidationError, Exception) as e:
+                logger.debug(f"Validation failed for {ticker}: {e}")
                 continue
 
-            # Run FlowProtocol
-            ticker_data = {"symbol": ticker, "price": stock_price}
-            option_data = {
-                "bid": opt["bid"],
-                "ask": opt["ask"],
-                "volume": opt["volume"],
-                "open_interest": opt["open_interest"],
-                "dte": opt["dte"],
-                "iv_percentile": opt.get("iv_percentile"),
-                "delta": opt["delta"],
-                "strike": opt["strike"],
-                "expiration": opt["expiration"],
-            }
+        results.append(signal)
 
-            protocol = FlowProtocol(ticker_data, option_data)
-            is_verified, guardrails = protocol.validate_sync_signal()
-            risk_tier = protocol.get_risk_tier()
-            whale_value = protocol.get_order_value()
-
-            signal = {
-                "ticker": ticker,
-                "stock_price": round(stock_price, 2),
-                "insider_name": insider["name"],
-                "insider_title": insider.get("title", "Unknown"),
-                "insider_shares": insider["shares"],
-                "insider_value": insider["value"],
-                "insider_date": insider_date_str,
-                "option_strike": opt["strike"],
-                "option_expiry": opt["expiration"],
-                "option_dte": opt["dte"],
-                "option_bid": opt["bid"],
-                "option_ask": opt["ask"],
-                "option_mid": opt["mid"],
-                "option_volume": opt["volume"],
-                "option_oi": opt["open_interest"],
-                "option_iv": opt["iv"],
-                "option_delta": opt["delta"],
-                "option_spread_pct": opt["spread_pct"],
-                "vol_oi_ratio": opt["vol_oi_ratio"],
-                "whale_value_usd": whale_value,
-                "breakeven": opt["breakeven"],
-                "breakeven_pct": opt["breakeven_pct"],
-                "risk_tier": risk_tier,
-                "guardrail_liquid": guardrails["liquid"],
-                "guardrail_low_vol": guardrails["low_vol"],
-                "guardrail_stable_time": guardrails["stable_time"],
-                "guardrail_is_whale": guardrails["is_whale"],
-                "days_apart": days_since_insider,
-            }
-
-            # Pydantic validation
-            if HAS_PYDANTIC:
-                try:
-                    validated = WhaleSignal(**signal)
-                    signal = validated.dict()
-                except (ValidationError, Exception) as e:
-                    logger.debug(f"Validation failed for {ticker}: {e}")
-                    continue
-
-            results.append(signal)
-
-            # Log S-Tier to audit ledger
-            if is_verified:
-                try:
-                    auditor.log_verified_signal(
-                        ticker=ticker,
-                        price=stock_price,
-                        option_data=option_data,
-                        insider_name=insider["name"],
-                        insider_value=insider["value"],
-                        risk_tier=risk_tier,
-                    )
-                except Exception:
-                    pass
+        # Log S-Tier to audit ledger
+        if risk_tier == "S-TIER SYNC":
+            try:
+                auditor.log_verified_signal(
+                    ticker=ticker,
+                    price=stock_price,
+                    option_data=option_data,
+                    insider_name=best_insider["name"] if best_insider else "",
+                    insider_value=best_insider["value"] if best_insider else 0,
+                    risk_tier=risk_tier,
+                )
+            except Exception:
+                pass
 
     return results
 
@@ -391,9 +398,9 @@ def get_whale_signals(max_workers: int = MAX_WORKERS) -> dict:
             except Exception:
                 errors += 1
 
-    # Sort: S-Tier first, then by whale value
-    tier_order = {"S-TIER SYNC": 0, "HIGH-IV RISK": 1, "LOW LIQUIDITY": 2, "SUB-INSTITUTIONAL": 3, "SHORT-TERM LOTTO": 4, "UNVERIFIED": 5}
-    all_signals.sort(key=lambda x: (tier_order.get(x["risk_tier"], 5), -x.get("whale_value_usd", 0)))
+    # Sort: S-Tier first, then Whale Verified, then by whale value
+    tier_order = {"S-TIER SYNC": 0, "WHALE VERIFIED": 1, "HIGH-IV RISK": 2, "LOW LIQUIDITY": 3, "SUB-INSTITUTIONAL": 4, "SHORT-TERM LOTTO": 5, "UNVERIFIED": 6}
+    all_signals.sort(key=lambda x: (tier_order.get(x["risk_tier"], 6), -x.get("whale_value_usd", 0)))
 
     s_tier_count = sum(1 for s in all_signals if s["risk_tier"] == "S-TIER SYNC")
 

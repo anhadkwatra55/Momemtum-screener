@@ -47,8 +47,8 @@ class FlowProtocol:
             return True  # Pass if unknown — don't veto on missing data
         return float(iv_pct) <= iv_percentile_limit
 
-    def check_time_buffer(self, min_dte: int = 30) -> bool:
-        """Guardrail 3: Filter out short-term 'Lotto' gambles."""
+    def check_time_buffer(self, min_dte: int = 7) -> bool:
+        """Guardrail 3: Filter out ultra-short-term gambles."""
         dte = int(self.option.get("dte", 0) or 0)
         return dte >= min_dte
 

@@ -54,6 +54,7 @@ type SortKey = "ticker" | "whale_value_usd" | "vol_oi_ratio" | "insider_value" |
 
 const TIER_COLORS: Record<string, { text: string; bg: string; border: string }> = {
   "S-TIER SYNC": { text: "#00FF66", bg: "rgba(0,255,102,0.08)", border: "#00FF6640" },
+  "WHALE VERIFIED": { text: "#00BFFF", bg: "rgba(0,191,255,0.08)", border: "#00BFFF40" },
   "HIGH-IV RISK": { text: "#FFD600", bg: "rgba(255,214,0,0.08)", border: "#FFD60040" },
   "LOW LIQUIDITY": { text: "#FF3333", bg: "rgba(255,51,51,0.08)", border: "#FF333340" },
   "SUB-INSTITUTIONAL": { text: "#6B6B6B", bg: "rgba(107,107,107,0.05)", border: "#2A2A2A" },
