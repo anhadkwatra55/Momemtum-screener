@@ -835,6 +835,10 @@ ALPHA_CACHE_TTL = 1800  # 30 minutes
 
 @app.get("/api/screener/alpha-calls")
 async def get_alpha_calls_endpoint(
+    limit: int = 75,
+    sort_by: str = "quant_score",
+    refresh: bool = False,
+    # Accept but ignore old params so frontend doesn't break
     mode: str = "atm_otm",
     min_price: float = 25.0,
     min_delta: float = 0.35,
@@ -844,14 +848,11 @@ async def get_alpha_calls_endpoint(
     premium_min: float = 1.0,
     premium_max: float = 8.0,
     min_oi: int = 100,
-    sort_by: str = "quant_score",
-    limit: int = 100,
-    refresh: bool = False,
 ):
-    """Alpha-Flow Options Screener v4 — S&P 500 + BS Greeks + Quant Score."""
+    """Alpha-Flow Options Screener — direct port of Colab AlphaFlowEngine."""
     import time as _time
 
-    cache_key = f"{mode}_{min_price}_{min_delta}_{dte_min}_{dte_max}_{premium_min}_{premium_max}_{min_oi}_{limit}"
+    cache_key = f"alpha_{limit}_{sort_by}"
     cached = _CACHED_ALPHA_CALLS.get(cache_key)
     cache_time = _ALPHA_CACHE_TIMES.get(cache_key, 0)
 
@@ -863,12 +864,7 @@ async def get_alpha_calls_endpoint(
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: get_alpha_calls(
-                mode=mode, min_price=min_price, min_delta=min_delta,
-                dte_min=dte_min, dte_max=dte_max, max_spread_pct=max_spread_pct,
-                premium_min=premium_min, premium_max=premium_max, min_oi=min_oi,
-                sort_by=sort_by, limit=limit,
-            )
+            lambda: get_alpha_calls(limit=limit, sort_by=sort_by)
         )
         _CACHED_ALPHA_CALLS[cache_key] = result
         _ALPHA_CACHE_TIMES[cache_key] = _time.time()
