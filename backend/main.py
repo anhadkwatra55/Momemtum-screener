@@ -840,17 +840,18 @@ async def get_alpha_calls_endpoint(
     min_delta: float = 0.35,
     dte_min: int = 90,
     dte_max: int = 150,
-    max_spread_pct: float = 13.0,
+    max_spread_pct: float = 10.0,
     premium_min: float = 1.0,
-    premium_max: float = 5.0,
-    sort_by: str = "breakeven_pct",
-    limit: int = 200,
+    premium_max: float = 8.0,
+    min_oi: int = 100,
+    sort_by: str = "quant_score",
+    limit: int = 100,
     refresh: bool = False,
 ):
-    """Alpha Call Options Screener v3 — S&P 500 + Black-Scholes delta."""
+    """Alpha-Flow Options Screener v4 — S&P 500 + BS Greeks + Quant Score."""
     import time as _time
 
-    cache_key = f"{mode}_{min_price}_{min_delta}_{dte_min}_{dte_max}_{premium_min}_{premium_max}_{limit}"
+    cache_key = f"{mode}_{min_price}_{min_delta}_{dte_min}_{dte_max}_{premium_min}_{premium_max}_{min_oi}_{limit}"
     cached = _CACHED_ALPHA_CALLS.get(cache_key)
     cache_time = _ALPHA_CACHE_TIMES.get(cache_key, 0)
 
@@ -865,7 +866,7 @@ async def get_alpha_calls_endpoint(
             lambda: get_alpha_calls(
                 mode=mode, min_price=min_price, min_delta=min_delta,
                 dte_min=dte_min, dte_max=dte_max, max_spread_pct=max_spread_pct,
-                premium_min=premium_min, premium_max=premium_max,
+                premium_min=premium_min, premium_max=premium_max, min_oi=min_oi,
                 sort_by=sort_by, limit=limit,
             )
         )

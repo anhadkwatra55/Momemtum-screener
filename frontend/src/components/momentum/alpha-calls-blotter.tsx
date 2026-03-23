@@ -25,6 +25,10 @@ interface AlphaCall {
   breakeven_pct: number;
   moneyness: string;
   intrinsic_value: number;
+  hv: number;
+  vol_edge: number;
+  pop: number;
+  quant_score: number;
 }
 
 interface AlphaCallsData {
@@ -43,7 +47,7 @@ interface AlphaCallsData {
   timestamp: string;
 }
 
-type SortKey = "ticker" | "stock_price" | "strike" | "dte" | "delta" | "volume" | "open_interest" | "breakeven_pct" | "implied_volatility" | "spread_pct" | "mid_price";
+type SortKey = "ticker" | "stock_price" | "strike" | "dte" | "delta" | "volume" | "open_interest" | "breakeven_pct" | "implied_volatility" | "spread_pct" | "mid_price" | "quant_score" | "pop" | "vol_edge";
 
 // ── Main Component ──
 interface AlphaCallsBlotterProps {
@@ -62,13 +66,14 @@ export function AlphaCallsBlotter({ onTickerSelect }: AlphaCallsBlotterProps) {
   const [dteMin, setDteMin] = useState(90);
   const [dteMax, setDteMax] = useState(150);
   const [premiumMin, setPremiumMin] = useState(1);
-  const [premiumMax, setPremiumMax] = useState(5);
-  const [maxSpread, setMaxSpread] = useState(13);
-  const [scanLimit, setScanLimit] = useState(100);
+  const [premiumMax, setPremiumMax] = useState(8);
+  const [maxSpread, setMaxSpread] = useState(10);
+  const [minOI, setMinOI] = useState(100);
+  const [scanLimit, setScanLimit] = useState(75);
 
   // Sort
-  const [sortKey, setSortKey] = useState<SortKey>("breakeven_pct");
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortKey, setSortKey] = useState<SortKey>("quant_score");
+  const [sortAsc, setSortAsc] = useState(false);
 
   const fetchData = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -83,6 +88,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: AlphaCallsBlotterProps) {
         premium_min: String(premiumMin),
         premium_max: String(premiumMax),
         max_spread_pct: String(maxSpread),
+        min_oi: String(minOI),
         sort_by: sortKey,
         limit: String(scanLimit),
         ...(refresh && { refresh: "true" }),
@@ -95,7 +101,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: AlphaCallsBlotterProps) {
     } finally {
       setLoading(false);
     }
-  }, [mode, minPrice, minDelta, dteMin, dteMax, premiumMin, premiumMax, maxSpread, sortKey, scanLimit]);
+  }, [mode, minPrice, minDelta, dteMin, dteMax, premiumMin, premiumMax, maxSpread, minOI, sortKey, scanLimit]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -115,15 +121,17 @@ export function AlphaCallsBlotter({ onTickerSelect }: AlphaCallsBlotterProps) {
   }, [data?.calls, sortKey, sortAsc]);
 
   const columns: { key: SortKey; label: string }[] = [
+    { key: "quant_score", label: "SCORE" },
     { key: "ticker", label: "TICKER" },
     { key: "stock_price", label: "PRICE" },
     { key: "strike", label: "STRIKE" },
     { key: "mid_price", label: "PREMIUM" },
     { key: "delta", label: "DELTA" },
     { key: "breakeven_pct", label: "B/E %" },
+    { key: "pop", label: "POP%" },
+    { key: "vol_edge", label: "EDGE" },
     { key: "dte", label: "DTE" },
     { key: "open_interest", label: "OI" },
-    { key: "volume", label: "VOL" },
     { key: "implied_volatility", label: "IV%" },
     { key: "spread_pct", label: "SPR%" },
   ];
@@ -199,11 +207,20 @@ export function AlphaCallsBlotter({ onTickerSelect }: AlphaCallsBlotterProps) {
 
           <div className="w-px h-6 bg-[#2A2A2A]" />
 
+          {/* OI Floor */}
+          <div className="flex items-center gap-1.5">
+            <label className="text-[9px] font-mono-data text-[#6B6B6B] uppercase">OI≥</label>
+            <input type="number" value={minOI} onChange={e => setMinOI(Math.max(0, parseInt(e.target.value) || 0))} className="w-14 text-[11px] font-mono-data bg-[#0A0A0A] border border-[#2A2A2A] text-[#E8E8E8] rounded-[2px] px-1.5 py-1 focus:outline-none focus:border-[#00FF66]" />
+          </div>
+
+          <div className="w-px h-6 bg-[#2A2A2A]" />
+
           {/* Scan Limit */}
           <div className="flex items-center gap-1.5">
             <label className="text-[9px] font-mono-data text-[#6B6B6B] uppercase">Scan</label>
             <select value={scanLimit} onChange={e => setScanLimit(parseInt(e.target.value))} className="text-[11px] font-mono-data bg-[#0A0A0A] border border-[#2A2A2A] text-[#E8E8E8] rounded-[2px] px-1.5 py-1 focus:outline-none focus:border-[#00FF66]">
               <option value={50}>50</option>
+              <option value={75}>75</option>
               <option value={100}>100</option>
               <option value={200}>200</option>
               <option value={500}>500</option>
@@ -279,15 +296,22 @@ export function AlphaCallsBlotter({ onTickerSelect }: AlphaCallsBlotterProps) {
                     animate={{ opacity: 1 }}
                     transition={{ delay: Math.min(i * 0.005, 0.15) }}
                   >
+                    {/* Quant Score */}
+                    <td className="px-2.5 py-2">
+                      <span className="font-bold px-1.5 py-0.5 rounded-[2px] text-[10px]" style={{ color: (c as any).quant_score >= 60 ? "#00FF66" : (c as any).quant_score >= 35 ? "#FFD600" : "#FF3333", background: (c as any).quant_score >= 60 ? "rgba(0,255,102,0.1)" : (c as any).quant_score >= 35 ? "rgba(255,214,0,0.08)" : "rgba(255,51,51,0.08)" }}>{(c as any).quant_score ?? "—"}</span>
+                    </td>
                     <td className="px-2.5 py-2"><span className="font-bold text-[#E8E8E8]">{c.ticker}</span></td>
                     <td className="px-2.5 py-2 text-[#C0C0C0]">${c.stock_price.toFixed(2)}</td>
                     <td className="px-2.5 py-2 text-[#E8E8E8] font-bold">${c.strike.toFixed(0)}</td>
                     <td className="px-2.5 py-2 text-[#FFD600] font-bold">${c.mid_price.toFixed(2)}</td>
                     <td className="px-2.5 py-2" style={{ color: c.delta >= 0.50 ? "#00FF66" : c.delta >= 0.40 ? "#FFD600" : "#C0C0C0" }}>{c.delta.toFixed(2)}</td>
                     <td className="px-2.5 py-2" style={{ color: c.breakeven_pct <= 3 ? "#00FF66" : c.breakeven_pct <= 6 ? "#FFD600" : "#FF3333" }}>{c.breakeven_pct > 0 ? "+" : ""}{c.breakeven_pct.toFixed(2)}%</td>
+                    {/* POP */}
+                    <td className="px-2.5 py-2" style={{ color: (c as any).pop >= 50 ? "#00FF66" : (c as any).pop >= 30 ? "#FFD600" : "#FF3333" }}>{(c as any).pop?.toFixed(0) ?? "—"}%</td>
+                    {/* Vol Edge */}
+                    <td className="px-2.5 py-2" style={{ color: (c as any).vol_edge > 0 ? "#00FF66" : (c as any).vol_edge > -5 ? "#FFD600" : "#FF3333" }}>{(c as any).vol_edge > 0 ? "+" : ""}{(c as any).vol_edge?.toFixed(1) ?? "—"}%</td>
                     <td className="px-2.5 py-2" style={{ color: c.dte <= 60 ? "#FF3333" : c.dte <= 120 ? "#FFD600" : "#C0C0C0" }}>{c.dte}d</td>
                     <td className="px-2.5 py-2" style={{ color: c.open_interest > 5000 ? "#00FF66" : c.open_interest > 500 ? "#C0C0C0" : "#6B6B6B" }}>{c.open_interest.toLocaleString()}</td>
-                    <td className="px-2.5 py-2" style={{ color: c.volume > 500 ? "#00FF66" : c.volume > 50 ? "#C0C0C0" : "#6B6B6B" }}>{c.volume.toLocaleString()}</td>
                     <td className="px-2.5 py-2" style={{ color: c.implied_volatility > 60 ? "#FF3333" : c.implied_volatility > 40 ? "#FFD600" : "#C0C0C0" }}>{c.implied_volatility.toFixed(1)}%</td>
                     <td className="px-2.5 py-2" style={{ color: c.spread_pct <= 5 ? "#00FF66" : c.spread_pct <= 10 ? "#FFD600" : "#FF3333" }}>{c.spread_pct.toFixed(1)}%</td>
                     <td className="px-2.5 py-2 text-[#6B6B6B] text-[10px]">{c.expiration}</td>

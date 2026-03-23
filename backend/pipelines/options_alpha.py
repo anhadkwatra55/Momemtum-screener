@@ -1,17 +1,21 @@
 """
-options_alpha.py — Alpha Call Options Intelligence Pipeline (v3)
+options_alpha.py — Alpha-Flow Options Intelligence Pipeline (v4)
 ================================================================
-Standalone institutional-grade long call screener.
-Uses PROVEN logic: S&P 500 universe + Black-Scholes delta + Zacks filters.
+Unified Alpha-Flow Engine: S&P 500 + Black-Scholes Greeks + Quant Score.
+Derived from proven AlphaFlowEngine class pattern.
 
-Filter Stack (matching Zacks screener):
-  1. Universe: S&P 500 (auto-fetched from Wikipedia)
-  2. Strike Price ≥ $25
-  3. Moneyness: ATM & OTM (Strike ≥ Price)
-  4. Delta ≥ 0.35 (Black-Scholes calculated)
-  5. Premium: $1 – $5 range
-  6. DTE: 90–150 days
-  7. Bid/Ask Spread ≤ 13%
+Institutional Gates:
+  1. Price Floor: ≥ $25
+  2. Time Buffer: DTE 90–150 days (adjustable)
+  3. Premium: $1–$8 range (adjustable)
+  4. Spread: ≤ 10% (adjustable)
+  5. Liquidity: OI > 100 (adjustable)
+  6. Delta: ≥ 0.35 (adjustable)
+
+Quant Metrics:
+  - Black-Scholes Delta + POP (Probability of Profit)
+  - IV-HV Vol Edge (realized vs implied)
+  - Composite Quant Score (0-100)
 
 Breakeven: ((Strike + Premium) / Price - 1) × 100
 """
@@ -22,9 +26,8 @@ import json
 import logging
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -32,9 +35,9 @@ logger = logging.getLogger("options_alpha")
 
 try:
     import yfinance as yf
-    HAS_YFINANCE = True
+    HAS_YF = True
 except ImportError:
-    HAS_YFINANCE = False
+    HAS_YF = False
 
 try:
     from scipy.stats import norm
@@ -44,65 +47,107 @@ except ImportError:
 
 try:
     import pandas as pd
-    HAS_PANDAS = True
+    HAS_PD = True
 except ImportError:
-    HAS_PANDAS = False
+    HAS_PD = False
 
-MOMENTUM_DATA_PATH = Path(__file__).parent / "momentum_data.json"
+try:
+    import requests as _requests
+    HAS_REQ = True
+except ImportError:
+    HAS_REQ = False
 
-# ── Default filter configuration ──
-DEFAULT_MIN_PRICE = 25.0
-DEFAULT_MIN_DELTA = 0.35
-DEFAULT_DTE_MIN = 90
-DEFAULT_DTE_MAX = 150
-DEFAULT_MAX_SPREAD_PCT = 13.0
-DEFAULT_PREMIUM_MIN = 1.0
-DEFAULT_PREMIUM_MAX = 5.0
-RISK_FREE_RATE = 0.04
+MOMENTUM_PATH = Path(__file__).parent / "momentum_data.json"
+
+# ── Default Filter Config ──
+DEFAULTS = {
+    "min_price": 25.0,
+    "min_delta": 0.35,
+    "dte_min": 90,
+    "dte_max": 150,
+    "max_spread": 10.0,
+    "prem_min": 1.0,
+    "prem_max": 8.0,
+    "min_oi": 100,
+    "r": 0.04,
+}
 MAX_WORKERS = 10
 
 
-def _calculate_delta(S: float, K: float, T: float, r: float, sigma: float) -> float:
-    """Black-Scholes call delta calculation."""
+# ── FlowProtocol (Core Math) ──
+
+def _bs_greeks(S: float, K: float, T: float, r: float, sigma: float) -> tuple[float, float]:
+    """Black-Scholes: returns (delta, pop)."""
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
-        return 0.0
+        return 0.0, 0.0
     try:
         d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
         if HAS_SCIPY:
-            return float(norm.cdf(d1))
+            delta = float(norm.cdf(d1))
+            pop = float(norm.cdf(d2))
         else:
-            # Fallback approximation
-            return float(max(0.0, min(1.0, 0.5 + d1 * 0.3)))
+            delta = float(max(0, min(1, 0.5 + d1 * 0.3)))
+            pop = float(max(0, min(1, 0.5 + d2 * 0.3)))
+        return (
+            round(delta, 2) if not (math.isnan(delta) or math.isinf(delta)) else 0.0,
+            round(pop, 2) if not (math.isnan(pop) or math.isinf(pop)) else 0.0,
+        )
+    except Exception:
+        return 0.0, 0.0
+
+
+def _iv_hv_edge(ticker_obj, iv: float) -> float:
+    """HV-IV spread using t.history() (fast — reuses existing Ticker object)."""
+    try:
+        hist = ticker_obj.history(period="30d")["Close"]
+        if len(hist) < 15:
+            return 0.0
+        hv = float(np.log(hist / hist.shift(1)).dropna().std() * np.sqrt(252))
+        edge = hv - iv
+        return round(edge, 3) if not (math.isnan(edge) or math.isinf(edge)) else 0.0
     except Exception:
         return 0.0
 
 
-def _get_sp500_tickers() -> list[str]:
-    """Fetch S&P 500 ticker list from Wikipedia."""
-    if not HAS_PANDAS:
+def _quant_score(pop: float, edge: float, oi: int) -> float:
+    """Composite Quant Score (0-100): 40% POP, 40% Vol Edge, 20% Liquidity."""
+    s = (pop * 40) + (max(0, edge) * 100 * 4) + (min(10, oi / 1000) * 2)
+    return round(min(100, max(0, s)), 1)
+
+
+# ── Universe ──
+
+def _get_sp500() -> list[str]:
+    """Fetch S&P 500 from Wikipedia with User-Agent."""
+    if not HAS_PD or not HAS_REQ:
         return []
     try:
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url)
-        tickers = tables[0]["Symbol"].tolist()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        resp = _requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        tickers = pd.read_html(resp.text)[0]["Symbol"].tolist()
         logger.info(f"Fetched {len(tickers)} S&P 500 tickers")
         return tickers
     except Exception as e:
-        logger.warning(f"Failed to fetch S&P 500 list: {e}")
+        logger.warning(f"S&P 500 fetch failed: {e}")
         return []
 
 
 def _get_momentum_tickers() -> list[str]:
-    """Fallback: load tickers from momentum_data.json."""
-    if not MOMENTUM_DATA_PATH.exists():
+    """Fallback universe from momentum_data.json."""
+    if not MOMENTUM_PATH.exists():
         return []
     try:
-        with open(MOMENTUM_DATA_PATH, "r") as f:
+        with open(MOMENTUM_PATH) as f:
             data = json.load(f)
         return [s["ticker"] for s in data.get("signals", []) if s.get("price", 0) >= 10]
     except Exception:
         return []
 
+
+# ── Scan Logic ──
 
 def _scan_ticker(
     symbol: str,
@@ -110,210 +155,212 @@ def _scan_ticker(
     min_delta: float,
     dte_min: int,
     dte_max: int,
-    max_spread_pct: float,
-    premium_min: float,
-    premium_max: float,
+    max_spread: float,
+    prem_min: float,
+    prem_max: float,
+    min_oi: int,
     mode: str,
+    r: float,
 ) -> list[dict]:
-    """
-    Scan a single ticker's option chain using the proven Zacks logic.
-    """
-    if not HAS_YFINANCE:
+    """Scan a single ticker — proven AlphaFlowEngine logic."""
+    if not HAS_YF:
         return []
-
     try:
-        symbol_clean = symbol.replace(".", "-")  # BRK.B → BRK-B
-        t = yf.Ticker(symbol_clean)
+        sym = symbol.replace(".", "-")
+        t = yf.Ticker(sym)
 
         try:
             price = t.fast_info["lastPrice"]
         except Exception:
             try:
-                info = t.info
-                price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
+                price = (t.info or {}).get("currentPrice") or (t.info or {}).get("regularMarketPrice", 0)
             except Exception:
                 return []
 
         if price < min_price:
             return []
 
-        expirations = t.options
-        if not expirations:
+        exps = t.options
+        if not exps:
             return []
 
         today = datetime.now()
+        valid = [(e, (datetime.strptime(e, "%Y-%m-%d") - today).days) for e in exps]
+        valid = [(e, d) for e, d in valid if dte_min <= d <= dte_max]
+        if not valid:
+            return []
+
+        # Fetch HV once per ticker (fast via t.history)
+        _hv_cache = [None]
+
+        def _get_hv():
+            if _hv_cache[0] is None:
+                try:
+                    hist = t.history(period="30d")["Close"]
+                    if len(hist) < 15:
+                        _hv_cache[0] = 0.0
+                    else:
+                        val = float(np.log(hist / hist.shift(1)).dropna().std() * np.sqrt(252))
+                        _hv_cache[0] = round(val, 4) if not (math.isnan(val) or math.isinf(val)) else 0.0
+                except Exception:
+                    _hv_cache[0] = 0.0
+            return _hv_cache[0]
+
         results = []
 
-        # Filter expirations by DTE window
-        valid_expiries = []
-        for exp_str in expirations:
+        for exp, dte in valid:
             try:
-                exp_date = datetime.strptime(exp_str, "%Y-%m-%d")
-                dte = (exp_date - today).days
-                if dte_min <= dte <= dte_max:
-                    valid_expiries.append((exp_str, dte, dte / 365.0))
-            except ValueError:
-                continue
-
-        for exp_str, dte, dte_years in valid_expiries:
-            try:
-                chain = t.option_chain(exp_str).calls
+                chain = t.option_chain(exp).calls
                 if chain.empty:
                     continue
+                dte_years = dte / 365.0
 
                 for _, opt in chain.iterrows():
                     strike = float(opt.get("strike", 0))
                     bid = float(opt.get("bid", 0) or 0)
                     ask = float(opt.get("ask", 0) or 0)
                     iv = float(opt.get("impliedVolatility", 0) or 0)
-                    volume = int(opt.get("volume", 0) or 0)
                     oi = int(opt.get("openInterest", 0) or 0)
-                    last_price = float(opt.get("lastPrice", 0) or 0)
+                    vol = int(opt.get("volume", 0) or 0)
+                    last = float(opt.get("lastPrice", 0) or 0)
 
-                    # Midpoint premium
                     mid = (bid + ask) / 2
                     if mid <= 0:
                         continue
 
-                    # Premium range filter
-                    if mid < premium_min or mid > premium_max:
+                    # Gate: Premium range
+                    if mid < prem_min or mid > prem_max:
                         continue
 
-                    # Moneyness filter
+                    # Gate: Moneyness
                     if mode == "atm_otm" and strike < price:
-                        continue  # ATM/OTM only
+                        continue
                     if mode == "itm_atm" and strike > price:
-                        continue  # ITM/ATM only
-
-                    # Bid/Ask spread filter
-                    spread_pct = ((ask - bid) / mid) * 100 if mid > 0 else 100
-                    if spread_pct > max_spread_pct:
                         continue
 
-                    # Black-Scholes Delta
-                    delta = _calculate_delta(price, strike, dte_years, RISK_FREE_RATE, iv)
+                    # Gate: Spread
+                    spread = ((ask - bid) / mid) * 100
+                    if spread > max_spread:
+                        continue
+
+                    # Gate: Liquidity (OI floor)
+                    if oi < min_oi:
+                        continue
+
+                    # Black-Scholes Greeks
+                    delta, pop = _bs_greeks(price, strike, dte_years, r, iv)
+
+                    # Gate: Delta floor
                     if delta < min_delta:
                         continue
 
-                    # Breakeven calculation
-                    breakeven_price = strike + mid
-                    breakeven_pct = ((breakeven_price / price) - 1) * 100
+                    # HV-IV Edge (lazy fetch)
+                    hv = _get_hv()
+                    edge = round(hv - iv, 3) if hv > 0 else 0.0
 
-                    # Theta approximation (daily decay)
-                    theta = 0.0
-                    if dte > 0:
-                        theta = round(-mid / dte, 4)
+                    # Quant Score
+                    score = _quant_score(pop, edge, oi)
+
+                    # Breakeven
+                    be = ((strike + mid) / price - 1) * 100
 
                     results.append({
                         "ticker": symbol,
                         "stock_price": round(price, 2),
                         "strike": round(strike, 2),
-                        "expiration": exp_str,
+                        "expiration": exp,
                         "dte": dte,
                         "bid": round(bid, 2),
                         "ask": round(ask, 2),
                         "mid_price": round(mid, 2),
-                        "last_price": round(last_price, 2),
-                        "volume": volume,
+                        "last_price": round(last, 2),
+                        "volume": vol,
                         "open_interest": oi,
                         "implied_volatility": round(iv * 100, 1),
-                        "spread_pct": round(spread_pct, 1),
-                        "delta": round(delta, 2),
-                        "theta": theta,
-                        "breakeven": round(breakeven_price, 2),
-                        "breakeven_pct": round(breakeven_pct, 2),
+                        "spread_pct": round(spread, 1),
+                        "delta": delta,
+                        "pop": round(pop * 100, 1),
+                        "hv": round(hv * 100, 1),
+                        "vol_edge": round(edge * 100, 1),
+                        "quant_score": score,
+                        "theta": round(-mid / dte, 4) if dte > 0 else 0,
+                        "breakeven": round(strike + mid, 2),
+                        "breakeven_pct": round(be, 2),
                         "moneyness": "ATM" if abs(strike - price) / price < 0.03 else ("ITM" if strike < price else "OTM"),
                         "intrinsic_value": round(max(0, price - strike), 2),
                     })
 
             except Exception as e:
-                logger.debug(f"Chain error {symbol}/{exp_str}: {e}")
+                logger.debug(f"Chain err {symbol}/{exp}: {e}")
                 continue
 
         return results
-
     except Exception as e:
-        logger.debug(f"Ticker scan failed {symbol}: {e}")
+        logger.debug(f"Scan fail {symbol}: {e}")
         return []
 
 
+# ── Public API ──
+
 def get_alpha_calls(
     mode: str = "atm_otm",
-    min_price: float = DEFAULT_MIN_PRICE,
-    min_delta: float = DEFAULT_MIN_DELTA,
-    dte_min: int = DEFAULT_DTE_MIN,
-    dte_max: int = DEFAULT_DTE_MAX,
-    max_spread_pct: float = DEFAULT_MAX_SPREAD_PCT,
-    premium_min: float = DEFAULT_PREMIUM_MIN,
-    premium_max: float = DEFAULT_PREMIUM_MAX,
-    sort_by: str = "breakeven_pct",
-    limit: int = 200,
+    min_price: float = DEFAULTS["min_price"],
+    min_delta: float = DEFAULTS["min_delta"],
+    dte_min: int = DEFAULTS["dte_min"],
+    dte_max: int = DEFAULTS["dte_max"],
+    max_spread_pct: float = DEFAULTS["max_spread"],
+    premium_min: float = DEFAULTS["prem_min"],
+    premium_max: float = DEFAULTS["prem_max"],
+    min_oi: int = DEFAULTS["min_oi"],
+    sort_by: str = "quant_score",
+    limit: int = 100,
     max_workers: int = MAX_WORKERS,
 ) -> dict:
     """
-    Run the Alpha Call screening pipeline.
-    Uses S&P 500 universe with Black-Scholes delta.
+    Run the Alpha-Flow scan.
+    Uses S&P 500 universe, Black-Scholes delta+POP, IV-HV edge, composite score.
     """
-    # Try S&P 500 first, fallback to momentum universe
-    tickers = _get_sp500_tickers()
-    universe_source = "S&P 500"
+    tickers = _get_sp500()
+    src = "S&P 500"
     if not tickers:
         tickers = _get_momentum_tickers()
-        universe_source = "Momentum Universe"
-
+        src = "Momentum"
     if not tickers:
-        return {
-            "calls": [],
-            "meta": {"error": "No ticker universe available", "universe_size": 0},
-            "timestamp": datetime.now().isoformat(),
-        }
+        return {"calls": [], "meta": {"error": "No universe", "universe_size": 0}, "timestamp": datetime.now().isoformat()}
 
-    # Cap tickers for speed
-    scan_tickers = tickers[:limit]
+    scan = tickers[:limit]
+    logger.info(f"Alpha-Flow v4: {len(scan)}/{len(tickers)} {src} tickers (mode={mode})")
 
-    logger.info(f"Alpha Calls v3: Scanning {len(scan_tickers)}/{len(tickers)} {universe_source} tickers")
+    calls: list[dict] = []
+    errs = 0
 
-    all_calls: list[dict] = []
-    errors = 0
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futs = {
+            pool.submit(
                 _scan_ticker, t, min_price, min_delta,
                 dte_min, dte_max, max_spread_pct,
-                premium_min, premium_max, mode,
-            ): t
-            for t in scan_tickers
+                premium_min, premium_max, min_oi, mode, DEFAULTS["r"],
+            ): t for t in scan
         }
-        for future in as_completed(futures):
+        for f in as_completed(futs):
             try:
-                results = future.result(timeout=30)
-                all_calls.extend(results)
+                calls.extend(f.result(timeout=30))
             except Exception:
-                errors += 1
+                errs += 1
 
     # Sort
-    sort_map = {
-        "breakeven_pct": lambda x: x.get("breakeven_pct", 999),
-        "open_interest": lambda x: -x.get("open_interest", 0),
-        "volume": lambda x: -x.get("volume", 0),
-        "delta": lambda x: -x.get("delta", 0),
-        "implied_volatility": lambda x: x.get("implied_volatility", 0),
-        "spread_pct": lambda x: x.get("spread_pct", 100),
-        "mid_price": lambda x: x.get("mid_price", 0),
-    }
-    sort_fn = sort_map.get(sort_by, sort_map["breakeven_pct"])
-    all_calls.sort(key=sort_fn)
+    rev = sort_by not in ("breakeven_pct", "spread_pct")
+    calls.sort(key=lambda x: x.get(sort_by, 0), reverse=rev)
 
     return {
-        "calls": all_calls,
+        "calls": calls,
         "meta": {
-            "universe_source": universe_source,
+            "universe_source": src,
             "universe_size": len(tickers),
-            "tickers_scanned": len(scan_tickers),
-            "contracts_found": len(all_calls),
-            "tickers_with_calls": len(set(c["ticker"] for c in all_calls)),
-            "errors": errors,
+            "tickers_scanned": len(scan),
+            "contracts_found": len(calls),
+            "tickers_with_calls": len(set(c["ticker"] for c in calls)),
+            "errors": errs,
             "mode": mode,
             "mode_label": "Wealth Protection (ITM/ATM)" if mode == "itm_atm" else "Tactical Leverage (ATM/OTM)",
             "filters": {
@@ -321,7 +368,8 @@ def get_alpha_calls(
                 "min_delta": min_delta,
                 "dte_range": f"{dte_min}-{dte_max}d",
                 "max_spread": f"{max_spread_pct}%",
-                "premium_range": f"${premium_min}-${premium_max}",
+                "premium": f"${premium_min}-${premium_max}",
+                "min_oi": min_oi,
             },
         },
         "timestamp": datetime.now().isoformat(),
