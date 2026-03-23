@@ -57,6 +57,7 @@ import { ResearchCardGrid } from "@/components/momentum/research-card";
 import { DailyMovers } from "@/components/momentum/daily-movers";
 import { TodayView } from "@/components/momentum/today-view";
 const LazyAlphaCallsBlotter = dynamic(() => import('@/components/momentum/alpha-calls-blotter').then(m => ({ default: m.AlphaCallsBlotter })), { ssr: false });
+const LazyWhaleTrackerBlotter = dynamic(() => import('@/components/momentum/whale-tracker-blotter').then(m => ({ default: m.WhaleTrackerBlotter })), { ssr: false });
 
 // ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
 const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
@@ -783,6 +784,16 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
+            {/* ══════ WHALE FLOW INTELLIGENCE ══════ */}
+            {activePage === "whale-tracker" && (
+              <motion.div
+                key="whale-tracker"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyWhaleTrackerBlotter onTickerSelect={handlePageTickerSelect} />
+              </motion.div>
+            )}
 
             {/* ══════ EARNINGS GROWERS ══════ */}
             {activePage === "earnings-growers" && (

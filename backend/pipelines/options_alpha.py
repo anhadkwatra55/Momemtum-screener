@@ -1,18 +1,19 @@
 """
-options_alpha.py — Alpha Call Options Intelligence Pipeline
-=============================================================
-Institutional-grade long call screener combining Zacks criteria
-with the HEADSTART Momentum Ensemble overlay.
+options_alpha.py — Alpha Call Options Intelligence Pipeline (v2)
+================================================================
+Standalone institutional-grade long call screener.
+NO momentum, ensemble, or sentiment dependencies.
+Uses ONLY: Option Greeks, Liquidity Metrics, Price Action.
 
 Filter Stack:
-  1. Price Filter: Stock ≥ $50 (reduces relative premium friction)
-  2. Option Greeks: ATM/OTM Long Calls, Delta ≥ 0.40, DTE 90-150d
-  3. Liquidity: Bid/Ask spread ≤ 10%
-  4. Momentum Veto: Ensemble Score > 1.5
-  5. IV Percentile: Exclude if > 70%
-  6. Crowding Guard: Flag if Crowding Index > 85
+  1. Underlying Price ≥ $50
+  2. DTE ≤ 180 days (6-month cap)
+  3. Delta ≥ 0.40
+  4. Bid/Ask Spread ≤ 10%
+  5. Volume > 50, Open Interest > 100
+  6. Moneyness mode: ITM/ATM or ATM/OTM
 
-Data: Reads momentum_data.json as ReadOnly source. Never mutates.
+Breakeven: (Strike + Premium - StockPrice) / StockPrice
 """
 
 from __future__ import annotations
@@ -23,323 +24,373 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
-
-import numpy as np
+from typing import Any, Literal
 
 logger = logging.getLogger("options_alpha")
 
-# Try importing yfinance
 try:
     import yfinance as yf
     HAS_YFINANCE = True
 except ImportError:
     HAS_YFINANCE = False
-    logger.warning("yfinance not available — options_alpha will return empty results")
+    logger.warning("yfinance not available — options_alpha disabled")
+
+try:
+    from pydantic import BaseModel, validator, ValidationError
+    HAS_PYDANTIC = True
+except ImportError:
+    HAS_PYDANTIC = False
 
 MOMENTUM_DATA_PATH = Path(__file__).parent / "momentum_data.json"
 
-# ── Configuration ──
+# ── Defaults ──
 MIN_PRICE = 50.0
 MIN_DELTA = 0.40
-DTE_MIN = 90
-DTE_MAX = 150
-MAX_SPREAD_PCT = 0.10  # 10% bid/ask spread
-MIN_ENSEMBLE_SCORE = 1.5
-MAX_IV_PERCENTILE = 0.70
-CROWDING_THRESHOLD = 85
-MAX_WORKERS = 8
+MAX_DTE = 180
+MAX_SPREAD_PCT = 0.10
+MIN_VOLUME = 50
+MIN_OI = 100
+MAX_WORKERS = 10
 
 
-def _load_momentum_signals() -> dict[str, dict]:
-    """Load momentum signals from cached JSON (ReadOnly)."""
+# ── Pydantic Validation Model ──
+if HAS_PYDANTIC:
+    class OptionContract(BaseModel):
+        ticker: str
+        stock_price: float
+        strike: float
+        expiration: str
+        dte: int
+        bid: float
+        ask: float
+        mid_price: float
+        last_price: float
+        volume: int
+        open_interest: int
+        implied_volatility: float
+        spread_pct: float
+        delta: float
+        theta: float
+        gamma: float
+        vega: float
+        breakeven: float
+        breakeven_pct: float
+        moneyness: str  # ITM, ATM, OTM
+        intrinsic_value: float
+
+        @validator("bid", "ask", "mid_price", "stock_price", "strike", pre=True)
+        def clean_price(cls, v):
+            if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+                return 0.0
+            return round(float(v), 2)
+
+        @validator("volume", "open_interest", pre=True)
+        def clean_int(cls, v):
+            if v is None:
+                return 0
+            return max(0, int(v))
+
+        @validator("delta", "theta", "gamma", "vega", "implied_volatility", pre=True)
+        def clean_greek(cls, v):
+            if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+                return 0.0
+            return round(float(v), 4)
+
+        @validator("spread_pct", "breakeven_pct", pre=True)
+        def clean_pct(cls, v):
+            if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+                return 0.0
+            return round(float(v), 2)
+
+
+def _get_ticker_universe() -> list[dict]:
+    """
+    Load ticker universe from momentum_data.json (ReadOnly).
+    Only extracts ticker + price — no momentum data used.
+    """
     if not MOMENTUM_DATA_PATH.exists():
-        return {}
+        return []
     try:
         with open(MOMENTUM_DATA_PATH, "r") as f:
             data = json.load(f)
         signals = data.get("signals", [])
-        return {s["ticker"]: s for s in signals if "ticker" in s}
+        return [
+            {"ticker": s["ticker"], "price": s.get("price", 0), "sector": s.get("sector", "Unknown")}
+            for s in signals
+            if s.get("price", 0) >= MIN_PRICE
+        ]
     except Exception as e:
-        logger.error(f"Failed to load momentum data: {e}")
-        return {}
+        logger.error(f"Failed to load universe: {e}")
+        return []
 
 
-def _compute_iv_percentile(ticker_obj: Any) -> float | None:
-    """
-    Compute IV Percentile using historical volatility vs current implied vol.
-    Returns 0-1 scale, or None if unavailable.
-    """
-    try:
-        hist = ticker_obj.history(period="1y")
-        if hist.empty or len(hist) < 30:
+def _classify_moneyness(strike: float, stock_price: float) -> str:
+    """Classify a strike as ITM, ATM, or OTM relative to stock price (for calls)."""
+    ratio = strike / stock_price
+    if ratio < 0.97:
+        return "ITM"
+    elif ratio <= 1.03:
+        return "ATM"
+    else:
+        return "OTM"
+
+
+def _validate_contract(raw: dict) -> dict | None:
+    """Run contract through Pydantic validation. Returns clean dict or None."""
+    if HAS_PYDANTIC:
+        try:
+            validated = OptionContract(**raw)
+            return validated.dict()
+        except (ValidationError, Exception):
             return None
-        # Historical realized vol (30-day annualized)
-        log_ret = np.log(hist["Close"] / hist["Close"].shift(1)).dropna()
-        realized_vol = float(log_ret.iloc[-30:].std() * np.sqrt(252))
-        # Use 1y range to estimate IV percentile
-        all_vols = []
-        for i in range(30, len(log_ret), 5):
-            chunk = log_ret.iloc[max(0, i - 30):i]
-            if len(chunk) >= 20:
-                all_vols.append(float(chunk.std() * np.sqrt(252)))
-        if not all_vols:
-            return None
-        # Percentile of current vol vs historical vols
-        rank = sum(1 for v in all_vols if v <= realized_vol) / len(all_vols)
-        return round(rank, 3)
-    except Exception:
-        return None
+    # Fallback: basic cleaning
+    for key in ["bid", "ask", "mid_price", "stock_price", "strike"]:
+        v = raw.get(key, 0)
+        if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+            raw[key] = 0.0
+    for key in ["volume", "open_interest"]:
+        v = raw.get(key, 0)
+        if v is None:
+            raw[key] = 0
+    return raw
 
 
-def _compute_crowding_index(signal: dict) -> float:
+def _scan_ticker(
+    ticker: str,
+    stock_price: float,
+    mode: str = "atm_otm",
+    min_volume: int = MIN_VOLUME,
+    min_oi: int = MIN_OI,
+) -> list[dict]:
     """
-    Compute a Crowding Index from available signal data.
-    Uses vol_spike + continuation probability as proxy for crowding.
-    Higher = more crowded trade.
-    """
-    vol_spike = signal.get("vol_spike", 1.0) or 1.0
-    cont_prob = 0
-    cont = signal.get("continuation", {})
-    if isinstance(cont, dict):
-        cont_prob = cont.get("probability", 0) or 0
-
-    # Crowding = volume intensity × continuation expectation
-    # Scale: 0-100
-    crowding = min(100, (vol_spike * 15) + (cont_prob * 0.5))
-    return round(crowding, 1)
-
-
-def _screen_ticker_options(ticker: str, signal: dict) -> list[dict]:
-    """
-    Fetch option chain for a single ticker and filter for Alpha Calls.
-    Returns list of qualifying option contracts.
+    Fetch and filter option chains for a single ticker.
+    Pure Greeks + Liquidity + Price Action — no momentum.
     """
     if not HAS_YFINANCE:
         return []
 
-    price = signal.get("price", 0)
-    if price < MIN_PRICE:
-        return []
-
-    composite = signal.get("composite", 0)
-    if composite < MIN_ENSEMBLE_SCORE:
-        return []
-
-    regime = signal.get("regime", "Unknown")
-    # ADX trending check via regime
-    if regime not in ("Trending",):
-        return []
-
     try:
         t = yf.Ticker(ticker)
-
-        # IV Percentile check
-        iv_pct = _compute_iv_percentile(t)
-
-        # Get available expiration dates
         expirations = t.options
         if not expirations:
             return []
 
         now = datetime.now()
-        target_min = now + timedelta(days=DTE_MIN)
-        target_max = now + timedelta(days=DTE_MAX)
+        max_exp = now + timedelta(days=MAX_DTE)
 
-        # Filter expiration dates within DTE range
+        # Filter expirations within DTE cap
         valid_expiries = []
         for exp_str in expirations:
             try:
                 exp_date = datetime.strptime(exp_str, "%Y-%m-%d")
-                if target_min <= exp_date <= target_max:
-                    valid_expiries.append(exp_str)
+                dte = (exp_date - now).days
+                if 1 <= dte <= MAX_DTE:
+                    valid_expiries.append((exp_str, dte))
             except ValueError:
                 continue
 
         if not valid_expiries:
             return []
 
-        # Crowding index
-        crowding_idx = _compute_crowding_index(signal)
-
         results = []
-        for exp_str in valid_expiries[:2]:  # Limit to 2 expirations per ticker
+
+        for exp_str, dte in valid_expiries[:4]:  # Cap at 4 expirations per ticker for speed
             try:
                 chain = t.option_chain(exp_str)
                 calls = chain.calls
-
                 if calls.empty:
                     continue
 
-                exp_date = datetime.strptime(exp_str, "%Y-%m-%d")
-                dte = (exp_date - now).days
-
                 for _, row in calls.iterrows():
                     strike = float(row.get("strike", 0))
-                    bid = float(row.get("bid", 0))
-                    ask = float(row.get("ask", 0))
-                    last_price = float(row.get("lastPrice", 0))
+                    bid = float(row.get("bid", 0) or 0)
+                    ask = float(row.get("ask", 0) or 0)
+                    last_price = float(row.get("lastPrice", 0) or 0)
                     volume = int(row.get("volume", 0) or 0)
-                    open_interest = int(row.get("openInterest", 0) or 0)
-                    implied_vol = float(row.get("impliedVolatility", 0) or 0)
+                    oi = int(row.get("openInterest", 0) or 0)
+                    iv = float(row.get("impliedVolatility", 0) or 0)
 
-                    # ATM/OTM filter: strike >= current price
-                    if strike < price:
+                    # ── Moneyness filter ──
+                    moneyness = _classify_moneyness(strike, stock_price)
+                    if mode == "itm_atm" and moneyness == "OTM":
+                        continue
+                    if mode == "atm_otm" and moneyness == "ITM":
                         continue
 
-                    # Skip deep OTM (> 20% above current price)
-                    if strike > price * 1.20:
+                    # Skip deep OTM/ITM (>25% away)
+                    if abs(strike - stock_price) / stock_price > 0.25:
                         continue
 
-                    # Bid/Ask spread filter
+                    # ── Bid/Ask guard ──
                     if ask <= 0 or bid <= 0:
                         continue
                     spread_pct = (ask - bid) / ask
                     if spread_pct > MAX_SPREAD_PCT:
                         continue
 
-                    # Delta approximation (Black-Scholes proxy)
-                    # For ATM calls, delta ≈ 0.5; decreases as strike moves OTM
-                    moneyness = price / strike
-                    approx_delta = max(0.0, min(1.0, 0.5 + (moneyness - 1.0) * 2.5))
-
-                    if approx_delta < MIN_DELTA:
+                    # ── Liquidity floor ──
+                    if volume < min_volume:
+                        continue
+                    if oi < min_oi:
                         continue
 
-                    # Calculate breakeven
-                    mid_price = (bid + ask) / 2
-                    breakeven = strike + mid_price
-                    breakeven_pct = round((breakeven / price - 1) * 100, 2)
+                    # ── Greeks ──
+                    # yfinance provides impliedVolatility; delta/theta/gamma/vega
+                    # may not always be available, so we approximate delta
+                    delta_val = 0.0
+                    theta_val = 0.0
+                    gamma_val = 0.0
+                    vega_val = 0.0
 
-                    # Expected Value (simplified)
-                    # EV = (probability × upside) - ((1-probability) × premium)
-                    prob = signal.get("probability", 50) / 100
-                    potential_gain = price * 0.10  # 10% move assumption
-                    ev = round((prob * potential_gain) - ((1 - prob) * mid_price), 2)
+                    # Check if greeks are available directly
+                    if "delta" in row and row.get("delta") is not None:
+                        delta_val = float(row["delta"])
+                    else:
+                        # Approximate delta from moneyness
+                        ratio = stock_price / strike
+                        delta_val = max(0.0, min(1.0, 0.5 + (ratio - 1.0) * 2.5))
 
-                    # Risk flags
-                    is_crowded = crowding_idx > CROWDING_THRESHOLD
-                    iv_warning = iv_pct is not None and iv_pct > MAX_IV_PERCENTILE
+                    if "theta" in row and row.get("theta") is not None:
+                        theta_val = float(row["theta"])
+                    if "gamma" in row and row.get("gamma") is not None:
+                        gamma_val = float(row["gamma"])
+                    if "vega" in row and row.get("vega") is not None:
+                        vega_val = float(row["vega"])
 
-                    results.append({
+                    # ── Delta filter ──
+                    if delta_val < MIN_DELTA:
+                        continue
+
+                    # ── Breakeven calculation ──
+                    mid_price = round((bid + ask) / 2, 2)
+                    breakeven = round(strike + mid_price, 2)
+                    breakeven_pct = round(((breakeven - stock_price) / stock_price) * 100, 2)
+
+                    # Intrinsic value (for calls)
+                    intrinsic = max(0, stock_price - strike)
+
+                    raw_contract = {
                         "ticker": ticker,
-                        "company_name": signal.get("company_name", ticker),
-                        "sector": signal.get("sector", "Unknown"),
-                        "stock_price": round(price, 2),
+                        "stock_price": round(stock_price, 2),
                         "strike": round(strike, 2),
                         "expiration": exp_str,
                         "dte": dte,
                         "bid": round(bid, 2),
                         "ask": round(ask, 2),
-                        "mid_price": round(mid_price, 2),
+                        "mid_price": mid_price,
                         "last_price": round(last_price, 2),
                         "volume": volume,
-                        "open_interest": open_interest,
-                        "implied_volatility": round(implied_vol * 100, 1),
+                        "open_interest": oi,
+                        "implied_volatility": round(iv * 100, 1),
                         "spread_pct": round(spread_pct * 100, 1),
-                        "approx_delta": round(approx_delta, 3),
-                        "breakeven": round(breakeven, 2),
+                        "delta": round(delta_val, 3),
+                        "theta": round(theta_val, 4),
+                        "gamma": round(gamma_val, 4),
+                        "vega": round(vega_val, 4),
+                        "breakeven": breakeven,
                         "breakeven_pct": breakeven_pct,
-                        "expected_value": ev,
-                        # Momentum overlay
-                        "ensemble_score": signal.get("composite", 0),
-                        "momentum_probability": signal.get("probability", 0),
-                        "conviction_tier": signal.get("conviction_tier", "Unknown"),
-                        "action_category": signal.get("action_category", "Unknown"),
-                        "regime": regime,
-                        "momentum_phase": signal.get("momentum_phase", "Unknown"),
-                        "thesis": signal.get("thesis", ""),
-                        "price_target": signal.get("price_target"),
-                        # Risk metrics
-                        "iv_percentile": round(iv_pct * 100, 1) if iv_pct is not None else None,
-                        "crowding_index": crowding_idx,
-                        "is_crowded": is_crowded,
-                        "iv_warning": iv_warning,
-                        "risk_flag": "HIGH RISK" if is_crowded else ("IV CRUSH RISK" if iv_warning else "CLEAR"),
-                    })
+                        "moneyness": moneyness,
+                        "intrinsic_value": round(intrinsic, 2),
+                    }
+
+                    # Pydantic validation
+                    validated = _validate_contract(raw_contract)
+                    if validated:
+                        results.append(validated)
 
             except Exception as e:
-                logger.debug(f"Failed to process {exp_str} for {ticker}: {e}")
+                logger.debug(f"Chain error {ticker}/{exp_str}: {e}")
                 continue
 
         return results
 
     except Exception as e:
-        logger.warning(f"Failed to screen options for {ticker}: {e}")
+        logger.warning(f"Ticker scan failed {ticker}: {e}")
         return []
 
 
 def get_alpha_calls(
-    min_price: float = MIN_PRICE,
-    min_ensemble: float = MIN_ENSEMBLE_SCORE,
-    max_iv_pct: float = MAX_IV_PERCENTILE,
+    mode: str = "atm_otm",
+    min_volume: int = MIN_VOLUME,
+    min_oi: int = MIN_OI,
+    sort_by: str = "open_interest",
     max_workers: int = MAX_WORKERS,
 ) -> dict:
     """
-    Run the full Alpha Call screening pipeline.
+    Run the Alpha Call screening pipeline.
+    Pure Greeks + Liquidity + Price Action.
 
-    Returns dict with:
-      - calls: list of qualifying option contracts
-      - meta: screening statistics
-      - timestamp: when the scan was run
+    Args:
+        mode: "itm_atm" (Wealth Protection) or "atm_otm" (Tactical Leverage)
+        min_volume: Minimum contract volume
+        min_oi: Minimum open interest
+        sort_by: Sort key for results
+        max_workers: Thread pool size
+
+    Returns:
+        dict with calls, meta, timestamp
     """
-    signals = _load_momentum_signals()
-    if not signals:
+    universe = _get_ticker_universe()
+    if not universe:
         return {
             "calls": [],
-            "meta": {"error": "No momentum data available", "screened": 0, "qualified": 0},
+            "meta": {"error": "No ticker universe available", "universe_size": 0},
             "timestamp": datetime.now().isoformat(),
         }
 
-    # Pre-filter: price >= min_price, composite >= min_ensemble, trending regime
-    candidates = {}
-    for ticker, sig in signals.items():
-        price = sig.get("price", 0)
-        composite = sig.get("composite", 0)
-        regime = sig.get("regime", "Unknown")
+    logger.info(f"Alpha Calls v2: Scanning {len(universe)} tickers (mode={mode}, vol>{min_volume}, oi>{min_oi})")
 
-        if price >= min_price and composite >= min_ensemble and regime == "Trending":
-            candidates[ticker] = sig
-
-    logger.info(f"Alpha Calls: {len(candidates)} candidates from {len(signals)} universe (price≥${min_price}, ensemble≥{min_ensemble})")
-
-    # Parallel option chain fetching
-    all_calls = []
+    all_calls: list[dict] = []
     errors = 0
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_screen_ticker_options, ticker, sig): ticker
-            for ticker, sig in candidates.items()
+            executor.submit(
+                _scan_ticker,
+                t["ticker"],
+                t["price"],
+                mode,
+                min_volume,
+                min_oi,
+            ): t["ticker"]
+            for t in universe
         }
         for future in as_completed(futures):
-            ticker = futures[future]
             try:
                 results = future.result(timeout=30)
                 all_calls.extend(results)
-            except Exception as e:
+            except Exception:
                 errors += 1
-                logger.debug(f"Timeout/error for {ticker}: {e}")
 
-    # Sort by expected value descending
-    all_calls.sort(key=lambda x: x.get("expected_value", 0), reverse=True)
+    # Sort
+    sort_map = {
+        "open_interest": lambda x: x.get("open_interest", 0),
+        "volume": lambda x: x.get("volume", 0),
+        "delta": lambda x: x.get("delta", 0),
+        "breakeven_pct": lambda x: x.get("breakeven_pct", 999),
+        "implied_volatility": lambda x: x.get("implied_volatility", 0),
+        "spread_pct": lambda x: x.get("spread_pct", 100),
+    }
+    sort_fn = sort_map.get(sort_by, sort_map["open_interest"])
+    reverse = sort_by != "breakeven_pct" and sort_by != "spread_pct"
+    all_calls.sort(key=sort_fn, reverse=reverse)
 
     return {
         "calls": all_calls,
         "meta": {
-            "universe_size": len(signals),
-            "candidates_screened": len(candidates),
+            "universe_size": len(universe),
             "contracts_found": len(all_calls),
             "tickers_with_calls": len(set(c["ticker"] for c in all_calls)),
             "errors": errors,
+            "mode": mode,
+            "mode_label": "Wealth Protection (ITM/ATM)" if mode == "itm_atm" else "Tactical Leverage (ATM/OTM)",
             "filters": {
-                "min_price": min_price,
-                "min_ensemble": min_ensemble,
+                "min_price": MIN_PRICE,
                 "min_delta": MIN_DELTA,
-                "dte_range": f"{DTE_MIN}-{DTE_MAX}",
-                "max_spread": f"{MAX_SPREAD_PCT*100}%",
-                "max_iv_percentile": f"{max_iv_pct*100}%",
-                "crowding_threshold": CROWDING_THRESHOLD,
+                "max_dte": MAX_DTE,
+                "max_spread_pct": f"{MAX_SPREAD_PCT*100}%",
+                "min_volume": min_volume,
+                "min_oi": min_oi,
             },
         },
         "timestamp": datetime.now().isoformat(),

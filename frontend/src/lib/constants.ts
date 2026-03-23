@@ -80,6 +80,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Alpha Calls", icon: "chart.line.uptrend.xyaxis", pageId: "alpha-calls", section: "STRATEGY" },
   { label: "Signals & Evidence", icon: "radar.fill", pageId: "signals", section: "STRATEGY" },
   // INTELLIGENCE — "What am I missing?"
+  { label: "Whale Flow Intel", icon: "exclamationmark.triangle.fill", pageId: "whale-tracker", section: "INTELLIGENCE" },
   { label: "Insider & Institutional", icon: "person.badge.key.fill", pageId: "insider-buys", section: "INTELLIGENCE" },
   { label: "Ticker Deep Dive", icon: "chart.bar.fill", pageId: "ticker-detail", section: "INTELLIGENCE" },
   { label: "Earnings & Growth", icon: "chart.line.uptrend.xyaxis", pageId: "earnings-growers", section: "INTELLIGENCE" },

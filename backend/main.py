@@ -828,34 +828,65 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
 
 
 # ── Alpha Call Options Screener ──
-_CACHED_ALPHA_CALLS: dict | None = None
-_ALPHA_CACHE_TIME: float = 0
+_CACHED_ALPHA_CALLS: dict[str, dict] = {}
+_ALPHA_CACHE_TIMES: dict[str, float] = {}
 ALPHA_CACHE_TTL = 1800  # 30 minutes
 
 
 @app.get("/api/screener/alpha-calls")
 async def get_alpha_calls_endpoint(
-    min_price: float = 50.0,
-    min_ensemble: float = 1.5,
+    mode: str = "atm_otm",
+    min_volume: int = 50,
+    min_oi: int = 100,
+    sort_by: str = "open_interest",
     refresh: bool = False,
 ):
-    """Alpha Call Options Screener — institutional long call filter."""
-    global _CACHED_ALPHA_CALLS, _ALPHA_CACHE_TIME
+    """Alpha Call Options Screener — pure Greeks + Liquidity + Price Action."""
     import time as _time
 
-    # Return cache if fresh
-    if _CACHED_ALPHA_CALLS and not refresh and (_time.time() - _ALPHA_CACHE_TIME) < ALPHA_CACHE_TTL:
-        return encode_response(_CACHED_ALPHA_CALLS)
+    cache_key = f"{mode}_{min_volume}_{min_oi}_{sort_by}"
+    cached = _CACHED_ALPHA_CALLS.get(cache_key)
+    cache_time = _ALPHA_CACHE_TIMES.get(cache_key, 0)
+
+    if cached and not refresh and (_time.time() - cache_time) < ALPHA_CACHE_TTL:
+        return encode_response(cached)
 
     try:
         from options_alpha import get_alpha_calls
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: get_alpha_calls(min_price=min_price, min_ensemble=min_ensemble)
+            lambda: get_alpha_calls(mode=mode, min_volume=min_volume, min_oi=min_oi, sort_by=sort_by)
         )
-        _CACHED_ALPHA_CALLS = result
-        _ALPHA_CACHE_TIME = _time.time()
+        _CACHED_ALPHA_CALLS[cache_key] = result
+        _ALPHA_CACHE_TIMES[cache_key] = _time.time()
+        return encode_response(result)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Whale Flow Intelligence ──
+_CACHED_WHALE_DATA: dict | None = None
+_WHALE_CACHE_TIME: float = 0
+WHALE_CACHE_TTL = 1800
+
+
+@app.get("/api/screener/whale-tracker")
+async def get_whale_tracker_endpoint(refresh: bool = False):
+    """Whale Flow Intelligence — Insider + UOA fusion with FlowProtocol guardrails."""
+    global _CACHED_WHALE_DATA, _WHALE_CACHE_TIME
+    import time as _time
+
+    if _CACHED_WHALE_DATA and not refresh and (_time.time() - _WHALE_CACHE_TIME) < WHALE_CACHE_TTL:
+        return encode_response(_CACHED_WHALE_DATA)
+
+    try:
+        from whale_tracker import get_whale_signals
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, get_whale_signals)
+        _CACHED_WHALE_DATA = result
+        _WHALE_CACHE_TIME = _time.time()
         return encode_response(result)
     except Exception as e:
         traceback.print_exc()
