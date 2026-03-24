@@ -554,32 +554,49 @@ def _seconds_until_next_run() -> float:
     return (target - now).total_seconds()
 
 
-def _refresh_alpha_cache_background():
-    """Pre-compute alpha calls for all universes and fill the cache.
-    Called after the main momentum pipeline finishes and on startup."""
+def _refresh_alpha_cache_background(startup: bool = False):
+    """Pre-compute alpha calls and fill the cache.
+    When startup=True, runs a lightweight scan (sp500 only, 75 tickers) to
+    get data visible fast without overwhelming the server.
+    When startup=False (daily refresh), scans all universes with 500 tickers."""
     import time as _t
     try:
         from options_alpha import get_alpha_calls
-        for univ in ("sp500", "nasdaq100", "both"):
-            cache_key = f"alpha_500_quant_score_{univ}"
-            print(f"  📊 Alpha pre-scan: {univ} (up to 500 tickers)…")
+
+        if startup:
+            # Lightweight startup scan: sp500 only, 75 tickers
+            universes = [("sp500", 75)]
+        else:
+            # Full daily scan: all universes, 500 tickers
+            universes = [("sp500", 500), ("nasdaq100", 500), ("both", 500)]
+
+        for univ, lim in universes:
+            cache_key = f"alpha_{lim}_quant_score_{univ}"
+            print(f"  📊 Alpha {'startup' if startup else 'daily'} scan: {univ} ({lim} tickers)…")
             t0 = _t.monotonic()
-            result = get_alpha_calls(limit=500, sort_by="quant_score", universe=univ)
+            result = get_alpha_calls(limit=lim, sort_by="quant_score", universe=univ)
             elapsed = round(_t.monotonic() - t0, 1)
             n = result.get("meta", {}).get("contracts_found", 0)
             _CACHED_ALPHA_CALLS[cache_key] = result
             _ALPHA_CACHE_TIMES[cache_key] = _t.time()
             # Also cache common smaller limits from the same data
-            for lim in (50, 75, 100, 200):
-                small_key = f"alpha_{lim}_quant_score_{univ}"
-                _CACHED_ALPHA_CALLS[small_key] = {
-                    "calls": result["calls"][:lim * 3],  # contracts, not tickers
-                    "meta": result["meta"],
-                    "timestamp": result["timestamp"],
-                }
-                _ALPHA_CACHE_TIMES[small_key] = _t.time()
+            for small_lim in (50, 75, 100, 200):
+                if small_lim <= lim:
+                    small_key = f"alpha_{small_lim}_quant_score_{univ}"
+                    _CACHED_ALPHA_CALLS[small_key] = {
+                        "calls": result["calls"][:small_lim * 3],
+                        "meta": result["meta"],
+                        "timestamp": result["timestamp"],
+                    }
+                    _ALPHA_CACHE_TIMES[small_key] = _t.time()
+            # Also cache as full key for endpoint fallback
+            full_key = f"alpha_500_quant_score_{univ}"
+            if full_key not in _CACHED_ALPHA_CALLS:
+                _CACHED_ALPHA_CALLS[full_key] = result
+                _ALPHA_CACHE_TIMES[full_key] = _t.time()
             print(f"  ✓ Alpha {univ}: {n} contracts in {elapsed}s")
-        print("  ✅ Alpha cache fully warmed")
+        status = "startup warm" if startup else "fully warmed"
+        print(f"  ✅ Alpha cache {status}")
     except Exception as e:
         print(f"  ⚠ Alpha pre-scan failed: {e}")
         import traceback
@@ -674,13 +691,15 @@ async def lifespan(app: FastAPI):
     pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
     pipeline_thread.start()
 
-    # Warm alpha calls cache immediately — sp500 first (most used), then others async
-    def _immediate_alpha_warmup():
-        _refresh_alpha_cache_background()
+    # Warm alpha calls cache after server is fully booted (lightweight: sp500/75 only)
+    def _delayed_alpha_warmup():
+        import time
+        time.sleep(60)  # Wait 60s for server + momentum pipeline to stabilize
+        _refresh_alpha_cache_background(startup=True)
 
-    alpha_warmup = threading.Thread(target=_immediate_alpha_warmup, daemon=True)
+    alpha_warmup = threading.Thread(target=_delayed_alpha_warmup, daemon=True)
     alpha_warmup.start()
-    print("  📊 Alpha cache warm-up started (sp500 first)")
+    print("  📊 Alpha cache warm-up scheduled (60s delay, lightweight)")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
