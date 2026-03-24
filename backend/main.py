@@ -691,15 +691,18 @@ async def lifespan(app: FastAPI):
     pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
     pipeline_thread.start()
 
-    # Warm alpha calls cache after server is fully booted (lightweight: sp500/75 only)
-    def _delayed_alpha_warmup():
-        import time
-        time.sleep(60)  # Wait 60s for server + momentum pipeline to stabilize
-        _refresh_alpha_cache_background(startup=True)
+    # Warm alpha calls cache AFTER pipeline finishes (not concurrently — avoids OOM on Railway)
+    def _alpha_warmup_after_pipeline():
+        try:
+            pipeline_thread.join()  # Wait for momentum pipeline to fully complete
+            print("  📊 Momentum pipeline done — starting alpha cache warm-up…")
+            _refresh_alpha_cache_background(startup=True)
+        except Exception as e:
+            print(f"  ⚠ Alpha warm-up skipped: {e}")
 
-    alpha_warmup = threading.Thread(target=_delayed_alpha_warmup, daemon=True)
+    alpha_warmup = threading.Thread(target=_alpha_warmup_after_pipeline, daemon=True)
     alpha_warmup.start()
-    print("  📊 Alpha cache warm-up scheduled (60s delay, lightweight)")
+    print("  📊 Alpha warm-up queued (waits for pipeline to finish)")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
