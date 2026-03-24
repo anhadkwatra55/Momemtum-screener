@@ -91,6 +91,16 @@ export type MomentumPhase = "Fresh" | "Exhausting" | "Neutral";
 export type Urgency = "HIGH" | "MODERATE" | "LOW";
 
 /**
+ * Quant research conviction tier classification.
+ */
+export type ConvictionTier = "Ultra Conviction" | "High Conviction" | "Moderate Conviction" | "Low Conviction" | "Contrarian";
+
+/**
+ * Quant research action category classification.
+ */
+export type ActionCategory = "Top Pick" | "Accumulate" | "Hold & Monitor" | "Caution" | "Reduce Exposure" | "Avoid";
+
+/**
  * Specifies the directional bias of a signal or trade, crucial for strategy definition.
  */
 export type Direction = "BULLISH" | "BEARISH" | "NEUTRAL";
@@ -166,6 +176,14 @@ export interface Signal extends BaseSignal {
   vol_spike?: Score; // Magnitude of a recent volume spike.
   ta_branch?: string; // Technical analysis branch or pattern identified.
   cluster_size?: Count; // Number of signals or assets in a detected cluster.
+  conviction_tier?: ConvictionTier; // Quant research conviction tier.
+  action_category?: ActionCategory; // Quant research action category.
+  // Moby.invest-style research fields
+  thesis?: string; // Auto-generated 2-3 sentence research brief.
+  price_target?: number | null; // ATR-based price target.
+  stop_loss?: number | null; // ATR-based stop loss.
+  upside_pct?: number | null; // Target upside percentage.
+  risk_reward?: number | null; // Risk/reward ratio.
   // Advanced signal triggers, using dedicated interfaces for structured data.
   momentum_shock?: MomentumShockSignalTrigger;
   smart_money?: SmartMoneySignalTrigger;
@@ -293,6 +311,8 @@ export interface KPISummary {
   avg_probability: Probability; // Average probability across all active signals.
   top_bull: string; // Ticker symbol of the top bullish asset.
   top_bear: string; // Ticker symbol of the top bearish asset.
+  tier_distribution?: Record<ConvictionTier, Count>; // Conviction tier distribution.
+  action_distribution?: Record<ActionCategory, Count>; // Action category distribution.
 }
 
 // ── Full Dashboard Data (from momentum_data.json) ──
@@ -331,6 +351,12 @@ export interface DashboardData {
   hidden_gems: Signal[];
   high_yield_etfs: YieldSignal[];
   dividend_stocks: YieldSignal[];
+  ai_stocks: Signal[];
+  bullish_momentum: Signal[];
+  high_volume_gappers: Signal[];
+  earnings_growers: Signal[];
+  momentum_95: Signal[];
+  top_picks: Signal[]; // Quant research top picks (Top Pick + Accumulate action categories).
   quote: Quote;
   all_quotes: Quote[];
   db_stats?: DBStats;

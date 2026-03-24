@@ -1,88 +1,73 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sidebar } from "./sidebar";
-import { motion } from "framer-motion";
-import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
-import { SFIcon } from "../ui/sf-icon";
-import {
-  SPRING_PHYSICS_DEFAULT,
-  Z_INDEX,
-  HAMBURGER_BUTTON_INITIAL_SHADOW,
-  HAMBURGER_BUTTON_HOVER_SHADOW,
-} from "../../lib/constants";
+import { TopNav } from "./topnav";
 
 interface AppShellProps {
   children: (activePage: string, setActivePage: (p: string) => void) => React.ReactNode;
   dbStats?: string;
 }
 
-export function AppShell({ children, dbStats }: AppShellProps) {
-  const [activePage, setActivePage] = useState("intelligence");
+function AppShellInner({ children, dbStats }: AppShellProps) {
+  const searchParams = useSearchParams();
+  const initialView = searchParams.get("view") || "market-pulse";
+
+  const [activePage, setActivePage] = useState(initialView);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const hamburgerInitial = useMemo(() => ({
-    y: 0,
-    boxShadow: HAMBURGER_BUTTON_INITIAL_SHADOW,
-  }), []);
-
-  const hamburgerWhileHover = useMemo(() => ({
-    y: -2,
-    boxShadow: HAMBURGER_BUTTON_HOVER_SHADOW,
-  }), []);
-
-  const hamburgerTransition = useMemo(() => (
-    SPRING_PHYSICS_DEFAULT
-  ), []);
+  // Sync with URL changes (e.g. back/forward navigation)
+  useEffect(() => {
+    const view = searchParams.get("view");
+    if (view && view !== activePage) {
+      setActivePage(view);
+    }
+  }, [searchParams]);
 
   const handleNavigate = useCallback((page: string) => {
     setActivePage(page);
-    setSidebarOpen(false); // Close the mobile sheet on navigation
+    setSidebarOpen(false);
+    // Update URL without full page reload
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", page);
+    window.history.replaceState({}, "", url.toString());
   }, []);
 
+  const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
+  const handleCloseSidebar = useCallback(() => setSidebarOpen(false), []);
+
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop Sidebar — Always present and visible on medium screens and above */}
-      <div className="hidden md:block">
-        <Sidebar
-          activePage={activePage}
-          onNavigate={setActivePage}
-          dbStats={dbStats}
-          isOpen={true} // For desktop, Sidebar is always conceptually "open"
-          onClose={useCallback(() => {}, [])} // No-op for desktop as it's not a temporary modal
-        />
-      </div>
+    <div className="flex min-h-screen bg-[#0d0d0d]" style={{ fontFamily: "'Inter', var(--font-sans), sans-serif" }}>
+      {/* Top Nav — z-50 */}
+      <TopNav onMenuClick={handleOpenSidebar} />
 
-      {/* Mobile Sidebar (Sheet) — Only visible on small screens when triggered */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <motion.button
-          className={`fixed top-3 left-3 z-50 md:hidden w-11 h-11 flex items-center justify-center rounded-2xl bg-card/80 glass cursor-pointer`}
-          aria-label="Open menu"
-          onClick={() => setSidebarOpen(true)}
-          initial={hamburgerInitial}
-          whileHover={hamburgerWhileHover}
-          whileTap={{ scale: 0.95 }}
-          transition={hamburgerTransition}
-        >
-          <SFIcon name="line.horizontal.3" className="text-foreground" />
-        </motion.button>
-        <SheetContent side="left" className="p-0 bg-transparent border-none w-[240px]">
-          {/* Sidebar content for mobile, rendered inside the Sheet.
-              The Sidebar component itself is expected to apply its glassmorphic background and styling. */}
-          <Sidebar
-            activePage={activePage}
-            onNavigate={handleNavigate}
-            dbStats={dbStats}
-            isOpen={true} // When inside SheetContent, Sidebar content is conceptually "open"
-            onClose={useCallback(() => setSidebarOpen(false), [])} // If Sidebar has an internal close button, it should close the sheet
-          />
-        </SheetContent>
-      </Sheet>
+      {/* Sidebar — desktop z-30, mobile overlay z-90, mobile panel z-100 */}
+      <Sidebar
+        activePage={activePage}
+        onNavigate={handleNavigate}
+        dbStats={dbStats}
+        isOpen={sidebarOpen}
+        onClose={handleCloseSidebar}
+      />
 
-      {/* Main content — collapses margin on mobile, takes sidebar space on desktop */}
-      <main className="ml-0 md:ml-[240px] flex-1 min-w-0 overflow-x-hidden p-4 md:p-6 min-h-screen relative z-[1] pt-16 md:pt-6">
+      {/* Main content — no z-index needed, natural flow */}
+      <main className="ml-0 md:ml-[220px] flex-1 min-w-0 overflow-x-hidden px-3 py-3 md:px-5 md:py-5 min-h-screen pt-[54px] md:pt-[54px]">
         {children(activePage, setActivePage)}
       </main>
     </div>
+  );
+}
+
+// Wrap in Suspense for useSearchParams
+export function AppShell(props: AppShellProps) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#2d2d2d] border-t-[#e2b857] rounded-full animate-spin" />
+      </div>
+    }>
+      <AppShellInner {...props} />
+    </Suspense>
   );
 }

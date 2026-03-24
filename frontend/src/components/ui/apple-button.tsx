@@ -1,12 +1,9 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode, memo, useMemo } from "react";
+import { forwardRef, type ReactNode, memo, useMemo } from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
-  SPRING_TRANSITION,
-  SHADOW_BUTTON_SECONDARY_HOVER,
-  SHADOW_BUTTON_GHOST_HOVER,
   SHADOW_BUTTON_PRIMARY_FOCUS,
   SHADOW_BUTTON_DANGER_FOCUS,
   SHADOW_BUTTON_SECONDARY_FOCUS,
@@ -22,27 +19,28 @@ export interface AppleButtonProps extends Omit<HTMLMotionProps<"button">, "child
   icon?: ReactNode;
   children: ReactNode;
   loading?: boolean;
-  glowColor?: string; // Accepted but not used on button DOM — prevents leak to motion.button
+  glowColor?: string;
 }
 
+// Carbon Terminal button styles
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-gradient-to-r from-cyan-500 to-cyan-600 text-white font-semibold shadow-[var(--shadow-glow-cyan)]",
+    "bg-[#00FF66] text-black font-semibold",
   secondary:
-    "bg-white/[0.04] text-secondary-foreground glass-subtle shadow-[var(--shadow-soft)]",
+    "bg-[#1C1C1C] text-[#C0C0C0] border border-[#2A2A2A]",
   ghost:
-    "bg-transparent text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+    "bg-transparent text-[#6B6B6B] hover:bg-[#1C1C1C] hover:text-[#E8E8E8]",
   danger:
-    "bg-gradient-to-r from-rose-500 to-rose-600 text-white font-semibold shadow-[var(--shadow-glow-rose)]",
+    "bg-[#FF3333] text-white font-semibold",
 };
 
 const sizeStyles: Record<Size, string> = {
-  sm: "px-3.5 py-4 text-xs gap-1.5 rounded-[1.4rem] min-h-[44px]",
-  md: "px-5 py-4 text-sm gap-2 rounded-[1.4rem] min-h-[44px]",
-  lg: "px-7 py-4 text-base gap-2.5 rounded-[1.4rem] min-h-[44px]",
+  sm: "px-3 py-1.5 text-[10px] gap-1.5 rounded-[2px] min-h-[28px] font-mono-data tracking-[0.04em] uppercase",
+  md: "px-4 py-2 text-xs gap-2 rounded-[2px] min-h-[32px] font-mono-data tracking-[0.04em] uppercase",
+  lg: "px-5 py-2.5 text-xs gap-2.5 rounded-[3px] min-h-[36px] font-mono-data tracking-[0.04em] uppercase",
 };
 
-const whileTapProps = { scale: 0.96 };
+const whileTapProps = { scale: 0.97 };
 
 export const AppleButton = memo(
   forwardRef<HTMLButtonElement, AppleButtonProps>(
@@ -54,38 +52,14 @@ export const AppleButton = memo(
 
       const whileHoverProps = useMemo(() => {
         if (isDisabled) return undefined;
-
-        let boxShadowValue = undefined;
-        if (variant === "secondary") {
-          boxShadowValue = SHADOW_BUTTON_SECONDARY_HOVER;
-        } else if (variant === "ghost") {
-          boxShadowValue = SHADOW_BUTTON_GHOST_HOVER;
-        }
-
-        return {
-          y: -2,
-          boxShadow: boxShadowValue,
+        // Carbon Terminal: border glow on hover
+        const focusMap: Record<Variant, string> = {
+          primary: SHADOW_BUTTON_PRIMARY_FOCUS,
+          danger: SHADOW_BUTTON_DANGER_FOCUS,
+          secondary: SHADOW_BUTTON_SECONDARY_FOCUS,
+          ghost: SHADOW_BUTTON_GHOST_FOCUS,
         };
-      }, [isDisabled, variant]);
-
-      const whileFocusProps = useMemo(() => {
-        if (isDisabled) return undefined;
-
-        let boxShadowValue = undefined;
-        if (variant === "primary") {
-          boxShadowValue = SHADOW_BUTTON_PRIMARY_FOCUS;
-        } else if (variant === "danger") {
-          boxShadowValue = SHADOW_BUTTON_DANGER_FOCUS;
-        } else if (variant === "secondary") {
-          boxShadowValue = SHADOW_BUTTON_SECONDARY_FOCUS;
-        } else if (variant === "ghost") {
-          boxShadowValue = SHADOW_BUTTON_GHOST_FOCUS;
-        }
-
-        return {
-          y: -2,
-          boxShadow: boxShadowValue,
-        };
+        return { boxShadow: focusMap[variant] };
       }, [isDisabled, variant]);
 
       return (
@@ -93,22 +67,20 @@ export const AppleButton = memo(
           ref={ref}
           className={cn(
             "inline-flex items-center justify-center font-medium outline-none",
-            "transition-[background,border-color,color,box-shadow] duration-200 relative overflow-hidden",
-            "tracking-[-0.03em]", // Apply precise letter-spacing for UI text
+            "transition-all duration-[50ms] ease-out relative overflow-hidden",
             variantStyles[variant],
             sizeStyles[size],
-            isDisabled && "opacity-60 grayscale cursor-not-allowed",
+            isDisabled && "opacity-40 cursor-not-allowed",
             className,
           )}
           whileHover={whileHoverProps}
-          whileFocus={whileFocusProps}
           whileTap={!isDisabled ? whileTapProps : undefined}
-          transition={SPRING_TRANSITION}
+          transition={{ duration: 0.05, ease: "easeOut" }}
           disabled={isDisabled}
           {...rest}
         >
           {loading ? (
-            <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+            <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
           ) : icon ? (
             <span className="flex-shrink-0">{icon}</span>
           ) : null}

@@ -8,8 +8,12 @@ import {
   fetchSignals,
   fetchTickerChart,
   fetchDerived,
+  getPipelineStatus,
 } from "@/services/api";
 import { SORTABLE_SIGNAL_KEYS, ValidSignalSortKey, DEFAULT_SIGNAL_REFRESH_INTERVAL_MS } from "@/lib/constants";
+
+// Wave polling interval (ms) — how often to check for new pipeline waves
+const WAVE_POLL_INTERVAL_MS = 8_000;
 
 // ── Loading state per data tier ──
 interface TierLoadingState {
@@ -145,10 +149,14 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
   }, []);
 
   // ── On-demand chart fetch (Tier 4) ──
+  const chartFailedRef = useRef<Set<string>>(new Set());
+
   const fetchChart = useCallback(async (ticker: string): Promise<TickerChartData | null> => {
     const upper = ticker.toUpperCase();
-    // Return from cache if available
+    // Return from cache if available (including failed placeholders)
     if (chartCache[upper]) return chartCache[upper];
+    // Don't retry failed tickers
+    if (chartFailedRef.current.has(upper)) return null;
 
     setChartLoading(upper);
     try {
@@ -162,7 +170,12 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
       } : prev);
       return chart;
     } catch (e) {
-      console.error(`Failed to fetch chart for ${upper}`, e);
+      console.warn(`Chart unavailable for ${upper} (likely not in screener universe)`);
+      // Mark as failed so we don't retry
+      chartFailedRef.current.add(upper);
+      // Cache an empty placeholder so the UI shows "no data" instead of looping
+      const emptyChart = { price: [], hull_ma: [], candlestick: [] } as unknown as TickerChartData;
+      setChartCache(prev => ({ ...prev, [upper]: emptyChart }));
       return null;
     } finally {
       setChartLoading(null);
@@ -178,16 +191,61 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
     performInitialLoad();
   }, [loadProgressively]);
 
-  // Background refresh — no loading spinner, silent update
+  // Background refresh — wave-aware polling
+  // When the pipeline is actively running, poll /api/pipeline/status every 8s.
+  // When wave_version increments (new wave published), re-fetch dashboard data.
+  // After pipeline completes, fall back to the standard refresh interval.
+  const lastWaveVersionRef = useRef<number>(0);
+
   useEffect(() => {
-    if (refreshInterval && refreshInterval > 0) {
+    let active = true;
+
+    const pollForWaves = async () => {
+      if (!active) return;
+      try {
+        const status = await getPipelineStatus();
+        const serverWave = (status as Record<string, unknown>)?.wave_version as number | undefined;
+        const isComplete = (status as Record<string, unknown>)?.is_complete as boolean | undefined;
+
+        if (serverWave !== undefined && serverWave > lastWaveVersionRef.current) {
+          lastWaveVersionRef.current = serverWave;
+          // New wave published — silently re-fetch data
+          await loadProgressively();
+        }
+
+        // If pipeline is still running, keep polling fast
+        if (!isComplete && active) {
+          setTimeout(pollForWaves, WAVE_POLL_INTERVAL_MS);
+        }
+      } catch {
+        // Pipeline status endpoint may not be available yet, retry
+        if (active) {
+          setTimeout(pollForWaves, WAVE_POLL_INTERVAL_MS);
+        }
+      }
+    };
+
+    // Start wave polling after initial load
+    if (initialLoadComplete) {
+      const startTimer = setTimeout(pollForWaves, WAVE_POLL_INTERVAL_MS);
+      return () => {
+        active = false;
+        clearTimeout(startTimer);
+      };
+    }
+    return () => { active = false; };
+  }, [initialLoadComplete, loadProgressively]);
+
+  // Standard slow refresh after pipeline completes (60s default)
+  useEffect(() => {
+    if (refreshInterval && refreshInterval > 0 && initialLoadComplete) {
       const intervalId = setInterval(() => {
         loadProgressively();
       }, refreshInterval);
       return () => clearInterval(intervalId);
     }
     return undefined;
-  }, [refreshInterval, loadProgressively]);
+  }, [refreshInterval, loadProgressively, initialLoadComplete]);
 
   // Auto-select first ticker when signals load
   useEffect(() => {

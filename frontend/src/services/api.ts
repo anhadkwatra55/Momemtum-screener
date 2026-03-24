@@ -116,7 +116,7 @@ interface ApiFetchOptions extends RequestInit {
  * @throws {ApiError} Throws a custom `ApiError` if the server responds with a non-OK status after all retries.
  * @throws {Error} Throws a generic `Error` for network issues or unexpected errors during the fetch operation.
  */
-async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
   const url = `${API_BASE}${path}`;
   const method = options?.method?.toUpperCase() || "GET";
   const {
@@ -796,6 +796,29 @@ export async function fetchSignals(): Promise<{ signals: Signal[] }> {
  */
 export async function fetchTickerChart(ticker: string): Promise<{ ticker: string; charts: TickerChartData }> {
   return apiFetch<{ ticker: string; charts: TickerChartData }>(`/api/charts/${ticker.toUpperCase()}`, { cache: true, cacheTTLSeconds: 120 });
+}
+
+/**
+ * Fetches weekly top momentum data — daily snapshots of top tickers with trend info.
+ */
+export async function fetchWeeklyTopMomentum(topN: number = 5): Promise<unknown> {
+  return apiFetch<unknown>(`/api/weekly-top-momentum?top_n=${topN}`, { cache: true, cacheTTLSeconds: 120 });
+}
+
+/**
+ * Fetches hybrid prediction (legacy scores + async ML pipeline dispatch).
+ * Returns instant legacy 4-system scores and a job_id for SSE streaming.
+ * No caching — each prediction triggers a fresh ML pipeline run.
+ */
+export async function fetchHybridPrediction(ticker: string): Promise<{
+  legacy_scores: Record<string, unknown> | null;
+  job_id: string;
+  ml_dispatched: boolean;
+  dispatch_error: string | null;
+  status: string;
+  stream_url: string;
+}> {
+  return apiFetch(`/api/predict/hybrid/${ticker.toUpperCase()}`);
 }
 
 /**

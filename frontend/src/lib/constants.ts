@@ -29,18 +29,31 @@ export const ROUTES = {
 // maintaining 'monochrome with one accent' in general UI while
 // providing rich data context.
 export const COLORS = {
-  background: "#050a12", // Near-black with blue tint
-  card: "rgba(15,23,42,0.45)", // Translucent card background, synchronized with --card in globals.css
-  cyan: "#06b6d4", // Primary accent
-  emerald: "#10b981", // Bullish/positive
-  rose: "#f43f5e", // Bearish/negative
-  amber: "#f59e0b", // Warnings/neutral
-  violet: "#8b5cf6", // Secondary accent
-  
-  blue: "#3b82f6", 
-  lime: "#84cc16",
-  orange: "#f97316",
-  slate: "#64748b",
+  // Artifacts base surfaces
+  background: "#0d0d0d",
+  card: "#1a1a1a",
+  // Signal colors — refined, softer
+  cyan: "#4ade80",       // Soft green
+  emerald: "#4ade80",    // Positive
+  rose: "#e05252",       // Negative
+  amber: "#e2b857",      // Muted gold
+  violet: "#9f7aea",     // Soft purple
+  blue: "#707070",
+  lime: "#4ade80",
+  orange: "#e2b857",
+  slate: "#707070",
+  // Artifacts surface tokens
+  carbon: "#1a1a1a",
+  titanium: "#222222",
+  steel: "#2d2d2d",
+  silver: "#707070",
+  chrome: "#a0a0a0",
+  white: "#e0e0e0",
+  green: "#4ade80",
+  red: "#e05252",
+  yellow: "#e2b857",
+  gold: "#e2b857",
+  purple: "#9f7aea",
 } as const;
 
 // ── Sidebar Navigation Items ─────────────────────────────────────────────────
@@ -53,29 +66,26 @@ export interface NavItem {
 }
 
 export const SIDEBAR_NAV: NavItem[] = [
-  // Platform
-  { label: "Intelligence", icon: "bolt.fill", pageId: "intelligence", section: "PLATFORM" },
-  { label: "Vector Market Map", icon: "map.fill", pageId: "vector-map", section: "PLATFORM" },
-  { label: "Sector Intelligence", icon: "antenna.radiowaves.left.and.right", pageId: "sector-intel", section: "PLATFORM" },
-  { label: "Ticker Detail", icon: "chart.bar.fill", pageId: "ticker-detail", section: "PLATFORM" },
-  // Signal Screeners
-  { label: "Fresh Momentum", icon: "leaf.fill", pageId: "fresh", section: "SIGNAL SCREENERS" },
-  { label: "Exhausting Momentum", icon: "flame.fill", pageId: "exhausting", section: "SIGNAL SCREENERS" },
-  { label: "Rotation Breakouts", icon: "tornado", pageId: "rotation", section: "SIGNAL SCREENERS" },
-  { label: "Momentum Shock", icon: "bolt.slash.fill", pageId: "shock", section: "SIGNAL SCREENERS" },
-  { label: "Gamma Squeeze Ops", icon: "target", pageId: "gamma", section: "SIGNAL SCREENERS" },
-  { label: "Smart Money", icon: "dollarsign.circle.fill", pageId: "smart-money", section: "SIGNAL SCREENERS" },
-  { label: "Momentum Continuation", icon: "rocket.fill", pageId: "continuation", section: "SIGNAL SCREENERS" },
-  { label: "Momentum Clusters", icon: "cube.fill", pageId: "clusters", section: "SIGNAL SCREENERS" },
-  { label: "Sector Shock Clusters", icon: "bolt.circle.fill", pageId: "shock-clusters", section: "SIGNAL SCREENERS" },
-  { label: "Hidden Gems", icon: "diamond.fill", pageId: "hidden-gems", section: "SIGNAL SCREENERS" },
-  // Research
-  { label: "Signals & Strategies", icon: "radar.fill", pageId: "signals", section: "RESEARCH" },
-  // Income
-  { label: "High Yield ETFs", icon: "chart.line.uptrend.rectangle.fill", pageId: "yield-etfs", section: "INCOME" },
-  { label: "Dividend Stocks", icon: "dollarsign.square.fill", pageId: "dividend-stocks", section: "INCOME" },
-  // Strategy
-  { label: "Strategy Builder", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
+  // TODAY — "What's happening right now?"
+  { label: "Today", icon: "house.fill", pageId: "today", section: "TODAY" },
+  { label: "Market Pulse", icon: "bolt.fill", pageId: "market-pulse", section: "TODAY" },
+  { label: "Sector Radar", icon: "antenna.radiowaves.left.and.right", pageId: "sector-radar", section: "TODAY" },
+  // RESEARCH — "What should I be watching?"
+  { label: "Momentum Lifecycle", icon: "leaf.fill", pageId: "momentum-lifecycle", section: "RESEARCH" },
+  { label: "Anomaly Detector", icon: "bolt.slash.fill", pageId: "anomaly-detector", section: "RESEARCH" },
+  { label: "Hidden Alpha", icon: "diamond.fill", pageId: "hidden-alpha", section: "RESEARCH" },
+  // PORTFOLIO — "How do I build a portfolio?"
+  { label: "Portfolio X-Ray", icon: "briefcase.fill", pageId: "portfolio-intel", section: "PORTFOLIO" },
+  { label: "Income Engine", icon: "dollarsign.circle.fill", pageId: "income-engine", section: "PORTFOLIO" },
+  // STRATEGY — "Can I prove this works?"
+  { label: "Strategy Lab", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
+  { label: "Alpha Calls", icon: "chart.line.uptrend.xyaxis", pageId: "alpha-calls", section: "STRATEGY" },
+  { label: "Signals & Evidence", icon: "radar.fill", pageId: "signals", section: "STRATEGY" },
+  // INTELLIGENCE — "What am I missing?"
+  { label: "Whale Flow Intel", icon: "exclamationmark.triangle.fill", pageId: "whale-tracker", section: "INTELLIGENCE" },
+  { label: "Insider & Institutional", icon: "person.badge.key.fill", pageId: "insider-buys", section: "INTELLIGENCE" },
+  { label: "Ticker Deep Dive", icon: "chart.bar.fill", pageId: "ticker-detail", section: "INTELLIGENCE" },
+  { label: "Earnings & Growth", icon: "chart.line.uptrend.xyaxis", pageId: "earnings-growers", section: "INTELLIGENCE" },
 ];
 
 // ── Shared Numerical Constants ───────────────────────────────────────────────
@@ -87,11 +97,11 @@ export const DEFAULT_BACKTEST_HISTORY_DAYS = 10; // Default history period for b
 // Defines Tailwind classes for various sentiment levels,
 // used to provide consistent visual feedback with minimal borders.
 export const SENTIMENT_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  "Strong Bullish": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-transparent" },
-  "Bullish": { bg: "bg-lime-500/12", text: "text-lime-400", border: "border-transparent" },
-  "Neutral": { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-transparent" },
-  "Bearish": { bg: "bg-orange-500/12", text: "text-orange-400", border: "border-transparent" },
-  "Strong Bearish": { bg: "bg-rose-500/15", text: "text-rose-400", border: "border-transparent" },
+  "Strong Bullish": { bg: "bg-[#00FF66]/10", text: "text-[#00FF66]", border: "border-[#2A2A2A]" },
+  "Bullish": { bg: "bg-[#00FF66]/8", text: "text-[#00FF66]", border: "border-[#2A2A2A]" },
+  "Neutral": { bg: "bg-[#6B6B6B]/10", text: "text-[#6B6B6B]", border: "border-[#2A2A2A]" },
+  "Bearish": { bg: "bg-[#FFD600]/8", text: "text-[#FFD600]", border: "border-[#2A2A2A]" },
+  "Strong Bearish": { bg: "bg-[#FF3333]/10", text: "text-[#FF3333]", border: "border-[#2A2A2A]" },
 };
 
 // ── Regime Styling ───────────────────────────────────────────────────────────
@@ -99,29 +109,30 @@ export const SENTIMENT_STYLES: Record<string, { bg: string; text: string; border
 // Defines Tailwind classes for various market regimes,
 // used for consistent visual representation with minimal borders.
 export const REGIME_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  "Trending": { bg: "bg-cyan-500/10", text: "text-cyan-400", border: "border-transparent" },
-  "Mean-Reverting": { bg: "bg-violet-500/10", text: "text-violet-400", border: "border-transparent" },
-  "Choppy": { bg: "bg-slate-500/8", text: "text-slate-500", border: "border-transparent" },
+  "Trending": { bg: "bg-[#00FF66]/8", text: "text-[#00FF66]", border: "border-[#2A2A2A]" },
+  "Mean-Reverting": { bg: "bg-[#FFD600]/8", text: "text-[#FFD600]", border: "border-[#2A2A2A]" },
+  "Choppy": { bg: "bg-[#6B6B6B]/8", text: "text-[#6B6B6B]", border: "border-[#2A2A2A]" },
 };
 
 // ── Animation & Motion Constants ─────────────────────────────────────────────
 
 // Centralized constants for Framer Motion animations and general motion design.
 export const MOTION_VARIANTS = {
-    SPRING_TRANSITION_DEFAULT: { type: "spring", stiffness: 300, damping: 30, mass: 1 } as const, // Snappy defaults
-    SPRING_TRANSITION_FAST: { type: "spring", stiffness: 400, damping: 35, mass: 0.8 } as const, // Faster micro-interactions
-    STAGGER_CHILDREN_DELAY_MS: 60, // Delay between staggered children animations (e.g., list items)
-    PAGE_TRANSITION_DURATION_MS: 300, // Overall duration for page transitions
-    PAGE_TRANSITION_INITIAL_Y: 20, // Initial Y offset for page transitions (y 20 -> 0)
-    PAGE_TRANSITION_VARIANTS: { // Framer Motion variants for consistent page transitions
-        initial: { opacity: 0, y: 20 },
-        animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.32, 0.72, 0, 1] } }, // Apple-esque cubic bezier
-        exit: { opacity: 0, y: 10, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] } },
+    // Carbon Terminal: mechanical, no spring overshoot
+    SPRING_TRANSITION_DEFAULT: { type: "tween" as const, duration: 0.1, ease: "easeOut" as const },
+    SPRING_TRANSITION_FAST: { type: "tween" as const, duration: 0.05, ease: "easeOut" as const },
+    STAGGER_CHILDREN_DELAY_MS: 30,
+    PAGE_TRANSITION_DURATION_MS: 150,
+    PAGE_TRANSITION_INITIAL_Y: 8,
+    PAGE_TRANSITION_VARIANTS: {
+        initial: { opacity: 0, y: 8 },
+        animate: { opacity: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" } },
+        exit: { opacity: 0, y: 4, transition: { duration: 0.1, ease: "easeOut" } },
     } as const,
-    HOVER_TRANSLATE_Y: -2, // Y translation for hover effects (translateY(-2px))
-    DEFAULT_ANIMATION_DURATION_MS: 200, // Generic duration for non-spring animations
-    FLASH_ANIMATION_DURATION_MS: 500, // Duration for subtle real-time data flash animations
-    FADE_IN_OUT_DURATION_MS: 150, // For quick opacity transitions
+    HOVER_TRANSLATE_Y: 0, // No hover lift — mechanical
+    DEFAULT_ANIMATION_DURATION_MS: 100,
+    FLASH_ANIMATION_DURATION_MS: 500,
+    FADE_IN_OUT_DURATION_MS: 100,
 } as const;
 
 // ── Layout & Z-Indexing Constants ────────────────────────────────────────────
@@ -143,12 +154,11 @@ export const Z_INDICES = {
 // Centralized definitions for consistent hover, focus, and active states,
 // aligning with the "shadow depth and background tints instead" philosophy.
 export const INTERACTIVE_STYLES = {
-    // General card hover/focus: subtle elevation with a transparent inner border hint
-    APPLE_CARD_HOVER_SHADOW: '0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(15,23,42,0.6)',
-    // Button specific states, combining shadow depth with a subtle glow (cyan primary accent)
-    APPLE_BUTTON_HOVER_SHADOWS: `0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px ${COLORS.cyan}40`, // Elevation + subtle cyan glow
-    APPLE_BUTTON_FOCUS_SHADOWS: `0 0 0 2px ${COLORS.cyan}80`, // Stronger cyan glow for focus-visible
-    APPLE_BUTTON_ACTIVE_SHADOWS: `inset 0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(15,23,42,0.6)`, // Inner shadow for pressed state
+    // Carbon Terminal: no shadows, border-only feedback
+    APPLE_CARD_HOVER_SHADOW: '0 0 0 1px #00FF66',
+    APPLE_BUTTON_HOVER_SHADOWS: '0 0 0 1px #00FF66',
+    APPLE_BUTTON_FOCUS_SHADOWS: '0 0 0 1px #00FF66',
+    APPLE_BUTTON_ACTIVE_SHADOWS: 'inset 0 0 0 1px #00FF66',
 } as const;
 
 // ── Typography Constants ─────────────────────────────────────────────────────
@@ -171,15 +181,14 @@ export const API_CONSTANTS = {
 
 // ── Spring Physics ──────────────────────────────────────────────────────────
 
-export const SPRING_PHYSICS_DEFAULT = { type: "spring" as const, stiffness: 300, damping: 30, mass: 1 };
-
-/** Convenience export — used across many components for Framer Motion transitions */
+// Carbon Terminal: mechanical tween, no spring physics
+export const SPRING_PHYSICS_DEFAULT = { type: "tween" as const, duration: 0.1, ease: "easeOut" as const };
 export const springTransition = SPRING_PHYSICS_DEFAULT;
 
 // ── API / WebSocket Constants ────────────────────────────────────────────────
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8060";
-export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE ?? "ws://localhost:8060/ws";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8060";
+export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE ?? API_BASE.replace(/^http/, "ws") + "/ws";
 
 export const API_MAX_RETRIES = 2;
 export const API_RETRY_DELAY_MS = 500;
@@ -259,14 +268,14 @@ export const Z_INDEX_SHEET_CONTENT = Z_INDICES.MODAL;
 export const Z_INDEX_FLASH = Z_INDICES.BASE;
 export const Z_INDEX = Z_INDICES;
 
-// Shadows
-export const COMMON_HOVER_SHADOW = "0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(15,23,42,0.6)";
-export const CTA_GLOW_SHADOW = `0 2px 8px rgba(0,0,0,0.4), 0 0 0 1px ${COLORS.cyan}40`;
-export const ELEVATED_SHADOW_DEFAULT = "0 8px 40px -6px rgba(0,0,0,0.6), 0 4px 16px -4px rgba(0,0,0,0.4)";
+// Shadows — Carbon Terminal: border-only
+export const COMMON_HOVER_SHADOW = "0 0 0 1px #2A2A2A";
+export const CTA_GLOW_SHADOW = "0 0 0 1px #00FF66";
+export const ELEVATED_SHADOW_DEFAULT = "none";
 export const APPLE_CARD_HOVER_SHADOW = INTERACTIVE_STYLES.APPLE_CARD_HOVER_SHADOW;
-export const INTERACTIVE_CARD_SHADOW_GLOW = `0 4px 24px -4px rgba(6,182,212,0.15), 0 0 0 1px rgba(6,182,212,0.1)`;
+export const INTERACTIVE_CARD_SHADOW_GLOW = "0 0 0 1px #00FF66";
 export const INTERACTIVE_ELEMENT_HOVER_SHADOW_GLOW = INTERACTIVE_CARD_SHADOW_GLOW;
-export const INTERACTIVE_GLOW_CYAN = `0 0 0 1px rgba(6,182,212,0.2), 0 4px 24px -4px rgba(6,182,212,0.15)`;
+export const INTERACTIVE_GLOW_CYAN = "0 0 0 1px rgba(0,255,102,0.3)";
 export const SHADOW_SOFT_VAR = "var(--shadow-soft)";
 export const SHADOW_CARD_VAR = "var(--shadow-card)";
 export const SHADOW_GLOW_CYAN_VAR = "var(--shadow-glow-cyan)";
@@ -278,13 +287,13 @@ export const SHADOWS = {
 };
 
 // Card / Layout
-export const CARD_BORDER_RADIUS = "1.8rem";
-export const CARD_BORDER_RADIUS_REM = 1.8;
+export const CARD_BORDER_RADIUS = "4px";
+export const CARD_BORDER_RADIUS_REM = 0.25;
 export const Z_INDEX_GLOW = 0;
 export const Z_INDEX_CONTENT = 1;
 export const CHART_MIN_HEIGHT = 300;
-export const HEADING_LETTER_SPACING = "-0.03em";
-export const UPPERCASE_LETTER_SPACING = "0.1em";
+export const HEADING_LETTER_SPACING = "-0.02em";
+export const UPPERCASE_LETTER_SPACING = "0.12em";
 export const DEFAULT_ACCENT_COLOR = "cyan" as const;
 
 // Animation flash
@@ -292,15 +301,15 @@ export const FLASH_ANIMATION_DURATION_IN = 150;
 export const FLASH_ANIMATION_DELAY_OUT = 300;
 export const FLASH_ANIMATION_DURATION_OUT = 500;
 export const FLASH_COLORS = {
-  bullish: "rgba(16,185,129,0.12)",
-  bearish: "rgba(244,63,94,0.12)",
-  positive: "#10b981",
-  negative: "#f43f5e",
-  neutral: "#94a3b8",
+  bullish: "rgba(0, 255, 102, 0.15)",
+  bearish: "rgba(255, 51, 51, 0.15)",
+  positive: "#00FF66",
+  negative: "#FF3333",
+  neutral: "#6B6B6B",
 };
 export const FLASH_VARIANTS = {
   initial: { opacity: 0 },
-  animate: { opacity: 1, transition: { duration: 0.15 } },
+  animate: { opacity: 1, transition: { duration: 0.1 } },
   exit: { opacity: 0, transition: { duration: 0.5 } },
 };
 export const SHIMMER_ANIMATION_PROPS = {
@@ -308,8 +317,8 @@ export const SHIMMER_ANIMATION_PROPS = {
   animate: { opacity: 1 },
   transition: { repeat: Infinity, repeatType: "reverse" as const, duration: 1.2 },
 };
-export const ITEM_WHILE_HOVER = { y: -2, transition: SPRING_PHYSICS_DEFAULT };
-export const PAGE_TRANSITION_INITIAL = { opacity: 0, y: 20 };
+export const ITEM_WHILE_HOVER = { y: 0, transition: SPRING_PHYSICS_DEFAULT }; // No hover lift
+export const PAGE_TRANSITION_INITIAL = { opacity: 0, y: 8 };
 export const PAGE_TRANSITION_ANIMATE = { opacity: 1, y: 0 };
 
 // Tooltip / motion presets
@@ -334,15 +343,15 @@ export const BACKTEST_HISTORY_LIMIT = 50;
 
 // RGB / Color helpers
 export const COLOR_RGB_COMPONENTS: Record<string, string> = {
-  cyan: "6, 182, 212",
-  emerald: "16, 185, 129",
-  rose: "244, 63, 94",
-  amber: "245, 158, 11",
-  violet: "139, 92, 246",
-  blue: "59, 130, 246",
-  lime: "132, 204, 22",
-  orange: "249, 115, 22",
-  slate: "100, 116, 139",
+  cyan: "0, 255, 102",
+  emerald: "0, 255, 102",
+  rose: "255, 51, 51",
+  amber: "255, 214, 0",
+  violet: "107, 107, 107",
+  blue: "107, 107, 107",
+  lime: "0, 255, 102",
+  orange: "255, 214, 0",
+  slate: "107, 107, 107",
 };
 
 // Internal chart series ID
@@ -350,24 +359,23 @@ export const INTERNAL_SERIES_ID_HORIZONTAL_LINES = "__horizontal_lines__";
 
 // ── Button Shadow Constants ─────────────────────────────────────────────────
 
-export const SHADOW_BUTTON_SECONDARY_HOVER = "0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(139,92,246,0.2)";
-export const SHADOW_BUTTON_GHOST_HOVER = "0 4px 12px rgba(0,0,0,0.15)";
-export const SHADOW_BUTTON_PRIMARY_FOCUS = `0 0 0 3px rgba(6,182,212,0.3), 0 4px 16px rgba(6,182,212,0.15)`;
-export const SHADOW_BUTTON_DANGER_FOCUS = "0 0 0 3px rgba(244,63,94,0.3), 0 4px 16px rgba(244,63,94,0.15)";
-export const SHADOW_BUTTON_SECONDARY_FOCUS = "0 0 0 3px rgba(139,92,246,0.3), 0 4px 16px rgba(139,92,246,0.15)";
-export const SHADOW_BUTTON_GHOST_FOCUS = "0 0 0 3px rgba(100,116,139,0.2)";
+// Carbon Terminal: minimal border-only focus states
+export const SHADOW_BUTTON_SECONDARY_HOVER = "0 0 0 1px #2A2A2A";
+export const SHADOW_BUTTON_GHOST_HOVER = "0 0 0 1px #2A2A2A";
+export const SHADOW_BUTTON_PRIMARY_FOCUS = "0 0 0 1px #00FF66";
+export const SHADOW_BUTTON_DANGER_FOCUS = "0 0 0 1px #FF3333";
+export const SHADOW_BUTTON_SECONDARY_FOCUS = "0 0 0 1px #C0C0C0";
+export const SHADOW_BUTTON_GHOST_FOCUS = "0 0 0 1px #6B6B6B";
 
-// ── Button / General Glow Shadows ───────────────────────────────────────────
-
-export const GLOW_SHADOW_CYAN = "0 0 16px -2px rgba(6,182,212,0.35)";
-export const GLOW_SHADOW_ROSE = "0 0 16px -2px rgba(244,63,94,0.35)";
+export const GLOW_SHADOW_CYAN = "0 0 0 1px #00FF66";
+export const GLOW_SHADOW_ROSE = "0 0 0 1px #FF3333";
 
 // ── Button Dimension Constants ──────────────────────────────────────────────
 
-export const MIN_BUTTON_HEIGHT_PX = 44;
-export const BUTTON_HEIGHT_LG_PX = 52;
-export const BUTTON_ICON_SIZE_PX = 40;
-export const BUTTON_ICON_SIZE_LG_PX = 48;
+export const MIN_BUTTON_HEIGHT_PX = 36;
+export const BUTTON_HEIGHT_LG_PX = 42;
+export const BUTTON_ICON_SIZE_PX = 32;
+export const BUTTON_ICON_SIZE_LG_PX = 40;
 export const BUTTON_TEXT_LETTER_SPACING_TIGHT = "-0.02em";
 export const BUTTON_TEXT_LETTER_SPACING_NORMAL = "-0.01em";
 export const FOCUS_NEUTRAL_COLOR_KEY = "slate";
@@ -376,15 +384,15 @@ export const MOTION_SPRING_CONFIG = SPRING_PHYSICS_DEFAULT;
 
 // ── Table Constants ─────────────────────────────────────────────────────────
 
-export const TABLE_ROW_HOVER_SHADOW = "0 4px 16px -2px rgba(0,0,0,0.35), 0 0 0 1px rgba(6,182,212,0.12)";
-export const CARD_HOVER_Y_OFFSET = -2;
+export const TABLE_ROW_HOVER_SHADOW = "none";
+export const CARD_HOVER_Y_OFFSET = 0;
 export const Z_INDEX_STICKY_CELL = 10;
 export const Z_INDEX_STICKY_HEADER_FOOTER = 20;
 export const Z_INDEX_STICKY_HEAD = 25;
-export const TABLE_SCROLLED_HEADER_SHADOW = "0 4px 16px -2px rgba(0,0,0,0.3)";
-export const TABLE_SCROLLED_FOOTER_SHADOW = "inset 0 4px 16px -2px rgba(0,0,0,0.3)";
-export const TABLE_SCROLLED_LEFT_COLUMN_SHADOW = "4px 0 12px -4px rgba(0,0,0,0.3)";
-export const TABLE_SCROLLED_RIGHT_COLUMN_SHADOW = "-4px 0 12px -4px rgba(0,0,0,0.3)";
+export const TABLE_SCROLLED_HEADER_SHADOW = "0 1px 0 0 #2A2A2A";
+export const TABLE_SCROLLED_FOOTER_SHADOW = "inset 0 1px 0 0 #2A2A2A";
+export const TABLE_SCROLLED_LEFT_COLUMN_SHADOW = "1px 0 0 0 #2A2A2A";
+export const TABLE_SCROLLED_RIGHT_COLUMN_SHADOW = "-1px 0 0 0 #2A2A2A";
 
 // ── Dialog Constants ────────────────────────────────────────────────────────
 
@@ -401,12 +409,12 @@ export const DIALOG_DESKTOP_VARIANTS = {
   hidden: { opacity: 0, y: 20, x: "-50%", scale: 0.96 },
   visible: { opacity: 1, y: "-50%", x: "-50%", scale: 1 },
 };
-export const DIALOG_CLOSE_BUTTON_HOVER = { scale: 1.08, backgroundColor: "rgba(15,23,42,0.8)" };
+export const DIALOG_CLOSE_BUTTON_HOVER = { scale: 1.08, backgroundColor: "rgba(42,42,42,0.8)" };
 export const DIALOG_CLOSE_BUTTON_TAP = { scale: 0.92 };
 export const DIALOG_CLOSE_BUTTON_TRANSITION = SPRING_PHYSICS_DEFAULT;
-export const DIALOG_CLOSE_BUTTON_FOCUS_SHADOW = "0 0 0 2px rgba(6,182,212,0.4)";
+export const DIALOG_CLOSE_BUTTON_FOCUS_SHADOW = "0 0 0 1px #00FF66";
 export const DIALOG_CLOSE_BUTTON_FOCUS_Y = -1;
-export const DIALOG_CLOSE_BUTTON_FOCUS_BG = "focus-visible:bg-slate-800/80";
+export const DIALOG_CLOSE_BUTTON_FOCUS_BG = "focus-visible:bg-[#1C1C1C]/80";
 
 // ── Select Constants ────────────────────────────────────────────────────────
 
@@ -444,9 +452,9 @@ export const SHADOW_CARD_ELEVATED = "var(--shadow-elevated)";
 export const ITEM_HOVER_Y = -2;
 export const MIN_TOUCH_TARGET_SIZE_PX = 44;
 export const INPUT_DEFAULT_SHADOW = "var(--shadow-soft)";
-export const INPUT_FOCUS_GLOW_SHADOW = `0 0 0 2px ${COLORS.cyan}40, ${ELEVATED_SHADOW_DEFAULT}`;
-export const ITEM_ACTIVE_BG = "rgba(6, 182, 212, 0.08)";
-export const ITEM_FOCUS_GLOW_SHADOW = `0 0 0 1px ${COLORS.cyan}30`;
+export const INPUT_FOCUS_GLOW_SHADOW = "0 0 0 1px #00FF66";
+export const ITEM_ACTIVE_BG = "rgba(0, 255, 102, 0.06)";
+export const ITEM_FOCUS_GLOW_SHADOW = "0 0 0 1px #00FF6630";
 export const Z_INDEX_DROPDOWN_OVERLAY = Z_INDICES.DROPDOWN;
 
 // ── Leaderboard Constants ───────────────────────────────────────────────────
@@ -460,22 +468,22 @@ export const AURA_LABELS: Record<string, string> = {
   weak: "Weak",
 };
 export const AURA_SCORE_THRESHOLDS = { ultra: 90, elite: 75, strong: 60, moderate: 45, neutral: 30, weak: 0 } as const;
-export const SPRING_PHYSICS_SNAPPY = { type: "spring" as const, stiffness: 400, damping: 35, mass: 0.8 };
+export const SPRING_PHYSICS_SNAPPY = { type: "tween" as const, duration: 0.05, ease: "easeOut" as const };
 export const FLASH_TRANSITION = {
   duration: 0.5,
   ease: "easeInOut" as const,
-  flashColor: COLORS.cyan,
+  flashColor: COLORS.green,
 };
 export const LEADERBOARD_SCORE_MULTIPLIER = 100;
 export const LEADERBOARD_SCORE_OFFSET = 0;
 export const LEADERBOARD_MIN_PROGRESS_SCALE = 0.05;
 export const LEADERBOARD_MAX_PROGRESS_SCALE = 1.0;
-export const INTERACTIVE_HOVER_PROPS = { y: -2, boxShadow: INTERACTIVE_CARD_SHADOW_GLOW };
-export const INTERACTIVE_FOCUS_PROPS = { y: -2, boxShadow: `0 0 0 2px ${COLORS.cyan}60` };
+export const INTERACTIVE_HOVER_PROPS = { y: 0, boxShadow: "0 0 0 1px #00FF66" };
+export const INTERACTIVE_FOCUS_PROPS = { y: 0, boxShadow: "0 0 0 1px #00FF66" };
 
 // ── Ticker Modal Constants ──────────────────────────────────────────────────
 
-export const SHADOW_ELEVATED_HOVER = "0 8px 40px -6px rgba(0,0,0,0.6), 0 0 0 1px rgba(6,182,212,0.15)";
+export const SHADOW_ELEVATED_HOVER = "0 0 0 1px #00FF66";
 export const SHADOW_CTA_GLOW = CTA_GLOW_SHADOW;
 export const TEXT_GLOW_CYAN = "";
 export const LETTER_SPACING = {
@@ -486,7 +494,7 @@ export const LETTER_SPACING = {
 
 // ── Rotation Signals Constants ──────────────────────────────────────────────
 
-export const CARD_HOVER_BACKGROUND = "rgba(6, 182, 212, 0.03)";
+export const CARD_HOVER_BACKGROUND = "rgba(0, 255, 102, 0.04)";
 export const SF_SYMBOLS: Record<string, string> = {
   "bolt.fill": "bolt.fill",
   "leaf.fill": "leaf.fill",
@@ -509,23 +517,23 @@ export const BACKTEST_PROGRESS_MAX_SIMULATED = 85;
 
 // ── Chart/Layout Utility Constants ──────────────────────────────────────────
 
-export const TRACKING_HEADING_CLASS = "tracking-[-0.03em]";
-export const CARD_HOVER_MOTION_PROPS = { y: -2, boxShadow: INTERACTIVE_CARD_SHADOW_GLOW };
-export const LIST_ITEM_HOVER_MOTION_PROPS = { y: -1, boxShadow: "var(--shadow-soft)" };
-export const SHADOW_GLOW_CYAN_VALUE = `0 0 0 1px rgba(6,182,212,0.2), 0 4px 24px -4px rgba(6,182,212,0.15)`;
+export const TRACKING_HEADING_CLASS = "tracking-[-0.02em]";
+export const CARD_HOVER_MOTION_PROPS = { y: 0, boxShadow: "0 0 0 1px #00FF66" };
+export const LIST_ITEM_HOVER_MOTION_PROPS = { y: 0, boxShadow: "none" };
+export const SHADOW_GLOW_CYAN_VALUE = "0 0 0 1px rgba(0,255,102,0.3)";
 export const MIN_CHART_HEIGHT_CLASS = "min-h-[300px]";
 
 // ── Page Motion Variants ────────────────────────────────────────────────────
 
 export const PAGE_MOTION_VARIANTS = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.32, 0.72, 0, 1] } },
-  exit: { opacity: 0, y: 10, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] } },
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" } },
+  exit: { opacity: 0, y: 4, transition: { duration: 0.1, ease: "easeOut" } },
 };
 export const PAGE_TRANSITION_VARIANTS_PROPS = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 8 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: 10 },
+  exit: { opacity: 0, y: 4 },
 };
 
 // ── Icon Size Constants ─────────────────────────────────────────────────────

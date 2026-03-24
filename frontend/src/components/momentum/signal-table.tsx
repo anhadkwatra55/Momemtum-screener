@@ -1,7 +1,7 @@
 "use client";
 
 import { cn, getBackgroundColorClass, getTextColorClass, getBorderColorClass } from "@/lib/utils";
-import { SentimentBadge } from "./sentiment-badge";
+import { ConvictionBadge, ActionBadge } from "./conviction-badge";
 import { RegimeBadge } from "./regime-badge";
 import { COLORS, springTransition } from "@/lib/constants";
 import type { Signal } from "@/types/momentum";
@@ -12,7 +12,8 @@ import { usePrevious } from "@/hooks/use-previous";
 // --- Constants ---
 const COLUMNS: { key: string; label: string; shortLabel?: string; className?: string }[] = [
   { key: "ticker", label: "Ticker", className: "sticky left-0 z-30 bg-card/80 backdrop-blur-sm" },
-  { key: "sentiment", label: "Sentiment" },
+  { key: "conviction_tier", label: "Conviction" },
+  { key: "action_category", label: "Action" },
   { key: "composite", label: "Composite" },
   { key: "probability", label: "Prob%", shortLabel: "Prob" },
   { key: "sys1_score", label: "S1" },
@@ -189,11 +190,12 @@ const SignalTableRow = React.memo(function SignalTableRow({
     <td key="ticker" className={cn("py-3 px-4 font-inter text-base font-semibold", columnClasses[0])}>
       {renderFlashValue(ticker, 'ticker')}
     </td>,
-    <td key="sentiment" className={cn("py-3 px-4", columnClasses[1])}><SentimentBadge sentiment={sentiment} /></td>,
-    <td key="composite" className={cn("py-3 px-4 font-mono-data text-base font-bold", getScoreColorClass(composite), columnClasses[2])}>
+    <td key="conviction_tier" className={cn("py-3 px-4", columnClasses[1])}><ConvictionBadge tier={signal.conviction_tier ?? 'Contrarian'} /></td>,
+    <td key="action_category" className={cn("py-3 px-4", columnClasses[2])}><ActionBadge action={signal.action_category ?? 'Hold & Monitor'} /></td>,
+    <td key="composite" className={cn("py-3 px-4 font-mono-data text-base font-bold", getScoreColorClass(composite), columnClasses[3])}>
       {renderFlashValue(composite.toFixed(2), 'composite', getScoreColorClass(composite))}
     </td>,
-    <td key="probability" className={cn("py-3 px-4", columnClasses[3])}>
+    <td key="probability" className={cn("py-3 px-4", columnClasses[4])}>
       <div className="min-w-[60px]">
         {renderFlashValue(probability + '%', 'probability', getTextColorClass(probColorKey))}
         <div className="w-full h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden">
@@ -206,29 +208,29 @@ const SignalTableRow = React.memo(function SignalTableRow({
         </div>
       </div>
     </td>,
-    <td key="sys1_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys1_score), columnClasses[4])}>
+    <td key="sys1_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys1_score), columnClasses[5])}>
       {renderFlashValue(sys1_score.toFixed(1), 'sys1_score', getScoreColorClass(sys1_score))}
     </td>,
-    <td key="sys2_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys2_score), columnClasses[5])}>
+    <td key="sys2_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys2_score), columnClasses[6])}>
       {renderFlashValue(sys2_score.toFixed(1), 'sys2_score', getScoreColorClass(sys2_score))}
     </td>,
-    <td key="sys3_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys3_score), columnClasses[6])}>
+    <td key="sys3_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys3_score), columnClasses[7])}>
       {renderFlashValue(sys3_score.toFixed(1), 'sys3_score', getScoreColorClass(sys3_score))}
     </td>,
-    <td key="sys4_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys4_score), columnClasses[7])}>
+    <td key="sys4_score" className={cn("py-3 px-4 font-mono-data text-sm", getScoreColorClass(sys4_score), columnClasses[8])}>
       {renderFlashValue(sys4_score.toFixed(1), 'sys4_score', getScoreColorClass(sys4_score))}
     </td>,
-    <td key="regime" className={cn("py-3 px-4", columnClasses[8])}><RegimeBadge regime={regime} /></td>,
-    <td key="price" className={cn("py-3 px-4 font-mono-data text-base", columnClasses[9])}>
+    <td key="regime" className={cn("py-3 px-4", columnClasses[9])}><RegimeBadge regime={regime} /></td>,
+    <td key="price" className={cn("py-3 px-4 font-mono-data text-base", columnClasses[10])}>
       {renderFlashValue('$' + price.toFixed(2), 'price')}
     </td>,
-    <td key="daily_change" className={cn("py-3 px-4 font-mono-data text-base font-semibold", getTextColorClass(dailyChangeColorKey), columnClasses[10])}>
+    <td key="daily_change" className={cn("py-3 px-4 font-mono-data text-base font-semibold", getTextColorClass(dailyChangeColorKey), columnClasses[11])}>
       {renderFlashValue((daily_change > 0 ? "+" : "") + daily_change.toFixed(2) + '%', 'daily_change', getTextColorClass(dailyChangeColorKey))}
     </td>,
-    <td key="return_20d" className={cn("py-3 px-4 font-mono-data text-base", getTextColorClass(return20dColorKey), columnClasses[11])}>
+    <td key="return_20d" className={cn("py-3 px-4 font-mono-data text-base", getTextColorClass(return20dColorKey), columnClasses[12])}>
       {renderFlashValue((return_20d > 0 ? "+" : "") + return_20d.toFixed(2) + '%', 'return_20d', getTextColorClass(return20dColorKey))}
     </td>,
-    <td key="sector" className={cn("py-3 px-4 text-sm text-slate-400 tracking-tight", columnClasses[12])}>
+    <td key="sector" className={cn("py-3 px-4 text-sm text-slate-400 tracking-tight", columnClasses[13])}>
       {renderFlashValue(sector, 'sector')}
     </td>,
   ];
@@ -433,11 +435,13 @@ export const SignalTable = React.memo(function SignalTable({
   const handleSort = useCallback((key: string) => onSort(key), [onSort]);
   const handleSelectTicker = useCallback((ticker: string) => onSelectTicker(ticker), [onSelectTicker]);
 
-  const { high, med, low } = useMemo(() => {
-    const high = signals.filter((s) => s.probability >= 70);
-    const med = signals.filter((s) => s.probability >= 40 && s.probability < 70);
-    const low = signals.filter((s) => s.probability < 40);
-    return { high, med, low };
+  const { ultra, high, moderate, low, contrarian } = useMemo(() => {
+    const ultra = signals.filter((s) => s.conviction_tier === 'Ultra Conviction');
+    const high = signals.filter((s) => s.conviction_tier === 'High Conviction');
+    const moderate = signals.filter((s) => s.conviction_tier === 'Moderate Conviction');
+    const low = signals.filter((s) => s.conviction_tier === 'Low Conviction');
+    const contrarian = signals.filter((s) => !s.conviction_tier || s.conviction_tier === 'Contrarian');
+    return { ultra, high, moderate, low, contrarian };
   }, [signals]);
 
   const columnClasses = useMemo(() => COLUMNS.map(col => col.className || ''), []);
@@ -532,6 +536,17 @@ export const SignalTable = React.memo(function SignalTable({
             <motion.tbody
                 layout="position"
             >
+              {ultra.length > 0 && (
+                <CollapsibleTier
+                  label="Ultra Conviction"
+                  count={ultra.length}
+                  tierColorKey="amber"
+                  signals={ultra}
+                  onSelectTicker={handleSelectTicker}
+                  selectedTicker={selectedTicker}
+                  columnClasses={columnClasses}
+                />
+              )}
               {high.length > 0 && (
                 <CollapsibleTier
                   label="High Conviction"
@@ -543,12 +558,12 @@ export const SignalTable = React.memo(function SignalTable({
                   columnClasses={columnClasses}
                 />
               )}
-              {med.length > 0 && (
+              {moderate.length > 0 && (
                 <CollapsibleTier
-                  label="Medium Conviction"
-                  count={med.length}
-                  tierColorKey="amber"
-                  signals={med}
+                  label="Moderate Conviction"
+                  count={moderate.length}
+                  tierColorKey="cyan"
+                  signals={moderate}
                   onSelectTicker={handleSelectTicker}
                   selectedTicker={selectedTicker}
                   columnClasses={columnClasses}
@@ -556,10 +571,21 @@ export const SignalTable = React.memo(function SignalTable({
               )}
               {low.length > 0 && (
                 <CollapsibleTier
-                  label="Developing"
+                  label="Low Conviction"
                   count={low.length}
-                  tierColorKey="rose"
+                  tierColorKey="slate"
                   signals={low}
+                  onSelectTicker={handleSelectTicker}
+                  selectedTicker={selectedTicker}
+                  columnClasses={columnClasses}
+                />
+              )}
+              {contrarian.length > 0 && (
+                <CollapsibleTier
+                  label="Contrarian"
+                  count={contrarian.length}
+                  tierColorKey="rose"
+                  signals={contrarian}
                   onSelectTicker={handleSelectTicker}
                   selectedTicker={selectedTicker}
                   columnClasses={columnClasses}

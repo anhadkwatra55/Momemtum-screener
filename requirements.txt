@@ -1,0 +1,2 @@
+# Root-level requirements — Railway/Render autodiscovery
+-r backend/requirements.txt

@@ -1,113 +1,121 @@
 "use client";
 
-import React, { useEffect, useCallback, useMemo } from "react";
-import { cn, getTextColorClass, formatValue, PaletteColorKey } from "@/lib/utils";
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { AppleCard } from "@/components/ui/apple-card";
-import { SPRING_TRANSITION, STAGGER_CHILDREN_DELAY } from "@/lib/constants";
+import React, { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
+import { motion, useMotionValue, useSpring, useTransform, animate } from "framer-motion";
 
-interface AnimatedNumberProps {
-  value: number;
-  prefix?: string;
-  suffix?: string;
-  className?: string;
-  colorKey?: PaletteColorKey;
-  animateCount?: boolean;
-}
+// ── Carbon Terminal Palette Key → color mapping ──
+type PaletteColorKey = "cyan" | "emerald" | "amber" | "rose" | "slate" | "violet" | "blue" | "lime" | "orange";
 
-const AnimatedNumber = ({ value, prefix = "", suffix = "", className, colorKey = "cyan", animateCount = true }: AnimatedNumberProps) => {
-  const count = useMotionValue(value);
-  const formattedText = useTransform(count, (latest) => formatValue(latest, prefix, suffix));
-
-  useEffect(() => {
-    if (animateCount) {
-      const animation = animate(count, value, SPRING_TRANSITION);
-      return animation.stop;
-    } else {
-      count.set(value);
-    }
-  }, [count, value, animateCount]);
-
-  return (
-    <motion.span className={cn("font-mono-data", className, getTextColorClass(colorKey))}>
-      {formattedText}
-    </motion.span>
-  );
+const CT_COLORS: Record<PaletteColorKey, { text: string; border: string; bg: string }> = {
+  cyan:    { text: "text-[#00FF66]", border: "border-[#00FF66]/25", bg: "bg-[#00FF66]/6" },
+  emerald: { text: "text-[#00FF66]", border: "border-[#00FF66]/25", bg: "bg-[#00FF66]/6" },
+  lime:    { text: "text-[#00FF66]", border: "border-[#00FF66]/25", bg: "bg-[#00FF66]/6" },
+  amber:   { text: "text-[#FFD600]", border: "border-[#FFD600]/25", bg: "bg-[#FFD600]/6" },
+  orange:  { text: "text-[#FFD600]", border: "border-[#FFD600]/25", bg: "bg-[#FFD600]/6" },
+  rose:    { text: "text-[#FF3333]", border: "border-[#FF3333]/25", bg: "bg-[#FF3333]/6" },
+  slate:   { text: "text-[#6B6B6B]", border: "border-[#2A2A2A]",   bg: "bg-[#6B6B6B]/6" },
+  violet:  { text: "text-[#6B6B6B]", border: "border-[#2A2A2A]",   bg: "bg-[#6B6B6B]/6" },
+  blue:    { text: "text-[#6B6B6B]", border: "border-[#2A2A2A]",   bg: "bg-[#6B6B6B]/6" },
 };
 
-interface KPICardProps {
+/** Animated number counter — tween to target value */
+function AnimatedNumber({ value }: { value: number | string }) {
+  const numericValue = typeof value === "string" ? parseFloat(value) || 0 : value;
+  const motionValue = useMotionValue(0);
+  const display = useTransform(motionValue, (v) => Math.round(v).toLocaleString());
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const controls = animate(motionValue, numericValue, {
+      duration: 0.6,
+      ease: "easeOut",
+    });
+    return controls.stop;
+  }, [numericValue, motionValue]);
+
+  useEffect(() => {
+    const unsubscribe = display.on("change", (v) => {
+      if (ref.current) ref.current.textContent = v;
+    });
+    return unsubscribe;
+  }, [display]);
+
+  return <span ref={ref}>{Math.round(numericValue).toLocaleString()}</span>;
+}
+
+/** Single KPI Telemetry Tile */
+function KPICard({
+  label,
+  value,
+  colorKey = "cyan",
+  prefix = "",
+  suffix = "",
+}: {
   label: string;
   value: number | string;
   colorKey?: PaletteColorKey;
   prefix?: string;
   suffix?: string;
-  animate?: boolean;
-}
-
-const KPICard = React.memo(function KPICard({ label, value, colorKey = "cyan", prefix = "", suffix = "", animate = true }: KPICardProps) {
-  // Memoize common hover props to avoid inline object literals.
-  // AppleCard's native hover effect will handle the shadow and glow based on glowColorKey.
-  const whileHoverProps = useMemo(() => ({
-    y: -2,
-  }), []);
+}) {
+  const colors = CT_COLORS[colorKey] ?? CT_COLORS.cyan;
 
   return (
-    <motion.div variants={itemVariants}>
-      <AppleCard
-        className="p-5 text-center rounded-2xl border-0"
-        whileHover={whileHoverProps}
-        transition={SPRING_TRANSITION}
-        glowColor="cyan" // Enforce primary accent glow for consistency within the KPI strip section
-      >
-        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-2">
-          {label}
-        </div>
-        {typeof value === "number" ? (
-          <AnimatedNumber
-            value={value}
-            prefix={prefix}
-            suffix={suffix}
-            className="text-2xl font-extrabold leading-none"
-            colorKey={colorKey}
-            animateCount={animate}
-          />
-        ) : (
-          <div className={cn("text-2xl font-extrabold font-mono-data leading-none", getTextColorClass(colorKey))}>
-            {prefix}{value}{suffix}
-          </div>
-        )}
-      </AppleCard>
+    <motion.div
+      className={cn(
+        "relative bg-[#111111] border border-[#2A2A2A] rounded-[3px] p-3",
+        "hover:border-[#00FF66]/40 transition-all duration-[50ms] ease-out",
+        "group cursor-default"
+      )}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.1, ease: "easeOut" }}
+    >
+      {/* Label */}
+      <div className="text-[10px] font-mono-data font-medium text-[#6B6B6B] uppercase tracking-[0.12em] mb-1.5">
+        {label}
+      </div>
+
+      {/* Value */}
+      <div className={cn("text-2xl font-mono-data font-bold tabular-nums", colors.text)}>
+        {prefix}
+        <AnimatedNumber value={value} />
+        {suffix}
+      </div>
+
+      {/* Bottom accent line */}
+      <div className={cn(
+        "absolute bottom-0 left-0 right-0 h-[2px]",
+        colors.bg,
+        "opacity-60"
+      )} />
     </motion.div>
   );
-});
+}
 
-// Stagger variants for the KPIStrip container
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      delayChildren: STAGGER_CHILDREN_DELAY,
-      staggerChildren: STAGGER_CHILDREN_DELAY,
-    },
-  },
-};
+// ── Skeleton ──
 
-// Variants for individual KPICard items
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: SPRING_TRANSITION,
-  },
-};
+export function KPISkeleton() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="bg-[#111111] border border-[#2A2A2A] rounded-[3px] p-3 h-[72px]">
+          <div className="skeleton h-3 w-16 mb-2 rounded-[2px]" />
+          <div className="skeleton h-6 w-12 rounded-[2px]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── KPI Strip ──
 
 interface KPIStripProps {
   items: Array<{
     label: string;
     value: number | string;
     colorKey?: PaletteColorKey;
+    color?: PaletteColorKey; // backward compat alias
     prefix?: string;
     suffix?: string;
   }>;
@@ -116,15 +124,10 @@ interface KPIStripProps {
 
 export function KPIStrip({ items, className }: KPIStripProps) {
   return (
-    <motion.div
-      className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-5 lg:gap-6", className)}
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
-    >
+    <div className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2", className)}>
       {items.map((item) => (
-        <KPICard key={item.label} {...item} />
+        <KPICard key={item.label} {...item} colorKey={item.colorKey ?? item.color ?? "cyan"} />
       ))}
-    </motion.div>
+    </div>
   );
 }

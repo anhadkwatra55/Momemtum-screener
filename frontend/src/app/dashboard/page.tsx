@@ -8,6 +8,7 @@ import { KPIStrip } from "@/components/momentum/kpi-strip";
 import { QuoteRotator } from "@/components/momentum/quote-rotator";
 import { useProgressiveData } from "@/hooks/use-progressive-data";
 import { usePipelineStatus } from "@/hooks/use-pipeline-status";
+import { useHybridPrediction } from "@/hooks/use-hybrid-prediction";
 import { DataReveal, CardReveal } from "@/components/ui/data-reveal";
 import { SFIcon } from "@/components/ui/sf-icon";
 import {
@@ -30,33 +31,36 @@ import {
 } from "@/components/ui/select";
 import { AppleButton } from "@/components/ui/apple-button";
 import { Card } from "@/components/ui/card";
+import { ConvictionBadge, ActionBadge, getTierConfig } from "@/components/momentum/conviction-badge";
 
 // ── Lazy-loaded heavy components (code-split per page) ──────────────────────
 const LazySignalTable = dynamic(() => import('@/components/momentum/signal-table').then(m => ({ default: m.SignalTable })), { ssr: false });
 const LazyStrategyCard = dynamic(() => import('@/components/momentum/strategy-card').then(m => ({ default: m.StrategyCard })), { ssr: false });
-const LazyScreenerTable = dynamic(() => import('@/components/momentum/screener-table').then(m => ({ default: m.ScreenerTable })), { ssr: false });
 const LazyLeaderboard = dynamic(() => import('@/components/momentum/leaderboard').then(m => ({ default: m.Leaderboard })), { ssr: false });
 const LazyTopSignals = dynamic(() => import('@/components/momentum/top-signals').then(m => ({ default: m.TopSignals })), { ssr: false });
 const LazyMiniSignalList = dynamic(() => import('@/components/momentum/mini-signal-list').then(m => ({ default: m.MiniSignalList })), { ssr: false });
-const LazyTrendingSectors = dynamic(() => import('@/components/momentum/trending-sectors').then(m => ({ default: m.TrendingSectors })), { ssr: false });
-const LazyRotationSignals = dynamic(() => import('@/components/momentum/rotation-signals').then(m => ({ default: m.RotationSignals })), { ssr: false });
 const LazyTickerSearch = dynamic(() => import('@/components/momentum/ticker-search').then(m => ({ default: m.TickerSearch })), { ssr: false });
 const LazyStrategyBuilder = dynamic(() => import('@/components/momentum/strategy-builder').then(m => ({ default: m.StrategyBuilder })), { ssr: false });
-const LazyYieldTable = dynamic(() => import('@/components/momentum/yield-table').then(m => ({ default: m.YieldTable })), { ssr: false });
 const LazySectorHeatmap = dynamic(() => import('@/components/momentum/sector-heatmap').then(m => ({ default: m.SectorHeatmap })), { ssr: false });
+const LazyPortfolioIntelligence = dynamic(() => import('@/components/momentum/portfolio-intelligence').then(m => ({ default: m.PortfolioIntelligence })), { ssr: false });
+const LazyInsiderBuying = dynamic(() => import('@/components/momentum/insider-buying').then(m => ({ default: m.InsiderBuying })), { ssr: false });
+const LazyCandlestickChart = dynamic(() => import('@/components/charts/candlestick-chart').then(m => ({ default: m.CandlestickChart })), { ssr: false });
+// New consolidated tabbed components
+const LazyMomentumLifecycle = dynamic(() => import('@/components/momentum/momentum-lifecycle').then(m => ({ default: m.MomentumLifecycle })), { ssr: false });
+const LazyAnomalyDetector = dynamic(() => import('@/components/momentum/anomaly-detector').then(m => ({ default: m.AnomalyDetector })), { ssr: false });
+const LazyHiddenAlpha = dynamic(() => import('@/components/momentum/hidden-alpha').then(m => ({ default: m.HiddenAlpha })), { ssr: false });
+const LazySectorRadar = dynamic(() => import('@/components/momentum/sector-radar').then(m => ({ default: m.SectorRadar })), { ssr: false });
+const LazyIncomeEngine = dynamic(() => import('@/components/momentum/income-engine').then(m => ({ default: m.IncomeEngine })), { ssr: false });
+const LazyMlPredictionPanel = dynamic(() => import('@/components/momentum/ml-prediction-panel').then(m => ({ default: m.MlPredictionPanel })), { ssr: false });
+const LazyWeeklyMomentumPanel = dynamic(() => import('@/components/momentum/weekly-momentum-panel').then(m => ({ default: m.WeeklyMomentumPanel })), { ssr: false });
+import { ResearchCardGrid } from "@/components/momentum/research-card";
+import { DailyMovers } from "@/components/momentum/daily-movers";
+import { TodayView } from "@/components/momentum/today-view";
+const LazyAlphaCallsBlotter = dynamic(() => import('@/components/momentum/alpha-calls-blotter').then(m => ({ default: m.AlphaCallsBlotter })), { ssr: false });
+const LazyWhaleTrackerBlotter = dynamic(() => import('@/components/momentum/whale-tracker-blotter').then(m => ({ default: m.WhaleTrackerBlotter })), { ssr: false });
 
-const SCREENER_MAP: Record<string, { key: string; title: string; icon: string }> = {
-  fresh: { key: "fresh_momentum", title: "Fresh Momentum", icon: "leaf.fill" },
-  exhausting: { key: "exhausting_momentum", title: "Exhausting Momentum", icon: "flame.fill" },
-  rotation: { key: "rotation_ideas", title: "Rotation Breakouts", icon: "tornado" },
-  shock: { key: "shock_signals", title: "Momentum Shock Detector", icon: "bolt.slash.fill" },
-  gamma: { key: "gamma_signals", title: "Gamma Squeeze Ops", icon: "target" },
-  "smart-money": { key: "smart_money", title: "Smart Money Accumulation", icon: "dollarsign.circle.fill" },
-  continuation: { key: "continuation", title: "Momentum Continuation", icon: "rocket.fill" },
-  clusters: { key: "momentum_clusters", title: "Momentum Clusters", icon: "cube.fill" },
-  "shock-clusters": { key: "shock_clusters", title: "Sector Shock Clusters", icon: "bolt.circle.fill" },
-  "hidden-gems": { key: "hidden_gems", title: "Hidden Gems", icon: "diamond.fill" },
-};
+// ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
+const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
 
 const ChartSkeleton = memo(() => (
   <div className={cn("flex h-full w-full items-center justify-center bg-card rounded-2xl overflow-hidden relative p-5", MIN_CHART_HEIGHT_CLASS)}>
@@ -152,6 +156,11 @@ const DashboardPage = memo(() => {
   // Pipeline status — auto-refresh when pipeline completes
   const pipeline = usePipelineStatus(refresh);
 
+  // Hybrid prediction — SSE streaming for XGBoost + Triage Gate
+  // Only runs for tickers in the ML sandbox (5 tickers with trained model)
+  const mlTicker = selectedTicker && ML_SANDBOX_TICKERS.has(selectedTicker) ? selectedTicker : null;
+  const hybridPrediction = useHybridPrediction(mlTicker);
+
   const handleSelectTicker = useCallback((ticker: string) => {
     setSelectedTicker(ticker);
   }, [setSelectedTicker]);
@@ -185,15 +194,32 @@ const DashboardPage = memo(() => {
 
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
+    let tierDist = data.summary.tier_distribution;
+
+    // Fallback: compute tier counts from signals if tier_distribution is absent or all zeros
+    if (!tierDist || Object.values(tierDist).every(v => !v)) {
+      if (data.signals?.length) {
+        const computed: Record<string, number> = {};
+        for (const s of data.signals) {
+          const tier = (s as any).conviction_tier;
+          if (tier) computed[tier] = (computed[tier] || 0) + 1;
+        }
+        if (Object.keys(computed).length > 0) {
+          tierDist = computed as any;
+        }
+      }
+    }
+
+    const td = tierDist ?? {};
     return [
-      { label: "Universe", value: data.summary.total_screened, color: "cyan" as PaletteColorKey },
-      { label: "Bullish", value: data.summary.bullish, color: "emerald" as PaletteColorKey },
-      { label: "Bearish", value: data.summary.bearish, color: "rose" as PaletteColorKey },
-      { label: "Avg Probability", value: `${data.summary.avg_probability}%`, color: "amber" as PaletteColorKey },
-      { label: "Top Bull", value: data.summary.top_bull, color: "emerald" as PaletteColorKey },
-      { label: "Top Bear", value: data.summary.top_bear, color: "rose" as PaletteColorKey },
+      { label: "Universe", value: data.summary.total_screened, colorKey: "cyan" as PaletteColorKey },
+      { label: "Ultra Conviction", value: td["Ultra Conviction"] ?? 0, colorKey: "amber" as PaletteColorKey },
+      { label: "High Conviction", value: td["High Conviction"] ?? 0, colorKey: "emerald" as PaletteColorKey },
+      { label: "Moderate", value: td["Moderate Conviction"] ?? 0, colorKey: "cyan" as PaletteColorKey },
+      { label: "Low Conviction", value: td["Low Conviction"] ?? 0, colorKey: "slate" as PaletteColorKey },
+      { label: "Contrarian", value: td["Contrarian"] ?? 0, colorKey: "rose" as PaletteColorKey },
     ];
-  }, [data?.summary]);
+  }, [data?.summary, data?.signals]);
 
   const handlePageTickerSelect = useCallback((ticker: string) => {
     handleSelectTicker(ticker);
@@ -259,161 +285,181 @@ const DashboardPage = memo(() => {
 
         return (
           <AnimatePresence mode="wait" initial={false}>
-            {/* ══════ INTELLIGENCE ══════ */}
-            {activePage === "intelligence" && (
+            {/* ══════ TODAY (Moby.invest-style landing) ══════ */}
+            {activePage === "today" && (
+              <motion.div key="today" {...PAGE_MOTION_VARIANTS}>
+                <TodayView data={data} onTickerSelect={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ MARKET PULSE ══════ */}
+            {activePage === "market-pulse" && (
               <motion.div
-                key="intelligence"
+                key="market-pulse"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-                  <h1 className={cn("text-4xl font-extrabold md:text-5xl flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="bolt.fill" size="text-5xl md:text-6xl" className="text-cyan-400" />
-                    Momentum Intelligence
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h1 className="text-[20px] font-bold md:text-[24px] flex items-center gap-3 font-mono-data tracking-[0.06em] text-[#E8E8E8]">
+                    <span className="text-[#00FF66]">⚡</span>
+                    Market Pulse
                   </h1>
                   <div className="flex items-center gap-3">
                     <LazyTickerSearch
                       onSelectTicker={handlePageTickerSelect}
                       onDataRefresh={refresh}
                     />
-                    <div className="flex items-center gap-3 bg-cyan-500/10 border border-cyan-500/25 rounded-full px-3 py-1 text-cyan-400 text-xs font-semibold tracking-[0.1em] uppercase">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse-glow" />
-                      {pipeline.connected ? "Live" : "Offline"}
+                    <div className="flex items-center gap-2 bg-[#111111] border border-[#2A2A2A] rounded-[2px] px-2.5 py-1 text-[#00FF66] text-[10px] font-mono-data tracking-[0.1em] uppercase">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#00FF66] ct-pulse" />
+                      {pipeline.connected ? "LIVE" : "OFFLINE"}
                     </div>
                   </div>
                 </div>
 
-                {/* Quote — instant, always available */}
                 {data.all_quotes?.length > 0 && (
-                  <Card className="mb-8 p-4">
+                  <Card className="mb-4 p-3">
                     <QuoteRotator quotes={data.all_quotes} />
                   </Card>
                 )}
 
-                {/* KPI Strip — Tier 1 progressive reveal */}
                 <DataReveal
                   loading={tierLoading.summary && kpiStripItems.length === 0}
                   skeleton={<KPISkeleton />}
-                  className="mb-8"
+                  className="mb-4"
                 >
                   <KPIStrip className="" items={kpiStripItems} />
                 </DataReveal>
 
-                {/* Leaderboard + Top Signals — Tier 2 progressive reveal */}
-                <DataReveal
-                  loading={tierLoading.signals && !data.signals?.length}
-                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
-                  className="mb-8"
-                  delay={100}
-                >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                    <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                {/* ── Research Cards (Moby.invest-style) ── */}
+                {(data.top_picks?.length > 0) && (
+                  <div className="mb-4">
+                    <ResearchCardGrid
+                      signals={data.top_picks || []}
+                      title="HEADSTART RESEARCH"
+                      subtitle="Highest conviction signals — multi-system agreement, trending regime, confirmed fresh momentum"
+                      maxCards={6}
+                      onViewChart={handlePageTickerSelect}
+                      onViewDetail={handlePageTickerSelect}
+                    />
                   </div>
-                </DataReveal>
-
-                {/* Fresh + Exhausting mini-cards — staggered reveal */}
-                <DataReveal
-                  loading={tierLoading.signals && !data.signals?.length}
-                  skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
-                  className="mb-8"
-                  delay={200}
-                >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                    <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                  </div>
-                </DataReveal>
-
-                {/* Hidden Gems Preview */}
-                {(data.hidden_gems || []).length > 0 && (
-                  <CardReveal
-                    loading={false}
-                    className="mb-8"
-                    delay={300}
-                  >
-                    <Card className="p-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <h2 className={cn("text-xl font-bold md:text-2xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                          <SFIcon name="diamond.fill" size="text-2xl" className="text-cyan-400" /> Hidden Gems — Underrated Picks
-                        </h2>
-                        <AppleButton
-                          variant="ghost"
-                          size="sm"
-                          className="text-cyan-400 hover:text-cyan-300"
-                          onClick={() => setActivePage("hidden-gems")}
-                          glowColor="cyan"
-                        >
-                          View All <span className="ml-1 text-sm font-semibold">→</span>
-                        </AppleButton>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4 text-balance">
-                        Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
-                      </p>
-                      <div className="space-y-1">
-                        {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0], i: number) => (
-                          <motion.div
-                            key={s.ticker}
-                            className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
-                            onClick={() => handlePageTickerSelect(s.ticker)}
-                            whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
-                            transition={SPRING_TRANSITION_PROPS}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            // @ts-expect-error framer-motion transition accepts delay
-                            transitionDelay={`${i * 60}ms`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
-                              <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
-                              <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>
-                                {s.probability}%
-                              </span>
-                              <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>
-                                {s.daily_change > 0 ? '+' : ''}{s.daily_change}%
-                              </span>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </Card>
-                  </CardReveal>
                 )}
 
-                {/* Sector Regime Heatmap */}
-                <CardReveal loading={!data.sector_regimes} delay={400}>
-                  <Card className="p-5">
-                    <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                      <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
+                {/* ── Daily Movers ── */}
+                {data.signals?.length > 0 && (
+                  <div className="mb-4">
+                    <h2 className="text-[13px] font-bold text-[#E8E8E8] font-mono-data tracking-[0.08em] uppercase flex items-center gap-2 mb-3">
+                      <span className="text-[#FFD600]">◆</span> DAILY MOVERS
                     </h2>
-                    <LazySectorHeatmap
-                      sectors={data.sector_regimes}
-                      sentiment={data.sector_sentiment}
-                    />
-                  </Card>
-                </CardReveal>
+                    <DailyMovers signals={data.signals} maxItems={5} />
+                  </div>
+                )}
+
+                {/* Two-column layout: main content + weekly panel */}
+                <div className="flex flex-col xl:flex-row gap-4">
+                  {/* Left: main Market Pulse content */}
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <DataReveal
+                      loading={tierLoading.signals && !data.signals?.length}
+                      skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
+                      delay={100}
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                        <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
+                      </div>
+                    </DataReveal>
+
+                    <DataReveal
+                      loading={tierLoading.signals && !data.signals?.length}
+                      skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
+                      delay={200}
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
+                        <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
+                      </div>
+                    </DataReveal>
+
+                    {(data.hidden_gems || []).length > 0 && (
+                      <CardReveal loading={false} delay={300}>
+                        <Card className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                              <SFIcon name="diamond.fill" size="text-lg" className="text-cyan-400" /> Hidden Gems — Underrated Picks
+                            </h2>
+                            <AppleButton variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300" onClick={() => setActivePage("hidden-alpha")} glowColor="cyan">
+                              View All <span className="ml-1 text-sm font-semibold">→</span>
+                            </AppleButton>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-4 text-balance">
+                            Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
+                          </p>
+                          <div className="space-y-1">
+                            {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0], i: number) => (
+                              <motion.div
+                                key={s.ticker}
+                                className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
+                                onClick={() => handlePageTickerSelect(s.ticker)}
+                                whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.06 }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
+                                  <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
+                                  <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
+                                  <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </Card>
+                      </CardReveal>
+                    )}
+
+                    <CardReveal loading={!data.sector_regimes} delay={400}>
+                      <Card className="p-3">
+                        <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                          <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
+                        </h2>
+                        <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
+                      </Card>
+                    </CardReveal>
+                  </div>
+
+                  {/* Right: Weekly Top Momentum Panel (sticky on desktop) */}
+                  <div className="xl:w-[300px] xl:shrink-0">
+                    <div className="xl:sticky xl:top-[90px]">
+                      <LazyWeeklyMomentumPanel onSelectTicker={handlePageTickerSelect} />
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
 
-            {/* ══════ SIGNALS & STRATEGIES ══════ */}
+            {/* ══════ SIGNALS & EVIDENCE ══════ */}
             {activePage === "signals" && (
               <motion.div
                 key="signals"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24 overflow-x-hidden"
+                className="pt-4 md:pt-6 pb-8 md:pb-12 overflow-x-hidden"
               >
-                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="radar.fill" size="text-5xl md:text-6xl" className="text-cyan-400" />
-                  Signals & Strategies
+                <h1 className={cn("text-2xl font-extrabold md:text-3xl mb-1 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                  <SFIcon name="radar.fill" size="text-3xl md:text-4xl" className="text-cyan-400" />
+                  Signals & Evidence
                 </h1>
+                <p className="text-sm text-muted-foreground/60 mb-5">
+                  Every signal, ranked by conviction. Click any row for the deep dive.
+                </p>
 
                 <DataReveal
                   loading={tierLoading.signals && !data.signals?.length}
                   skeleton={<SectionSkeleton rows={10} />}
-                  className="mb-8"
+                  className="mb-6"
                 >
                   <LazySignalTable
                     signals={sortedSignals}
@@ -425,14 +471,18 @@ const DashboardPage = memo(() => {
                   />
                 </DataReveal>
 
-                <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="chess.piece.queen.fill" size="text-2xl" className="text-cyan-400" /> Trading Strategies
+                {/* Minimal divider */}
+                <div className="border-t border-white/[0.04] my-6" />
+
+                <h2 className={cn("text-lg font-bold mb-1 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
+                  <SFIcon name="chess.piece.queen.fill" size="text-lg" className="text-cyan-400" /> Trade Ideas
                 </h2>
+                <p className="text-xs text-muted-foreground/50 mb-4">Actionable setups with context, entries, and risk levels.</p>
                 <DataReveal
                   loading={!data.strategies?.length}
-                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{Array.from({length: 6}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
+                  skeleton={<div className="grid grid-cols-1 md:grid-cols-2 gap-2">{Array.from({length: 4}).map((_, i) => <SectionSkeleton key={i} rows={2} />)}</div>}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {data.strategies.map((s) => (
                       <LazyStrategyCard key={s.ticker} strategy={s} />
                     ))}
@@ -441,33 +491,20 @@ const DashboardPage = memo(() => {
               </motion.div>
             )}
 
-            {/* ══════ SECTOR INTELLIGENCE ══════ */}
-            {activePage === "sector-intel" && (
+            {/* ══════ SECTOR RADAR ══════ */}
+            {activePage === "sector-radar" && (
               <motion.div
-                key="sector-intel"
+                key="sector-radar"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <h1 className={cn("text-4xl font-extrabold md:text-5xl mb-8 flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                  <SFIcon name="antenna.radiowaves.left.and.right" size="text-5xl md:text-6xl" className="text-cyan-400" />
-                  Sector Intelligence
-                </h1>
-                <CardReveal loading={!data.sector_regimes} className="mb-8">
-                  <Card className="border-cyan-500/20 shadow-lg shadow-cyan-500/5 p-5">
-                    <h2 className={cn("text-xl font-bold md:text-2xl mb-4 flex items-center gap-3", TRACKING_HEADING_CLASS)}>
-                      <SFIcon name="globe.americas.fill" size="text-2xl" className="text-cyan-400" /> Sector Regime Heatmap
-                      <span className="text-sm text-muted-foreground font-normal tracking-normal ml-3">— Real-time regime classification</span>
-                    </h2>
-                    <LazySectorHeatmap
-                      sectors={data.sector_regimes}
-                      sentiment={data.sector_sentiment}
-                    />
-                  </Card>
-                </CardReveal>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <LazyTrendingSectors sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
-                  <LazyRotationSignals rotationIdeas={data.rotation_ideas || []} />
-                </div>
+                <LazySectorRadar
+                  sectorRegimes={data.sector_regimes}
+                  sectorSentiment={data.sector_sentiment}
+                  rotationIdeas={data.rotation_ideas || []}
+                  shockClusters={(data as any).shock_clusters || []}
+                  onSelectTicker={handlePageTickerSelect}
+                />
               </motion.div>
             )}
 
@@ -476,12 +513,12 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="ticker-detail"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-                  <h1 className={cn("text-4xl font-extrabold md:text-5xl flex items-center gap-4", TRACKING_HEADING_CLASS)}>
-                    <SFIcon name="chart.bar.fill" size="text-5xl md:text-6xl" className="text-cyan-400" /> Ticker Detail
-                    {selectedTicker && <span className="text-cyan-400 font-mono-data text-4xl md:text-5xl tracking-normal ml-2">— {selectedTicker}</span>}
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h1 className={cn("text-2xl font-extrabold md:text-3xl flex items-center gap-3", TRACKING_HEADING_CLASS)}>
+                    <SFIcon name="chart.bar.fill" size="text-3xl md:text-4xl" className="text-cyan-400" /> Ticker Detail
+                    {selectedTicker && <span className="text-cyan-400 font-mono-data text-2xl md:text-3xl tracking-normal ml-1">— {selectedTicker}</span>}
                   </h1>
                   <div className="flex items-center gap-3">
                     <LazyTickerSearch
@@ -534,11 +571,29 @@ const DashboardPage = memo(() => {
                   </DataReveal>
                 )}
 
+                {/* ML Prediction Panel — XGBoost + Triage Gate (sandbox tickers only) */}
+                {selectedTicker && ML_SANDBOX_TICKERS.has(selectedTicker) && (
+                  <div className="mb-6">
+                    <LazyMlPredictionPanel
+                      step={hybridPrediction.step}
+                      stepLabel={hybridPrediction.stepLabel}
+                      mlResult={hybridPrediction.mlResult}
+                      isAnomaly={hybridPrediction.isAnomaly}
+                      isComplete={hybridPrediction.isComplete}
+                      isLoading={hybridPrediction.isLoading}
+                      isStreaming={hybridPrediction.isStreaming}
+                    />
+                  </div>
+                )}
+
                 {/* Charts — loaded on-demand per ticker */}
-                {selectedTicker && (
-                  <DataReveal
-                    loading={chartLoading === selectedTicker || (!selectedChart && !!selectedTicker)}
-                    skeleton={
+                {selectedTicker && (() => {
+                  const isChartLoading = chartLoading === selectedTicker;
+                  const hasChartData = selectedChart && selectedChart.dates && selectedChart.dates.length > 0;
+                  const chartFailed = selectedChart && (!selectedChart.dates || selectedChart.dates.length === 0);
+
+                  if (isChartLoading) {
+                    return (
                       <div className="space-y-6">
                         <ChartSkeleton />
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -546,15 +601,35 @@ const DashboardPage = memo(() => {
                           <ChartSkeleton />
                         </div>
                       </div>
-                    }
-                  >
-                    {selectedChart && (
+                    );
+                  }
+
+                  if (chartFailed) {
+                    return (
+                      <Card className="p-8 text-center border border-white/[0.04]">
+                        <SFIcon name="chart.line.downtrend.xyaxis" size={24} className="text-muted-foreground/20 mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground/40 font-medium">Chart data unavailable for {selectedTicker}</p>
+                        <p className="text-xs text-muted-foreground/25 mt-1">This ticker may not be in the screener universe yet.</p>
+                      </Card>
+                    );
+                  }
+
+                  if (!hasChartData) return null;
+
+                  return (
+                    <DataReveal loading={false} skeleton={<ChartSkeleton />}>
                       <div className="space-y-6">
-                        {/* Price + HMA */}
-                        <Card className="p-5">
-                          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Price + Hull MA</h3>
-                          <LazyPriceChart ticker={selectedTicker} data={selectedChart} className="h-[280px]" />
-                        </Card>
+                        {/* Price + HMA + Candlestick */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <Card className="p-3">
+                            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-2">Price + Hull MA</h3>
+                            <LazyPriceChart ticker={selectedTicker} data={selectedChart} className="h-[260px]" />
+                          </Card>
+                          <Card className="p-3">
+                            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-2">6M Candlestick</h3>
+                            <LazyCandlestickChart ticker={selectedTicker} data={selectedChart} className="h-[260px]" />
+                          </Card>
+                        </div>
 
                         {/* ADX + Stochastics row */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -613,63 +688,77 @@ const DashboardPage = memo(() => {
                           </Card>
                         </div>
                       </div>
-                    )}
-                  </DataReveal>
-                )}
+                    </DataReveal>
+                  );
+                })()}
               </motion.div>
             )}
 
-            {/* ══════ SCREENER PAGES (all 10 + hidden gems) ══════ */}
-            {Object.keys(SCREENER_MAP).includes(activePage) && (
+            {/* ══════ MOMENTUM LIFECYCLE ══════ */}
+            {activePage === "momentum-lifecycle" && (
               <motion.div
-                key={activePage}
+                key="momentum-lifecycle"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <DataReveal loading={!data.signals?.length} skeleton={<SectionSkeleton rows={8} />}>
-                  <LazyScreenerTable
-                    data={(data as unknown as Record<string, unknown[]>)[SCREENER_MAP[activePage].key] as typeof data.signals || []}
-                    title={SCREENER_MAP[activePage].title}
-                    icon={SCREENER_MAP[activePage].icon}
-                    onSelectTicker={handlePageTickerSelect}
-                  />
-                </DataReveal>
+                <LazyMomentumLifecycle data={data as any} onSelectTicker={handlePageTickerSelect} />
               </motion.div>
             )}
 
-            {/* ══════ HIGH YIELD ETFs ══════ */}
-            {activePage === "yield-etfs" && (
+            {/* ══════ ANOMALY DETECTOR ══════ */}
+            {activePage === "anomaly-detector" && (
               <motion.div
-                key="yield-etfs"
+                key="anomaly-detector"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <DataReveal loading={!data.high_yield_etfs?.length} skeleton={<SectionSkeleton rows={8} />}>
-                  <LazyYieldTable
-                    data={data.high_yield_etfs || []}
-                    title="High Yield ETFs"
-                    icon="chart.line.uptrend.rectangle.fill"
-                    onSelectTicker={handlePageTickerSelect}
-                  />
-                </DataReveal>
+                <LazyAnomalyDetector data={data as any} onSelectTicker={handlePageTickerSelect} />
               </motion.div>
             )}
 
-            {/* ══════ DIVIDEND STOCKS ══════ */}
-            {activePage === "dividend-stocks" && (
+            {/* ══════ HIDDEN ALPHA ══════ */}
+            {activePage === "hidden-alpha" && (
               <motion.div
-                key="dividend-stocks"
+                key="hidden-alpha"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <DataReveal loading={!data.dividend_stocks?.length} skeleton={<SectionSkeleton rows={8} />}>
-                  <LazyYieldTable
-                    data={data.dividend_stocks || []}
-                    title="Dividend Stocks — Aristocrats & Kings"
-                    icon="dollarsign.square.fill"
-                    onSelectTicker={handlePageTickerSelect}
-                  />
-                </DataReveal>
+                <LazyHiddenAlpha data={data as any} onSelectTicker={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ INCOME ENGINE ══════ */}
+            {activePage === "income-engine" && (
+              <motion.div
+                key="income-engine"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyIncomeEngine data={data as any} onSelectTicker={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ PORTFOLIO INTELLIGENCE ══════ */}
+            {activePage === "portfolio-intel" && (
+              <motion.div
+                key="portfolio-intel"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyPortfolioIntelligence
+                  signalTickers={sortedSignals?.map((s: { ticker: string }) => s.ticker) || []}
+                />
+              </motion.div>
+            )}
+
+            {/* ══════ INSIDER BUYING ══════ */}
+            {activePage === "insider-buys" && (
+              <motion.div
+                key="insider-buys"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyInsiderBuying onSelectTicker={handlePageTickerSelect} />
               </motion.div>
             )}
 
@@ -678,25 +767,56 @@ const DashboardPage = memo(() => {
               <motion.div
                 key="strategy"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
                 <LazyStrategyBuilder />
               </motion.div>
             )}
 
-            {/* ══════ VECTOR MAP ══════ */}
-            {activePage === "vector-map" && (
+            {/* ══════ ALPHA CALLS OPTIONS ══════ */}
+            {activePage === "alpha-calls" && (
               <motion.div
-                key="vector-map"
+                key="alpha-calls"
                 {...PAGE_MOTION_VARIANTS}
-                className="pt-8 md:pt-12 pb-16 md:pb-24"
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
               >
-                <Card className="p-12 text-center">
-                  <SFIcon name="hand.wave.fill" size="text-6xl" className="text-cyan-400 mb-3" />
-                  <p className={cn("text-muted-foreground text-xl font-semibold", TRACKING_HEADING_CLASS)}>Coming soon — a visual map of momentum vectors.</p>
-                  <p className="text-muted-foreground/60 text-sm mt-2 max-w-lg mx-auto">
-                    Our team is meticulously crafting an immersive and insightful market visualization. Stay tuned!
+                <LazyAlphaCallsBlotter onTickerSelect={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ WHALE FLOW INTELLIGENCE ══════ */}
+            {activePage === "whale-tracker" && (
+              <motion.div
+                key="whale-tracker"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <LazyWhaleTrackerBlotter onTickerSelect={handlePageTickerSelect} />
+              </motion.div>
+            )}
+
+            {/* ══════ EARNINGS GROWERS ══════ */}
+            {activePage === "earnings-growers" && (
+              <motion.div
+                key="earnings-growers"
+                {...PAGE_MOTION_VARIANTS}
+                className="pt-4 md:pt-6 pb-8 md:pb-12"
+              >
+                <Card className="p-6 text-center">
+                  <SFIcon name="chart.line.uptrend.xyaxis" size="text-4xl" className="text-emerald-400 mb-2" />
+                  <p className={cn("text-foreground text-lg font-bold mb-2", TRACKING_HEADING_CLASS)}>Consistent Earnings & Revenue Growth</p>
+                  <p className="text-muted-foreground/60 text-sm max-w-lg mx-auto mb-4">
+                    This scanner discovers S&P Composite 1500 symbols with 5 consecutive quarters of strong revenue and EBITDA growth — perfect for long-term holds.
                   </p>
+                  <div className="flex flex-wrap gap-2 justify-center mb-4">
+                    {["Fundamentals", "Revenue Growth", "EBITDA Growth", "Long Term"].map(t => (
+                      <span key={t} className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold uppercase tracking-wider">{t}</span>
+                    ))}
+                  </div>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 text-xs font-medium">
+                    <SFIcon name="clock.fill" size="text-sm" />
+                    Coming Soon — Requires quarterly financials pipeline
+                  </div>
                 </Card>
               </motion.div>
             )}

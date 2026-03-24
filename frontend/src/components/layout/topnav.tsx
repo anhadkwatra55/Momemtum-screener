@@ -1,161 +1,109 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
-import React, { useMemo } from "react";
-import { cn, getTextColorClass, getFromColorClass, getToColorClass, getBackgroundColorClass } from "@/lib/utils";
-import { ROUTES, COLORS, Z_INDEX, MOTION, SHADOWS, TYPOGRAPHY } from "@/lib/constants";
+import React, { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { ROUTES } from "@/lib/constants";
 
-// --- SF Symbol SVG Paths (simplified paths for demonstration, in a real project these would be precise) ---
-// This map allows `SFIcon` to render actual SVG icons based on SF Symbol names.
-const SF_SYMBOLS_SVG_PATHS: Record<string, string> = {
-  "square.grid.2x2.fill": "M4 4h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm12 0h-7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1zM4 16h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zm12 0h-7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1z",
-  "flask.fill": "M16.5 2H7.5A2.5 2.5 0 0 0 5 4.5v16A2.5 2.5 0 0 0 7.5 23h9A2.5 2.5 0 0 0 19 20.5V4.5A2.5 2.5 0 0 0 16.5 2zm-9 2h9a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5zM6 9h12v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V9zM9 13v-1h6v1h-6zm0 3v-1h6v1h-6z",
-  "arrow.up.arrow.down.circle.fill": "M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1 14.5a.5.5 0 0 1-1 0v-4a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-1.5v3.5zm-1-10a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-1.5v3.5a.5.5 0 0 1-1 0v-4z",
-  "bell.fill": "M12 2C7.589 2 4 5.589 4 10v6l-2 2v1h20v-1l-2-2v-6c0-4.411-3.589-8-8-8zm0 18c-1.654 0-3-1.346-3-3h6c0 1.654-1.346 3-3 3z",
-  "person.crop.circle.fill": "M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm-4 9a7 7 0 0 1 8 0v1.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V14z",
-  "bolt.fill": "M13.682 2.21A.9.9 0 0 0 12.83 2h-1.5a.9.9 0 0 0-.85.79l-4 9a.9.9 0 0 0 .8.92h3.5l-1.5 8a.9.9 0 0 0 .7.99.9.9 0 0 0 .84-.13l9-10a.9.9 0 0 0-.7-.99h-3.5l1.5-8a.9.9 0 0 0-.7-.98z",
-};
+/**
+ * NYSEClock — Clean, Inter-style market clock
+ */
+const NYSEClock = React.memo(function NYSEClock() {
+  const [time, setTime] = useState("");
+  const [marketStatus, setMarketStatus] = useState<"PRE" | "LIVE" | "AFTER" | "CLOSED">("CLOSED");
 
-const SFIcon = React.memo(({ name, className }: { name: string; className?: string }) => {
-  const path = SF_SYMBOLS_SVG_PATHS[name];
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const h = et.getHours(), m = et.getMinutes(), s = et.getSeconds();
+      setTime(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+      const day = et.getDay();
+      const minuteOfDay = h * 60 + m;
+      if (day < 1 || day > 5) setMarketStatus("CLOSED");
+      else if (minuteOfDay < 570) setMarketStatus("PRE");
+      else if (minuteOfDay < 960) setMarketStatus("LIVE");
+      else if (minuteOfDay < 1080) setMarketStatus("AFTER");
+      else setMarketStatus("CLOSED");
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  if (!path) {
-    console.warn(`SF Symbol "${name}" not found in local paths. Displaying a generic placeholder.`);
-    // Fallback to a consistent, generic SVG icon (e.g., a question mark circle)
-    // to maintain layout and indicate missing data, rather than a text character.
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        className={cn("w-[1.25em] h-[1.25em] text-current", className)}
-        aria-hidden="true"
-      >
-        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1 14.5a.5.5 0 0 1-1 0v-4a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-1.5v3.5zm-1-10a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-1.5v3.5a.5.5 0 0 1-1 0v-4z" />
-      </svg>
-    );
-  }
+  const colors = {
+    PRE: { text: "#e2b857", dot: "#e2b857" },
+    LIVE: { text: "#4ade80", dot: "#4ade80" },
+    AFTER: { text: "#e2b857", dot: "#e2b857" },
+    CLOSED: { text: "#707070", dot: "#707070" },
+  }[marketStatus];
 
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24" // Standard viewBox for most SF Symbols paths
-      fill="currentColor"
-      className={cn("w-[1.25em] h-[1.25em] text-current flex-shrink-0", className)} // Ensure size scales with text utilities
-      aria-hidden="true"
-    >
-      <path d={path} />
-    </svg>
+    <div className="flex items-center gap-2 text-[11px]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+      <span className="text-[#707070] tracking-wide uppercase text-[10px]">NYSE</span>
+      <span className="text-[#e0e0e0] tabular-nums">
+        {time.slice(0, -3)}<span style={{ opacity: 0.4 }}>{time.slice(-3)}</span>
+      </span>
+      <div className="w-1.5 h-1.5 rounded-full" style={{ background: colors.dot, boxShadow: marketStatus === "LIVE" ? `0 0 6px ${colors.dot}` : "none" }} />
+      <span style={{ color: colors.text }} className="text-[10px] tracking-wide font-medium">{marketStatus}</span>
+    </div>
   );
 });
-SFIcon.displayName = "SFIcon";
-
-interface TopNavItemData {
-  label: string;
-  href: string;
-  icon: string; // SF Symbol name
-}
-
-const TOP_NAV_LINKS: TopNavItemData[] = [
-  { label: "Dashboard", href: ROUTES.dashboard, icon: "square.grid.2x2.fill" },
-  { label: "Research", href: "/research", icon: "flask.fill" },
-  { label: "Trade", href: "/trade", icon: "arrow.up.arrow.down.circle.fill" },
-  { label: "Alerts", href: "/alerts", icon: "bell.fill" },
-  { label: "Account", href: "/account", icon: "person.crop.circle.fill" },
-];
-
-const TopNavItem = React.memo(
-  ({ label, href, icon }: TopNavItemData) => {
-    return (
-      <motion.div
-        whileHover={{
-          y: -2, // Subtle lift effect
-          boxShadow: SHADOWS.ACCENT_GLOW_PRIMARY, // Primary accent glow
-          backgroundColor: `rgba(255, 255, 255, 0.08)`, // Specific translucent white tint for hover
-          transition: MOTION.SPRING_PRESET,
-        }}
-        whileTap={{ scale: 0.98 }} // Pressed state
-        className="relative"
-      >
-        <Link
-          href={href}
-          className={cn(
-            "flex items-center justify-center sm:justify-start gap-1.5",
-            "text-sm font-medium",
-            "text-muted-foreground hover:text-foreground", // Semantic colors for text
-            "px-3.5 sm:px-4",
-            "h-[44px]", // Ensures generous touch target size (44x44px minimum)
-            "rounded-2xl", // Generous rounded corners (2rem)
-            getBackgroundColorClass('white', '500', '5'), // Uses bg-white/5 for default background, consistent with design tokens
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            "whitespace-nowrap"
-          )}
-        >
-          <SFIcon name={icon} className="text-xl sm:text-lg text-foreground" />
-          <span className={cn("hidden sm:inline-block text-sm", TYPOGRAPHY.UI_LABEL_TRACKING_CLASS)}>
-            {label}
-          </span>
-        </Link>
-      </motion.div>
-    );
-  }
-);
-TopNavItem.displayName = "TopNavItem";
 
 interface TopNavProps {
-  title?: string;
-  icon?: string; // SF Symbol name for the app logo
+  onMenuClick?: () => void;
 }
 
-export const TopNav = React.memo(function TopNav({
-  title = "MOMENTUM",
-  icon = "bolt.fill",
-}: TopNavProps) {
-  const logoHoverProps = useMemo(() => ({
-    y: -2,
-    boxShadow: SHADOWS.ACCENT_GLOW_PRIMARY,
-    scale: 1.02,
-    transition: MOTION.SPRING_PRESET,
-  }), []);
-
+export const TopNav = React.memo(function TopNav({ onMenuClick }: TopNavProps) {
   return (
     <nav className={cn(
-      "fixed top-0 left-0 right-0 h-14",
-      "bg-[var(--card)] backdrop-blur-xl shadow-[var(--shadow-soft)]", // Uses semantic CSS variable for card background and backdrop-blur
-      "px-4 sm:px-7 flex items-center justify-between",
-      `z-${Z_INDEX.TOP_NAV}` // Uses centralized Z-index constant
+      "fixed top-0 left-0 right-0 h-[48px]",
+      "bg-[#111111]/95 backdrop-blur-sm border-b border-[#2d2d2d]",
+      "px-3 md:px-4 md:pl-[236px] flex items-center justify-between",
+      "z-50"
     )}>
-      <Link href={ROUTES.home} className="flex items-center gap-3 no-underline">
-        <motion.div
-          whileHover={logoHoverProps}
-          whileTap={{ scale: 0.98 }}
-          className={cn(
-            "relative w-11 h-11 rounded-2xl",
-            "bg-gradient-to-br",
-            getFromColorClass('cyan', '500'), // Uses utility for gradient start color
-            getToColorClass('cyan', '600'),   // Uses utility for gradient end color
-            "flex items-center justify-center text-lg font-extrabold",
-            getTextColorClass('white', '500'), // Uses utility for text color
-            "shadow-[var(--shadow-soft)] flex-shrink-0 overflow-hidden"
-          )}
+      {/* Left: hamburger (mobile) + logo (mobile) + clock */}
+      <div className="flex items-center gap-3 md:gap-6">
+        {/* Mobile hamburger inside topnav */}
+        <button
+          className="md:hidden w-8 h-8 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#e2b857] transition-colors duration-200"
+          aria-label="Open menu"
+          onClick={onMenuClick}
         >
-          <SFIcon name={icon} className={cn(getTextColorClass('white', '500'), "text-xl")} /> {/* Uses utility for icon color */}
-        </motion.div>
-        <h1 className={cn("text-lg font-extrabold text-foreground hidden sm:block", TYPOGRAPHY.HERO_TRACKING_CLASS)}>
-          {title}
-        </h1>
-      </Link>
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+            <path d="M2 4h12v1H2zm0 3.5h12v1H2zm0 3.5h12v1H2z" />
+          </svg>
+        </button>
 
-      <div className="flex items-center gap-1 sm:gap-2.5">
-        {TOP_NAV_LINKS.map((item) => (
-          <TopNavItem
-            key={item.href}
-            label={item.label}
-            href={item.href}
-            icon={item.icon}
-          />
-        ))}
+        <Link href={ROUTES.home} className="flex items-center gap-2 no-underline md:hidden">
+          <div className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold text-[#0d0d0d] bg-[#e2b857] flex-shrink-0">
+            H
+          </div>
+          <span className="text-[12px] font-semibold tracking-wide text-[#e0e0e0]">
+            HEADSTART
+          </span>
+        </Link>
+
+        <NYSEClock />
+      </div>
+
+      {/* Right */}
+      <div className="flex items-center gap-3 md:gap-4">
+        {/* Search — hidden on small mobile */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 border border-[#2d2d2d] rounded-md text-[#707070] text-[11px] cursor-pointer hover:border-[#e2b857] hover:text-[#e2b857] transition-all duration-200">
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+            <path d="M6.5 1a5.5 5.5 0 014.383 8.823l3.147 3.147a.75.75 0 01-1.06 1.06l-3.147-3.147A5.5 5.5 0 116.5 1zm0 1.5a4 4 0 100 8 4 4 0 000-8z" />
+          </svg>
+          <span>Search</span>
+          <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded text-[9px] text-[#707070]">⌘K</kbd>
+        </div>
+
+        {/* Sync status — hidden on small mobile */}
+        <div className="hidden sm:flex items-center gap-2 text-[10px]">
+          <span className="text-[#707070] tracking-wide">SYNC</span>
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" style={{ boxShadow: "0 0 6px rgba(74,222,128,0.6)" }} />
+          <span className="text-[#4ade80] tracking-wide font-medium">LIVE</span>
+        </div>
       </div>
     </nav>
   );

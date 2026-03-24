@@ -17,13 +17,14 @@ Design constraints:
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import os
 import random
 import time
 import traceback
 import warnings
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -43,11 +44,14 @@ warnings.filterwarnings("ignore")
 #  CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# CPU workers for indicator math (leave 1 core for the event loop)
-CPU_WORKERS = max(1, (os.cpu_count() or 4) - 1)
+# Thread workers for indicator math
+# In cloud mode, cap at 1 — Railway hobby plan has very limited RAM (~512MB)
+# NOTE: We use ThreadPoolExecutor (not ProcessPool) to avoid duplicating memory per-subprocess
+_is_cloud = bool(os.environ.get("DEPLOY_TICKER_LIMIT") or os.environ.get("RAILWAY_ENVIRONMENT"))
+CPU_WORKERS = int(os.environ.get("PIPELINE_CPU_WORKERS", "1" if _is_cloud else str(max(1, (os.cpu_count() or 4) - 1))))
 
-# I/O workers for network requests
-IO_WORKERS = 20
+# I/O workers for network requests — reduce in cloud to avoid thread exhaustion
+IO_WORKERS = int(os.environ.get("PIPELINE_IO_WORKERS", "3" if _is_cloud else "20"))
 
 # Chunk size for batched screening (controls peak memory)
 SCREEN_CHUNK_SIZE = 50
@@ -79,11 +83,12 @@ def screen_universe_parallel(
     progress: bool = True,
 ) -> List[dict]:
     """
-    Screen the full universe using ProcessPoolExecutor.
-    Each worker runs screen_ticker() in a separate process,
-    bypassing the GIL for true parallel CPU execution.
+    Screen the full universe using ThreadPoolExecutor.
+    Uses threads instead of processes to avoid memory duplication.
+    NumPy/pandas release the GIL during C-level math so threads
+    still achieve meaningful parallelism.
 
-    Falls back to serial screening if multiprocessing fails.
+    Falls back to serial screening if thread pool fails.
     """
     workers = max_workers or CPU_WORKERS
     tickers = sorted(ohlcv.keys())
@@ -92,10 +97,10 @@ def screen_universe_parallel(
     start_time = time.perf_counter()
 
     if progress:
-        print(f"    ⚡ Parallel screening: {len(tickers)} tickers across {workers} processes …")
+        print(f"    ⚡ Threaded screening: {len(tickers)} tickers across {workers} threads …")
 
     try:
-        with ProcessPoolExecutor(max_workers=workers) as pool:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             # Submit all tickers as (ticker, df) tuples
             future_to_ticker = {
                 pool.submit(_screen_single, (ticker, ohlcv[ticker])): ticker
@@ -115,7 +120,7 @@ def screen_universe_parallel(
 
     except Exception as e:
         if progress:
-            print(f"    ⚠ ProcessPool failed ({e}). Falling back to serial …")
+            print(f"    ⚠ ThreadPool failed ({e}). Falling back to serial …")
         # Fallback to serial screening
         return screen_universe(ohlcv, progress=progress)
 
@@ -338,6 +343,34 @@ def _compute_derived_lists(results: List[dict]) -> dict:
         "shock_clusters": _slim(shock_clusters),
         "gamma_signals": _slim(gamma_signals),
         "hidden_gems": _slim(hidden_gems),
+        # ── Thematic Derived Lists ──
+        "ai_stocks": _slim(sorted(
+            [r for r in results if r["ticker"] in set(cfg.AI_STOCKS)],
+            key=lambda x: x["composite"], reverse=True
+        )),
+        "bullish_momentum": _slim(sorted(
+            [r for r in results if r["composite"] > 0.15 and r["daily_change"] > 0
+             and r.get("regime") in ("Trending", "Choppy")
+             and r["probability"] > 45
+             and r["ticker"] not in set(cfg.ETF_TICKERS)],
+            key=lambda x: x["composite"], reverse=True
+        )[:100]),
+        "high_volume_gappers": _slim(sorted(
+            [r for r in results if r["daily_change"] > 1.0
+             and r.get("vol_spike", 1.0) > 1.2 and r["composite"] > 0
+             and r["ticker"] not in set(cfg.ETF_TICKERS)],
+            key=lambda x: x["daily_change"], reverse=True
+        )[:100]),
+        "earnings_growers": [],  # Phase 2: requires quarterly financials pipeline
+        "momentum_95": _slim(sorted(
+            [r for r in results if r["probability"] >= 95],
+            key=lambda x: x["probability"], reverse=True
+        )),
+        # Quant Research: Top Picks (Top Pick + Accumulate action categories)
+        "top_picks": _slim(sorted(
+            [r for r in results if r.get("action_category") in ("Top Pick", "Accumulate")],
+            key=lambda x: x["composite"], reverse=True
+        )[:50]),
     }
 
 
@@ -354,6 +387,18 @@ def _compute_summary(results: List[dict]) -> dict:
     top_bull = max(bull_results, key=lambda x: x["composite"]) if bull_results else None
     top_bear = min(bear_results, key=lambda x: x["composite"]) if bear_results else None
 
+    # Conviction tier distribution
+    tier_counts: Dict[str, int] = {}
+    for r in results:
+        tier = r.get("conviction_tier", "Contrarian")
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+    # Action category distribution
+    action_counts: Dict[str, int] = {}
+    for r in results:
+        action = r.get("action_category", "Hold & Monitor")
+        action_counts[action] = action_counts.get(action, 0) + 1
+
     return {
         "total_screened": len(results),
         "total_universe": len(cfg.ALL_TICKERS),
@@ -364,6 +409,8 @@ def _compute_summary(results: List[dict]) -> dict:
         "avg_composite": round(float(np.mean(composites)), 2) if composites else 0,
         "top_bull": top_bull["ticker"] if top_bull else "—",
         "top_bear": top_bear["ticker"] if top_bear else "—",
+        "tier_distribution": tier_counts,
+        "action_distribution": action_counts,
     }
 
 
@@ -520,6 +567,13 @@ def run_pipeline_sync(use_parallel: bool = True) -> dict:
     except Exception:
         db_stats = {}
 
+    # ── Snapshot daily top momentum for weekly tracking ──
+    try:
+        top_count = db.upsert_daily_top(results)
+        print(f"    ✓ Snapshotted top {top_count} daily momentum leaders")
+    except Exception as e:
+        print(f"    ⚠ Daily top snapshot failed: {e}")
+
     elapsed = time.perf_counter() - total_start
 
     dashboard_data = {
@@ -548,3 +602,268 @@ def run_pipeline_sync(use_parallel: bool = True) -> dict:
     print(f"  Workers: {CPU_WORKERS} CPU / {IO_WORKERS} I/O")
 
     return dashboard_data
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  PROGRESSIVE PIPELINE — INSTANT DASHBOARD RENDER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Priority tickers: most-watched names that should render first
+PRIORITY_TICKERS = [
+    # Mega-cap tech
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
+    "ORCL", "CRM", "AMD", "ADBE", "NFLX", "INTC", "CSCO", "QCOM",
+    # Financials
+    "JPM", "V", "MA", "BAC", "GS", "BRK-B", "WFC", "MS",
+    # Healthcare
+    "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO",
+    # Consumer / Industrials
+    "AMZN", "HD", "MCD", "NKE", "COST", "WMT", "CAT", "BA", "GE",
+    # Energy / Materials
+    "XOM", "CVX", "LIN",
+    # ETFs
+    "SPY", "QQQ", "IWM", "DIA",
+]
+
+# Global wave version — incremented each time dashboard cache is updated
+_wave_version: int = 0
+
+
+def get_wave_version() -> int:
+    """Return the current wave version counter."""
+    return _wave_version
+
+
+def _package_dashboard(
+    results: List[dict],
+    etf_yield_data: List[dict] | None = None,
+    div_stock_data: List[dict] | None = None,
+    elapsed: float = 0.0,
+    wave: int = 0,
+    total_waves: int = 3,
+    is_complete: bool = False,
+) -> dict:
+    """
+    Package screened results into the dashboard JSON format.
+    Reusable across progressive waves.
+    """
+    sec_regimes = sector_regimes(results)
+    strategies = generate_all_strategies(results)
+
+    summary = _compute_summary(results)
+    sector_sentiment = _compute_sector_sentiment(results)
+    derived = _compute_derived_lists(results)
+
+    signals_table = [{k: v for k, v in r.items()
+                      if k not in ("charts", "sys1", "sys2", "sys3", "sys4")}
+                     for r in results]
+    chart_data = {r["ticker"]: r.get("charts", {}) for r in results}
+    actionable = [s for s in strategies if s["direction"] != "NEUTRAL"][:30]
+    quote = random.choice(cfg.QUOTES)
+
+    try:
+        db_stats = db.get_db_stats()
+    except Exception:
+        db_stats = {}
+
+    return {
+        "quote": quote,
+        "summary": summary,
+        "signals": signals_table,
+        "charts": chart_data,
+        "strategies": actionable,
+        "sector_regimes": sec_regimes,
+        "sector_sentiment": sector_sentiment,
+        "all_quotes": cfg.QUOTES,
+        "db_stats": db_stats,
+        "high_yield_etfs": etf_yield_data or [],
+        "dividend_stocks": div_stock_data or [],
+        **derived,
+        "_meta": {
+            "pipeline_time_sec": round(elapsed, 1),
+            "parallel_workers": CPU_WORKERS,
+            "tickers_screened": len(results),
+            "tickers_universe": len(cfg.ALL_TICKERS),
+            "wave": wave,
+            "total_waves": total_waves,
+            "is_complete": is_complete,
+        },
+    }
+
+
+def run_pipeline_progressive(
+    publish_callback,
+    use_parallel: bool = True,
+) -> dict:
+    """
+    Progressive pipeline: fetch → screen → publish in 3 waves.
+
+    Wave 1: ~50 priority tickers (instant dashboard render, ~15-30s)
+    Wave 2: Remaining S&P 500 (~450 tickers)
+    Wave 3: Full universe (~1000+ remaining tickers) + yield data
+
+    After each wave, calls publish_callback(dashboard_data) so the
+    serving layer can cache partial results for the frontend.
+
+    Returns the final complete dashboard data dict.
+    """
+    global _wave_version
+    total_start = time.perf_counter()
+
+    pipeline_status.update("running", "Wave 1/3 — Fetching priority tickers…")
+    print("=" * 64)
+    print("  MOMENTUM TRADING SCREENER — Progressive Pipeline")
+    print("=" * 64)
+
+    # ── Build wave ticker lists ──
+    all_tickers = list(cfg.ALL_TICKERS)
+    priority_set = set(PRIORITY_TICKERS)
+    all_set = set(all_tickers)
+
+    # Wave 1: priority tickers that exist in our universe
+    wave1_tickers = [t for t in PRIORITY_TICKERS if t in all_set]
+    # Deduplicate
+    wave1_set = set(wave1_tickers)
+
+    # Wave 2: S&P 500 constituents not in wave 1 (first ~500 from main sectors)
+    _sp500_tickers = []
+    for sector in ["Technology", "Healthcare", "Financials",
+                    "Consumer Discretionary", "Industrials",
+                    "Communication Services", "Consumer Staples", "Energy",
+                    "Materials", "Real Estate", "Utilities"]:
+        _sp500_tickers.extend(cfg.UNIVERSE.get(sector, [])[:60])
+    wave2_tickers = [t for t in _sp500_tickers if t not in wave1_set and t in all_set]
+    wave2_set = wave1_set | set(wave2_tickers)
+
+    # Wave 3: everything else
+    wave3_tickers = [t for t in all_tickers if t not in wave2_set]
+
+    print(f"  Wave plan: {len(wave1_tickers)} → +{len(wave2_tickers)} → +{len(wave3_tickers)} tickers")
+
+    # Accumulated results across waves
+    all_results: List[dict] = []
+
+    # ━━━━━━━━━━━ WAVE 1 — Priority tickers (instant render) ━━━━━━━━━━━
+    print(f"\n[Wave 1/3] Fetching {len(wave1_tickers)} priority tickers …")
+    pipeline_status.update("running", f"Wave 1/3 — Fetching {len(wave1_tickers)} priority tickers…")
+
+    try:
+        ohlcv1 = smart_fetch(tickers=wave1_tickers, progress=True)
+        ohlcv1, _ = validate_universe(ohlcv1, progress=False)
+
+        if use_parallel:
+            results1 = screen_universe_parallel(ohlcv1, progress=True)
+        else:
+            results1 = screen_universe(ohlcv1, progress=True)
+
+        # Free OHLCV DataFrames immediately to reclaim memory
+        del ohlcv1; gc.collect()
+
+        all_results.extend(results1)
+        all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
+
+        elapsed1 = time.perf_counter() - total_start
+        print(f"  ✓ Wave 1 complete: {len(results1)} tickers in {elapsed1:.1f}s")
+
+        # Publish wave 1
+        data1 = _package_dashboard(all_results, elapsed=elapsed1, wave=1, total_waves=3)
+        _wave_version += 1
+        pipeline_status.update("running", f"Wave 1/3 done — {len(all_results)} tickers served. Loading more…")
+        publish_callback(data1)
+    except Exception as e:
+        print(f"  ⚠ Wave 1 failed: {e}")
+        traceback.print_exc()
+
+    # ━━━━━━━━━━━ WAVE 2 — S&P 500 core ━━━━━━━━━━━
+    print(f"\n[Wave 2/3] Fetching {len(wave2_tickers)} S&P 500 tickers …")
+    pipeline_status.update("running", f"Wave 2/3 — Screening {len(wave2_tickers)} S&P 500 tickers…")
+
+    try:
+        ohlcv2 = smart_fetch(tickers=wave2_tickers, progress=True)
+        ohlcv2, _ = validate_universe(ohlcv2, progress=False)
+
+        if use_parallel:
+            results2 = screen_universe_parallel(ohlcv2, progress=True)
+        else:
+            results2 = screen_universe(ohlcv2, progress=True)
+
+        # Free OHLCV DataFrames immediately to reclaim memory
+        del ohlcv2; gc.collect()
+
+        all_results.extend(results2)
+        all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
+
+        elapsed2 = time.perf_counter() - total_start
+        print(f"  ✓ Wave 2 complete: {len(all_results)} total tickers in {elapsed2:.1f}s")
+
+        # Publish wave 2
+        data2 = _package_dashboard(all_results, elapsed=elapsed2, wave=2, total_waves=3)
+        _wave_version += 1
+        pipeline_status.update("running", f"Wave 2/3 done — {len(all_results)} tickers. Loading full universe…")
+        publish_callback(data2)
+    except Exception as e:
+        print(f"  ⚠ Wave 2 failed: {e}")
+        traceback.print_exc()
+
+    # ━━━━━━━━━━━ WAVE 3 — Full universe + yield data ━━━━━━━━━━━
+    print(f"\n[Wave 3/3] Fetching {len(wave3_tickers)} remaining tickers + yield data …")
+    pipeline_status.update("running", f"Wave 3/3 — Screening {len(wave3_tickers)} remaining tickers…")
+
+    try:
+        ohlcv3 = smart_fetch(tickers=wave3_tickers, progress=True)
+        ohlcv3, _ = validate_universe(ohlcv3, progress=False)
+
+        if use_parallel:
+            results3 = screen_universe_parallel(ohlcv3, progress=True)
+        else:
+            results3 = screen_universe(ohlcv3, progress=True)
+
+        # Free OHLCV DataFrames immediately to reclaim memory
+        del ohlcv3; gc.collect()
+
+        all_results.extend(results3)
+        all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
+    except Exception as e:
+        print(f"  ⚠ Wave 3 screening failed: {e}")
+        traceback.print_exc()
+
+    # Yield data (runs alongside wave 3 results)
+    print("\n  Fetching yield data for ETFs & dividend stocks …")
+    try:
+        etf_yield_data = fetch_yield_data_parallel(
+            cfg.HIGH_YIELD_ETFS, all_results, progress=True
+        )
+        div_stock_data = fetch_yield_data_parallel(
+            cfg.HIGH_DIVIDEND_STOCKS, all_results, progress=True
+        )
+    except Exception as e:
+        print(f"  ⚠ Yield data failed: {e}")
+        etf_yield_data = []
+        div_stock_data = []
+
+    # Snapshot daily top
+    try:
+        top_count = db.upsert_daily_top(all_results)
+        print(f"    ✓ Snapshotted top {top_count} daily momentum leaders")
+    except Exception as e:
+        print(f"    ⚠ Daily top snapshot failed: {e}")
+
+    # Final publish
+    elapsed_total = time.perf_counter() - total_start
+    final_data = _package_dashboard(
+        all_results,
+        etf_yield_data=etf_yield_data,
+        div_stock_data=div_stock_data,
+        elapsed=elapsed_total,
+        wave=3,
+        total_waves=3,
+        is_complete=True,
+    )
+    _wave_version += 1
+    publish_callback(final_data)
+
+    pipeline_status.update("done", f"Pipeline complete — {len(all_results)} tickers in {elapsed_total:.1f}s")
+    print(f"\n✓ Progressive pipeline complete: {len(all_results)} tickers in {elapsed_total:.1f}s")
+    print(f"  Workers: {CPU_WORKERS} CPU / {IO_WORKERS} I/O")
+
+    return final_data

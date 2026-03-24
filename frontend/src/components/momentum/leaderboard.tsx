@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useAnimate } from 'framer-motion';
 import { cn, getBackgroundColorClass, getSentimentClasses, getTextColorClass } from "@/lib/utils";
 import type { Signal } from "@/types/momentum";
+import { ConvictionBadge } from "./conviction-badge";
 import {
   AURA_LABELS,
   AURA_SCORE_THRESHOLDS,
@@ -165,25 +166,17 @@ const LeaderboardItem = React.memo(function LeaderboardItem({ signal: s, index, 
       {/* Ticker (JetBrains Mono, accent color) */}
       <div className={cn("font-extrabold text-lg md:text-xl w-16 md:w-20 font-mono-data", getTextColorClass('cyan', '400'))}>{s.ticker}</div>
 
-      {/* Company Name / Sector & Aura Label */}
+      {/* Company Name / Sector & Conviction Tier */}
       <div className="flex-1 min-w-0 flex flex-col justify-center">
         <div className={cn("text-base truncate leading-tight", getTextColorClass('slate', '200'))}>{s.company_name || s.sector}</div>
-        {displayAuraLabel && (
-          <motion.span
-            initial={{ opacity: 0, x: -5 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2, delay: 0.05 }}
-            className={cn(
-              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold mt-1 border",
-              `tracking-[${TYPOGRAPHY.LETTER_SPACING_LOOSE_UPPERCASE}]`,
-              auraBgClass,
-              scoreTextClass,
-              auraBorderClass
-            )}
-          >
-            {displayAuraLabel}
-          </motion.span>
-        )}
+        <motion.div
+          initial={{ opacity: 0, x: -5 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.2, delay: 0.05 }}
+          className="mt-1"
+        >
+          <ConvictionBadge tier={s.conviction_tier ?? 'Contrarian'} />
+        </motion.div>
       </div>
 
       {/* Progress Bar & Score (JetBrains Mono, color-coded) */}

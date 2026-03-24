@@ -6,44 +6,34 @@ import React from "react";
 import { AppleCard } from "@/components/ui/apple-card";
 import { motion } from "framer-motion";
 
-// Local definition for PaletteColorKey and its hex map.
-// In a real application, these would be imported from `lib/utils.ts` and `lib/constants.ts`
-// respectively, following the "centralize constants" and "resolve critical build error" mandates.
-type LocalPaletteColorKey =
-  | 'cyan'
-  | 'emerald'
-  | 'rose'
-  | 'amber'
-  | 'violet'
-  | 'blue'
-  | 'lime'
-  | 'orange'
-  | 'slate';
+// Local palette hex map for Framer Motion direct CSS use
+type LocalPaletteColorKey = 'cyan' | 'emerald' | 'rose' | 'amber' | 'violet' | 'blue' | 'lime' | 'orange' | 'slate';
 
 const PALETTE_HEX_MAP: Record<LocalPaletteColorKey, string> = {
-  cyan: '#06b6d4',
-  emerald: '#10b981',
-  rose: '#f43f5e',
-  amber: '#f59e0b',
-  violet: '#8b5cf6',
-  blue: '#3b82f6', // Example, assuming a default blue shade
-  lime: '#84cc16', // Example
-  orange: '#f97316', // Example
-  slate: '#64748b', // Example slate-500
+  cyan: '#06b6d4', emerald: '#10b981', rose: '#f43f5e', amber: '#f59e0b',
+  violet: '#8b5cf6', blue: '#3b82f6', lime: '#84cc16', orange: '#f97316', slate: '#64748b',
 };
 
-// Local utility to convert PaletteColorKey to RGBA string for Framer Motion and direct CSS use.
-// This function addresses the critical build error identified in the analysis.
 function getPaletteColorWithAlpha(colorKey: LocalPaletteColorKey, opacity: number): string {
   const hex = PALETTE_HEX_MAP[colorKey];
-  if (!hex) {
-    console.warn(`Unknown colorKey for getPaletteColorWithAlpha: "${colorKey}". Falling back to transparent.`);
-    return `rgba(0, 0, 0, 0)`;
-  }
+  if (!hex) return `rgba(0, 0, 0, 0)`;
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
+/** Generate a concise one-line trade context summary */
+function getTradeContext(s: Strategy): string {
+  const dirLabel = s.direction === "BULLISH" ? "Bullish" : s.direction === "BEARISH" ? "Bearish" : "Neutral";
+  const actionMap: Record<string, string> = {
+    OPEN_LONG: "Go long", OPEN_SHORT: "Go short", CLOSE_LONG: "Close long", CLOSE_SHORT: "Close short",
+    HOLD: "Hold position", MONITOR: "Watch for entry",
+  };
+  const action = actionMap[s.action] || s.action;
+  const conviction = typeof s.conviction === "number" ? `${s.conviction}% conviction` : "";
+  const urgencyLabel = s.urgency === "HIGH" ? "act now" : s.urgency === "MODERATE" ? "near-term" : "low urgency";
+  return `${dirLabel} setup — ${action} with ${conviction}, ${urgencyLabel}.`;
 }
 
 interface StrategyCardProps {
@@ -51,63 +41,9 @@ interface StrategyCardProps {
   className?: string;
 }
 
-// Sub-component for animating numerical/text changes with Framer Motion
-const AnimatedValue: React.FC<{
-  value: string | number | undefined | null;
-  className?: string;
-  colorClass?: string;
-  prefix?: string;
-  suffix?: string;
-}> = React.memo(
-  ({ value, className, colorClass, prefix = "", suffix = "" }) => {
-    const prevValue = React.useRef(value);
-    const [animationKey, setAnimationKey] = React.useState(0);
-
-    React.useEffect(() => {
-      if (String(prevValue.current) !== String(value)) {
-        setAnimationKey(prev => prev + 1);
-        prevValue.current = value;
-      }
-    }, [value]);
-
-    const displayValue = value === undefined || value === null ? "—" : `${value}`;
-
-    // Refactored flash animation transition to use a tween type, suitable for keyframes.
-    // getPaletteColorWithAlpha is used to provide direct RGBA values for Framer Motion.
-    return (
-      <motion.span
-        key={animationKey}
-        initial={{ backgroundColor: "transparent" }}
-        animate={{ backgroundColor: ["transparent", getPaletteColorWithAlpha('cyan', 0.15), "transparent"] }}
-        transition={{ duration: 0.8, ease: "easeInOut" }} // Use tween transition for keyframes
-        className={cn("inline-block rounded px-1 -mx-1", className, colorClass)}
-      >
-        {prefix}{displayValue}{suffix}
-      </motion.span>
-    );
-  }
-);
-
-
 export const StrategyCard = React.memo(function StrategyCard({ strategy: s, className }: StrategyCardProps) {
-  const dataDirectionColorClass = React.useMemo(() =>
-    s.direction === "BULLISH"
-      ? getTextColorClass('emerald', '400')
-      : s.direction === "BEARISH"
-        ? getTextColorClass('rose', '400')
-        : getTextColorClass('slate', '400'),
-    [s.direction]
-  );
-
-  const urgencyColorClass = React.useMemo(() =>
-    s.urgency === "HIGH"
-      ? getTextColorClass('rose', '400')
-      : s.urgency === "MODERATE"
-        ? getTextColorClass('amber', '400')
-        : getTextColorClass('slate', '400'),
-    [s.urgency]
-  );
-
+  const dirColor: LocalPaletteColorKey = s.direction === "BULLISH" ? "emerald" : s.direction === "BEARISH" ? "rose" : "slate";
+  const urgColor: LocalPaletteColorKey = s.urgency === "HIGH" ? "rose" : s.urgency === "MODERATE" ? "amber" : "slate";
   const spring = SPRING_PHYSICS_DEFAULT;
 
   const hoverProps = React.useMemo(() => ({
@@ -118,82 +54,51 @@ export const StrategyCard = React.memo(function StrategyCard({ strategy: s, clas
 
   return (
     <AppleCard
-      className={cn(
-        "relative p-6 md:p-8 overflow-hidden",
-        className,
-      )}
+      className={cn("relative p-5 overflow-hidden", className)}
       whileHover={hoverProps}
       transition={spring}
     >
-      {/* Subtle Directional UI Indicator with semantic z-index, using direct RGBA */}
+      {/* Left accent bar */}
       <div
-        className="absolute left-0 top-0 h-full w-[2px] rounded-l-[1.25rem] z-10" // Replaced z-[1] with semantic z-10
+        className="absolute left-0 top-0 h-full w-[2px] rounded-l-[1.25rem] z-10"
         style={{
-          background: `linear-gradient(to bottom, transparent, ${getPaletteColorWithAlpha('cyan', 0.8)} 20%, ${getPaletteColorWithAlpha('cyan', 0.8)} 80%, transparent)`,
+          background: `linear-gradient(to bottom, transparent, ${getPaletteColorWithAlpha(dirColor, 0.8)} 20%, ${getPaletteColorWithAlpha(dirColor, 0.8)} 80%, transparent)`,
         }}
       />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <span
-          className={cn(
-            "font-mono-data text-3xl md:text-4xl font-extrabold tracking-[-0.03em]",
-            dataDirectionColorClass,
-          )}
-        >
+      {/* Row 1: Ticker + Sentiment */}
+      <div className="flex items-center justify-between mb-2">
+        <span className={cn("font-mono-data text-2xl font-extrabold tracking-[-0.03em]", getTextColorClass(dirColor, '400'))}>
           {s.ticker}
         </span>
         <SentimentBadge sentiment={s.sentiment} />
       </div>
 
-      {/* Action */}
-      <div className="font-mono-data text-xl md:text-2xl font-bold tracking-[-0.03em] mb-4 text-foreground">
-        {s.action}
+      {/* Row 2: Trade context summary */}
+      <p className="text-xs text-muted-foreground/70 leading-relaxed mb-3">
+        {getTradeContext(s)}
+      </p>
+
+      {/* Row 3: Key numbers — compact single row */}
+      <div className="flex items-center gap-4 text-xs mb-2">
+        <div><span className="text-muted-foreground/50">Entry</span> <span className="font-mono-data font-bold text-foreground">${s.entry_price}</span></div>
+        <div><span className="text-muted-foreground/50">Stop</span> <span className="font-mono-data font-bold text-foreground">${s.stop_loss ?? "—"}</span></div>
+        <div><span className="text-muted-foreground/50">Target</span> <span className="font-mono-data font-bold text-foreground">${s.target ?? "—"}</span></div>
       </div>
 
-      {/* Details - Enhanced vertical spacing */}
-      <div className="text-sm text-muted-foreground leading-relaxed space-y-4">
-        <div>
-          <span className="font-semibold text-foreground">Options:</span>{" "}
-          <span className="text-base font-inter">{s.options_strategy}</span>
-        </div>
-        <div className="italic text-sm text-muted-foreground mt-1 mb-2 font-inter"> {/* Applied font-inter */}
-          {s.options_note}
-        </div>
-        <div className="grid grid-cols-2 gap-y-4 sm:flex sm:flex-wrap sm:gap-x-6">
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">Entry:</span>{" "}
-            <AnimatedValue value={s.entry_price} className="font-mono-data text-base font-bold text-foreground" prefix="$" />
-          </div>
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">Stop:</span>{" "}
-            <AnimatedValue value={s.stop_loss} className="font-mono-data text-base font-bold text-foreground" prefix="$" />
-          </div>
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">Target:</span>{" "}
-            <AnimatedValue value={s.target} className="font-mono-data text-base font-bold text-foreground" prefix="$" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-y-4 sm:flex sm:flex-wrap sm:gap-x-6">
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">R/R:</span>{" "}
-            <AnimatedValue value={s.risk_reward} className="font-mono-data text-base font-bold text-foreground" />
-          </div>
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">ETF Cost:</span>{" "}
-            <AnimatedValue value={s.etf_cost_est} className="font-mono-data text-base font-bold text-foreground" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-y-4 sm:flex sm:flex-wrap sm:gap-x-6">
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">Conviction:</span>{" "}
-            <AnimatedValue value={s.conviction} className={cn("font-mono-data text-base font-bold", dataDirectionColorClass)} suffix="%" />
-          </div>
-          <div className="flex-auto">
-            <span className="font-semibold text-foreground">Urgency:</span>{" "}
-            <AnimatedValue value={s.urgency} className={cn("font-mono-data text-base font-bold", urgencyColorClass)} />
-          </div>
-        </div>
+      {/* Row 4: Conviction + Urgency + Options — compact */}
+      <div className="flex items-center gap-3 text-xs">
+        <span className={cn("font-mono-data font-bold", getTextColorClass(dirColor, '400'))}>
+          {typeof s.conviction === "number" ? `${s.conviction}%` : s.conviction}
+        </span>
+        <span className={cn("font-mono-data font-semibold", getTextColorClass(urgColor, '400'))}>
+          {s.urgency}
+        </span>
+        {s.options_strategy && s.options_strategy !== "NONE" && (
+          <span className="text-muted-foreground/50 truncate max-w-[120px]" title={s.options_note}>
+            {s.options_strategy.replace(/_/g, " ")}
+          </span>
+        )}
       </div>
     </AppleCard>
   );

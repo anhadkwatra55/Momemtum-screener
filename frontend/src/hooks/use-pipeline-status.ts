@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { PipelineStatus } from "@/types/momentum";
 
-const WS_PIPELINE_URL = (typeof window !== "undefined")
-  ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:8060/ws/pipeline`
-  : "ws://localhost:8060/ws/pipeline";
+const _apiBase = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8060";
+const WS_PIPELINE_URL = _apiBase.replace(/^http/, "ws") + "/ws/pipeline";
 
 interface PipelineState {
   state: PipelineStatus;
