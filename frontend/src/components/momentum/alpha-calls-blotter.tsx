@@ -14,7 +14,7 @@ interface AlphaCall {
 
 interface AlphaCallsData {
   calls: AlphaCall[];
-  meta: { universe_source: string; universe_size: number; tickers_scanned: number; contracts_found: number; tickers_with_calls: number; errors: number; filters: Record<string, string>; };
+  meta: { universe_source: string; universe_size: number; tickers_scanned: number; contracts_found: number; tickers_with_calls: number; errors: number; partial?: boolean; scan_time_seconds?: number; filters: Record<string, string>; };
   timestamp: string;
 }
 
@@ -120,14 +120,32 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const [selected, setSelected] = useState<AlphaCall | null>(null);
   const [universe, setUniverse] = useState<"sp500" | "nasdaq100" | "both">("sp500");
 
-  const fetchData = useCallback(async (refresh = false) => {
+  const fetchData = useCallback(async (refresh = false, retryCount = 0) => {
     setLoading(true); setError(null);
+    const controller = new AbortController();
+    // 3 minute timeout for large scans
+    const timeoutMs = scanLimit >= 500 ? 180_000 : 120_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const params = new URLSearchParams({ limit: String(scanLimit), sort_by: "quant_score", universe, ...(refresh && { refresh: "true" }) });
-      const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData(await res.json());
-    } catch (e: any) { setError(e.message || "Failed"); }
+      const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`Server error (HTTP ${res.status})`);
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      setData(result);
+    } catch (e: any) {
+      clearTimeout(timer);
+      if (e.name === "AbortError") {
+        if (retryCount < 1) {
+          // Auto-retry once on timeout
+          return fetchData(refresh, retryCount + 1);
+        }
+        setError(`Scan timed out — try scanning fewer tickers (current: ${scanLimit})`);
+      } else {
+        setError(e.message || "Failed to fetch options data");
+      }
+    }
     finally { setLoading(false); }
   }, [scanLimit, universe]);
 
@@ -223,16 +241,24 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
             </button>
           </div>
 
-          {/* Loading / Error / Empty */}
+          {/* Loading / Error / Partial / Empty */}
           {loading && !data && (
             <div style={{ textAlign: "center", padding: "80px 0" }}>
               <div style={{ width: 36, height: 36, border: `2px solid ${T.border}`, borderTopColor: T.gold, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
-              <p style={{ fontSize: 13, color: T.textMuted }}>Scanning option chains…</p>
+              <p style={{ fontSize: 13, color: T.textMuted }}>Scanning {scanLimit === 500 ? "all" : scanLimit} tickers — this may take a few minutes…</p>
             </div>
           )}
           {error && (
-            <div style={{ padding: 16, borderRadius: 8, border: `1px solid ${T.red}30`, background: T.redDim, marginBottom: 16 }}>
-              <p style={{ fontSize: 13, color: T.red }}>{error}</p>
+            <div style={{ padding: 16, borderRadius: 8, border: `1px solid ${T.red}30`, background: T.redDim, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={{ fontSize: 13, color: T.red, margin: 0 }}>{error}</p>
+              <button onClick={() => fetchData(false)} style={{ fontSize: 11, fontWeight: 600, padding: "5px 14px", borderRadius: 6, cursor: "pointer", border: `1px solid ${T.red}40`, background: "transparent", color: T.red, flexShrink: 0, marginLeft: 12 }}>
+                Retry
+              </button>
+            </div>
+          )}
+          {data?.meta?.partial && !loading && (
+            <div style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.gold}30`, background: T.goldDim, marginBottom: 16, fontSize: 12, color: T.gold }}>
+              ⚡ Partial results — scan timed out after {data.meta.tickers_scanned} of {data.meta.universe_size} tickers. Showing {data.meta.contracts_found} contracts found so far.
             </div>
           )}
           {data && !grouped.length && !loading && (

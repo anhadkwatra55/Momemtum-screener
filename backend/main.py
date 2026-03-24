@@ -554,6 +554,38 @@ def _seconds_until_next_run() -> float:
     return (target - now).total_seconds()
 
 
+def _refresh_alpha_cache_background():
+    """Pre-compute alpha calls for all universes and fill the cache.
+    Called after the main momentum pipeline finishes and on startup."""
+    import time as _t
+    try:
+        from options_alpha import get_alpha_calls
+        for univ in ("sp500", "nasdaq100", "both"):
+            cache_key = f"alpha_500_quant_score_{univ}"
+            print(f"  📊 Alpha pre-scan: {univ} (up to 500 tickers)…")
+            t0 = _t.monotonic()
+            result = get_alpha_calls(limit=500, sort_by="quant_score", universe=univ)
+            elapsed = round(_t.monotonic() - t0, 1)
+            n = result.get("meta", {}).get("contracts_found", 0)
+            _CACHED_ALPHA_CALLS[cache_key] = result
+            _ALPHA_CACHE_TIMES[cache_key] = _t.time()
+            # Also cache common smaller limits from the same data
+            for lim in (50, 75, 100, 200):
+                small_key = f"alpha_{lim}_quant_score_{univ}"
+                _CACHED_ALPHA_CALLS[small_key] = {
+                    "calls": result["calls"][:lim * 3],  # contracts, not tickers
+                    "meta": result["meta"],
+                    "timestamp": result["timestamp"],
+                }
+                _ALPHA_CACHE_TIMES[small_key] = _t.time()
+            print(f"  ✓ Alpha {univ}: {n} contracts in {elapsed}s")
+        print("  ✅ Alpha cache fully warmed")
+    except Exception as e:
+        print(f"  ⚠ Alpha pre-scan failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def _scheduled_pipeline_run():
     """Called by the scheduler timer to re-run the pipeline."""
     global _last_pipeline_run, _DATA_CACHE
@@ -567,6 +599,10 @@ def _scheduled_pipeline_run():
 
     _last_pipeline_run = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _run_pipeline_background()
+
+    # Pre-compute alpha calls after momentum pipeline
+    alpha_thread = threading.Thread(target=_refresh_alpha_cache_background, daemon=True)
+    alpha_thread.start()
 
     _schedule_next_run()
 
@@ -637,6 +673,16 @@ async def lifespan(app: FastAPI):
     # Start background pipeline in thread (engine handles its own parallelism)
     pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
     pipeline_thread.start()
+
+    # Warm alpha calls cache after a short delay (let momentum pipeline start first)
+    def _delayed_alpha_warmup():
+        import time
+        time.sleep(30)  # Wait 30s for momentum pipeline to get going
+        _refresh_alpha_cache_background()
+
+    alpha_warmup = threading.Thread(target=_delayed_alpha_warmup, daemon=True)
+    alpha_warmup.start()
+    print("  📊 Alpha cache warm-up scheduled (30s delay)")
 
     # Schedule daily auto-refresh
     _schedule_next_run()

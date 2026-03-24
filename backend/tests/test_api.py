@@ -52,6 +52,19 @@ class TestAPIEndpoints:
         resp = client.get("/api/ticker/search?q=")
         assert resp.json()["results"] == []
 
+    def test_alpha_calls(self, client):
+        """Smoke test for the Alpha Calls options screener endpoint."""
+        resp = client.get("/api/screener/alpha-calls?limit=50&sort_by=quant_score")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "calls" in data
+        assert "meta" in data
+        assert "timestamp" in data
+        meta = data["meta"]
+        assert "universe_source" in meta
+        assert "contracts_found" in meta
+        assert "filters" in meta
+
 
 class TestAPIRoutes:
     def test_all_routes_exist(self, client):
@@ -61,5 +74,6 @@ class TestAPIRoutes:
                      "/api/backtest", "/api/backtest/cancel", "/api/backtest/history",
                      "/api/compare", "/api/indicators", "/api/strategy/backtest",
                      "/api/strategy/code", "/api/strategy/save", "/api/strategy/list",
-                     "/api/ticker/search", "/api/ticker/add", "/api/receipts"]:
+                     "/api/ticker/search", "/api/ticker/add", "/api/receipts",
+                     "/api/screener/alpha-calls"]:
             assert path in routes, f"Route {path} not registered"

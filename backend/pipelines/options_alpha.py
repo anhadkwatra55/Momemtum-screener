@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
@@ -91,44 +92,50 @@ class FlowProtocol:
 # ═══════════════════════════════════════════════════════════════
 
 def get_sp500():
-    """Fetch S&P 500 tickers from Wikipedia."""
+    """Fetch S&P 500 tickers from Wikipedia with retry."""
     if not HAS_PD or not HAS_REQ:
         return []
-    try:
-        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = _requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        tickers = pd.read_html(resp.text)[0]["Symbol"].tolist()
-        logger.info(f"Fetched {len(tickers)} S&P 500 tickers")
-        return tickers
-    except Exception as e:
-        logger.warning(f"S&P 500 fetch failed: {e}")
-        return []
+    for attempt in range(3):
+        try:
+            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            resp = _requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            tickers = pd.read_html(resp.text)[0]["Symbol"].tolist()
+            logger.info(f"Fetched {len(tickers)} S&P 500 tickers")
+            return tickers
+        except Exception as e:
+            logger.warning(f"S&P 500 fetch attempt {attempt + 1}/3 failed: {e}")
+            if attempt < 2:
+                _time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
+    return []
 
 
 def get_nasdaq100():
-    """Fetch NASDAQ 100 tickers from Wikipedia."""
+    """Fetch NASDAQ 100 tickers from Wikipedia with retry."""
     if not HAS_PD or not HAS_REQ:
         return []
-    try:
-        url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = _requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        tables = pd.read_html(resp.text)
-        # The NASDAQ 100 table typically has a 'Ticker' or 'Symbol' column
-        for t in tables:
-            for col in ['Ticker', 'Symbol', 'ticker', 'symbol']:
-                if col in t.columns:
-                    tickers = t[col].tolist()
-                    logger.info(f"Fetched {len(tickers)} NASDAQ 100 tickers")
-                    return tickers
-        logger.warning("NASDAQ 100 table not found")
-        return []
-    except Exception as e:
-        logger.warning(f"NASDAQ 100 fetch failed: {e}")
-        return []
+    for attempt in range(3):
+        try:
+            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            resp = _requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            tables = pd.read_html(resp.text)
+            # The NASDAQ 100 table typically has a 'Ticker' or 'Symbol' column
+            for t in tables:
+                for col in ['Ticker', 'Symbol', 'ticker', 'symbol']:
+                    if col in t.columns:
+                        tickers = t[col].tolist()
+                        logger.info(f"Fetched {len(tickers)} NASDAQ 100 tickers")
+                        return tickers
+            logger.warning("NASDAQ 100 table not found")
+            return []
+        except Exception as e:
+            logger.warning(f"NASDAQ 100 fetch attempt {attempt + 1}/3 failed: {e}")
+            if attempt < 2:
+                _time.sleep(2 ** attempt)
+    return []
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -343,6 +350,11 @@ def get_alpha_calls(
 
     all_calls: list[dict] = []
     errors = 0
+    timed_out = False
+
+    # Overall scan timeout: 4 minutes — return partial results if exceeded
+    SCAN_TIMEOUT = 240  # seconds
+    scan_start = _time.monotonic()
 
     # Parallel scan via ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -350,26 +362,48 @@ def get_alpha_calls(
             executor.submit(_scan_one_ticker, sym): sym
             for sym in scan_tickers
         }
+        completed = 0
         for future in as_completed(futures):
+            # Check overall timeout
+            elapsed = _time.monotonic() - scan_start
+            if elapsed > SCAN_TIMEOUT:
+                logger.warning(
+                    f"Alpha-Flow: Overall timeout ({SCAN_TIMEOUT}s) hit after "
+                    f"{completed}/{len(scan_tickers)} tickers. Returning partial results."
+                )
+                timed_out = True
+                # Cancel remaining futures
+                for f in futures:
+                    f.cancel()
+                break
             try:
-                results = future.result(timeout=60)
+                results = future.result(timeout=30)  # 30s per-ticker timeout
                 all_calls.extend(results)
             except Exception:
                 errors += 1
+            completed += 1
 
     # Sort — default by Quant_Score descending (matching Colab)
     reverse = sort_by not in ("breakeven_pct", "spread_pct")
     all_calls.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse)
+
+    scan_elapsed = round(_time.monotonic() - scan_start, 1)
+    logger.info(
+        f"Alpha-Flow: Done in {scan_elapsed}s — "
+        f"{len(all_calls)} contracts from {len(set(c['ticker'] for c in all_calls))} tickers"
+    )
 
     return {
         "calls": all_calls,
         "meta": {
             "universe_source": src,
             "universe_size": len(tickers),
-            "tickers_scanned": len(scan_tickers),
+            "tickers_scanned": completed if timed_out else len(scan_tickers),
             "contracts_found": len(all_calls),
             "tickers_with_calls": len(set(c["ticker"] for c in all_calls)),
             "errors": errors,
+            "partial": timed_out,
+            "scan_time_seconds": scan_elapsed,
             "filters": {
                 "price_floor": "$25",
                 "dte_range": "90-150d",
