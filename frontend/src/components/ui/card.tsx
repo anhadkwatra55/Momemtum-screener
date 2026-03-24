@@ -4,8 +4,8 @@ import { motion, LayoutGroup } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 /**
- * Card — Carbon Terminal Panel Surface
- * Opaque #111111 with 1px #2A2A2A border, 4px radius, no blur/shadow
+ * Card — Artifacts Panel Surface
+ * Layered #1a1a1a with 1px #2d2d2d border, 8px radius, subtle shadow
  */
 
 interface CardProps extends React.ComponentProps<typeof motion.div> {
@@ -22,8 +22,8 @@ const Card = React.memo(
         "group/card flex flex-col overflow-hidden text-sm text-card-foreground",
         "gap-3",
         "data-[size=sm]:gap-2",
-        // Carbon Terminal surface
-        "bg-[#111111] border border-[#2A2A2A] rounded-[4px]",
+        // Artifacts surface
+        "bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg",
         className
       )
 
@@ -32,12 +32,12 @@ const Card = React.memo(
           return {
             tabIndex: 0,
             whileHover: {
-              borderColor: '#00FF66',
+              borderColor: '#e2b857',
             },
             whileFocus: {
-              borderColor: '#00FF66',
+              borderColor: '#e2b857',
             },
-            transition: { duration: 0.05, ease: "easeOut" as const },
+            transition: { duration: 0.2, ease: "easeOut" as const },
             className: cn(
               baseClasses,
               "cursor-pointer",
@@ -78,7 +78,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>
       className={cn(
         "group/card-header @container/card-header grid auto-rows-min items-start",
         "gap-1.5",
-        "px-3 pt-3 sm:px-4 sm:pt-4",
+        "px-4 pt-4 sm:px-5 sm:pt-5",
         "group-data-[size=sm]/card:px-3 group-data-[size=sm]/card:pt-3",
         "has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto]",
         className
@@ -95,7 +95,7 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, React.ComponentProps<"h3"
       ref={ref}
       data-slot="card-title"
       className={cn(
-        "text-sm leading-snug font-bold tracking-[-0.02em] text-[#E8E8E8] group-data-[size=sm]/card:text-xs",
+        "text-sm leading-snug font-semibold tracking-[-0.01em] text-[#e0e0e0] group-data-[size=sm]/card:text-xs",
         className
       )}
       {...props}
@@ -109,7 +109,7 @@ const CardDescription = React.forwardRef<HTMLDivElement, React.ComponentProps<"d
     <div
       ref={ref}
       data-slot="card-description"
-      className={cn("text-xs text-[#6B6B6B]", className)}
+      className={cn("text-xs text-[#707070]", className)}
       {...props}
     />
   )
@@ -138,7 +138,7 @@ const CardContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">
       ref={ref}
       data-slot="card-content"
       className={cn(
-        "px-3 sm:px-4",
+        "px-4 sm:px-5",
         "group-data-[size=sm]/card:px-3",
         className
       )}
@@ -154,11 +154,11 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>
       ref={ref}
       data-slot="card-footer"
       className={cn(
-        "bg-[#0A0A0A]",
+        "bg-[#141414]",
         "flex items-center",
-        "rounded-b-[4px]",
-        "border-t border-[#2A2A2A]",
-        "px-3 pb-3 sm:px-4 sm:pb-4",
+        "rounded-b-lg",
+        "border-t border-[#2d2d2d]",
+        "px-4 pb-4 sm:px-5 sm:pb-5",
         "group-data-[size=sm]/card:px-3 group-data-[size=sm]/card:pb-3",
         className
       )}

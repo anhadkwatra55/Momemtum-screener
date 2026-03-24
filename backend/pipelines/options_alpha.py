@@ -107,6 +107,30 @@ def get_sp500():
         return []
 
 
+def get_nasdaq100():
+    """Fetch NASDAQ 100 tickers from Wikipedia."""
+    if not HAS_PD or not HAS_REQ:
+        return []
+    try:
+        url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = _requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        tables = pd.read_html(resp.text)
+        # The NASDAQ 100 table typically has a 'Ticker' or 'Symbol' column
+        for t in tables:
+            for col in ['Ticker', 'Symbol', 'ticker', 'symbol']:
+                if col in t.columns:
+                    tickers = t[col].tolist()
+                    logger.info(f"Fetched {len(tickers)} NASDAQ 100 tickers")
+                    return tickers
+        logger.warning("NASDAQ 100 table not found")
+        return []
+    except Exception as e:
+        logger.warning(f"NASDAQ 100 fetch failed: {e}")
+        return []
+
+
 # ═══════════════════════════════════════════════════════════════
 # 3. SINGLE-TICKER SCAN — Exact Colab logic, parallelizable
 # ═══════════════════════════════════════════════════════════════
@@ -259,22 +283,39 @@ def get_alpha_calls(
     limit: int = 75,
     max_workers: int = 8,
     sort_by: str = "quant_score",
+    universe: str = "sp500",
     **kwargs,  # Accept extra params from API without breaking
 ) -> dict:
     """
-    Run the Alpha-Flow scan across S&P 500.
+    Run the Alpha-Flow scan across S&P 500 and/or NASDAQ 100.
 
     Args:
         limit: Number of tickers to scan (default 75)
         max_workers: Thread pool size
         sort_by: Sort key for results
+        universe: 'sp500', 'nasdaq100', or 'both'
 
     Returns:
         dict with calls, meta, timestamp
     """
-    # Fetch universe
-    tickers = get_sp500()
-    src = "S&P 500"
+    # Fetch universe based on selection
+    if universe == "nasdaq100":
+        tickers = get_nasdaq100()
+        src = "NASDAQ 100"
+    elif universe == "both":
+        sp = get_sp500()
+        nq = get_nasdaq100()
+        # Merge and deduplicate, preserving order
+        seen = set()
+        tickers = []
+        for t in sp + nq:
+            if t not in seen:
+                seen.add(t)
+                tickers.append(t)
+        src = "S&P 500 + NASDAQ 100"
+    else:
+        tickers = get_sp500()
+        src = "S&P 500"
     if not tickers:
         # Fallback to momentum universe
         try:

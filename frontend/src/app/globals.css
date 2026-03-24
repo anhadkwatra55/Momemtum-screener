@@ -4,155 +4,161 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   HEADSTART — Carbon Terminal Design System
-   F1 Telemetry + Bloomberg Terminal aesthetic
-   Hyper-monochrome · Mechanical interactivity · Data-first
+   HEADSTART — Artifacts Design System
+   Anthropic/Claude aesthetic · Subtle surfaces · Research-grade clarity
+   Deep charcoal · Muted accents · Soft radius · Fluid transitions
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @theme inline {
-  /* ── Carbon Terminal Base Surfaces ── */
-  --color-background: #000000;
-  --color-foreground: #E8E8E8;
-  --color-card: #111111;
-  --color-card-foreground: #E8E8E8;
-  --color-popover: #0A0A0A;
-  --color-popover-foreground: #E8E8E8;
+  /* ── Artifacts Base Surfaces ── */
+  --color-background: #0d0d0d;
+  --color-foreground: #e0e0e0;
+  --color-card: #1a1a1a;
+  --color-card-foreground: #e0e0e0;
+  --color-popover: #141414;
+  --color-popover-foreground: #e0e0e0;
 
-  /* ── Primary: Telemetry Green ── */
-  --color-primary: #00FF66;
-  --color-primary-foreground: #000000;
+  /* ── Primary: Muted Gold ── */
+  --color-primary: #e2b857;
+  --color-primary-foreground: #0d0d0d;
 
   /* ── Secondary/Muted Surfaces ── */
-  --color-secondary: #1C1C1C;
-  --color-secondary-foreground: #C0C0C0;
-  --color-muted: #161616;
-  --color-muted-foreground: #6B6B6B;
-  --color-accent: #1C1C1C;
-  --color-accent-foreground: #E8E8E8;
-  --color-destructive: #FF3333;
+  --color-secondary: #222222;
+  --color-secondary-foreground: #a0a0a0;
+  --color-muted: #1a1a1a;
+  --color-muted-foreground: #707070;
+  --color-accent: #222222;
+  --color-accent-foreground: #e0e0e0;
+  --color-destructive: #e05252;
 
-  /* ── Borders: Hard separation ── */
-  --color-border: #2A2A2A;
+  /* ── Borders: Subtle separation ── */
+  --color-border: #2d2d2d;
   --color-input: #333333;
-  --color-ring: #00FF66;
+  --color-ring: #e2b857;
 
-  /* ── Chart: Signal colors only ── */
-  --color-chart-1: #00FF66;
-  --color-chart-2: #FF3333;
-  --color-chart-3: #FFD600;
-  --color-chart-4: #C0C0C0;
-  --color-chart-5: #6B6B6B;
+  /* ── Chart: Refined signal palette ── */
+  --color-chart-1: #4ade80;
+  --color-chart-2: #e05252;
+  --color-chart-3: #e2b857;
+  --color-chart-4: #a0a0a0;
+  --color-chart-5: #707070;
 
-  /* ── Sidebar: Carbon fiber ── */
-  --color-sidebar: #0A0A0A;
-  --color-sidebar-foreground: #C0C0C0;
-  --color-sidebar-primary: #00FF66;
-  --color-sidebar-primary-foreground: #000000;
-  --color-sidebar-accent: #1C1C1C;
-  --color-sidebar-accent-foreground: #00FF66;
-  --color-sidebar-border: #2A2A2A;
-  --color-sidebar-ring: #00FF66;
+  /* ── Sidebar: Deep charcoal ── */
+  --color-sidebar: #111111;
+  --color-sidebar-foreground: #a0a0a0;
+  --color-sidebar-primary: #e2b857;
+  --color-sidebar-primary-foreground: #0d0d0d;
+  --color-sidebar-accent: #1e1e1e;
+  --color-sidebar-accent-foreground: #e2b857;
+  --color-sidebar-border: #2d2d2d;
+  --color-sidebar-ring: #e2b857;
 
-  /* ── Radius: Aggressive, tight ── */
-  --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 4px;
-  --radius-xl: 4px;
+  /* ── Radius: Soft, rounded (Anthropic style) ── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
 
   /* ── Fonts ── */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
 }
 
-/* ═══ Carbon Terminal Tokens ═══ */
+/* ═══ Artifacts Design Tokens ═══ */
 :root {
-  /* Surface hierarchy */
-  --ct-black: #000000;
-  --ct-carbon: #111111;
-  --ct-titanium: #1C1C1C;
-  --ct-steel: #2A2A2A;
-  --ct-silver: #6B6B6B;
-  --ct-chrome: #C0C0C0;
-  --ct-white: #E8E8E8;
+  /* Surface hierarchy (deep charcoal layering) */
+  --ct-black: #0d0d0d;
+  --ct-carbon: #1a1a1a;
+  --ct-titanium: #222222;
+  --ct-steel: #2d2d2d;
+  --ct-silver: #707070;
+  --ct-chrome: #a0a0a0;
+  --ct-white: #e0e0e0;
 
-  /* Signal palette — ONLY 3 colors */
-  --ct-green: #00FF66;
-  --ct-red: #FF3333;
-  --ct-yellow: #FFD600;
-  --ct-green-rgb: 0, 255, 102;
-  --ct-red-rgb: 255, 51, 51;
-  --ct-yellow-rgb: 255, 214, 0;
+  /* Signal palette — refined, softer */
+  --ct-green: #4ade80;
+  --ct-red: #e05252;
+  --ct-yellow: #e2b857;
+  --ct-green-rgb: 74, 222, 128;
+  --ct-red-rgb: 224, 82, 82;
+  --ct-yellow-rgb: 226, 184, 87;
+
+  /* Accent tokens — Anthropic palette */
+  --ct-gold: #e2b857;
+  --ct-purple: #9f7aea;
+  --ct-gold-rgb: 226, 184, 87;
+  --ct-purple-rgb: 159, 122, 234;
 
   /* Legacy compatibility aliases */
-  --color-mo-cyan: #00FF66;
-  --color-mo-emerald: #00FF66;
-  --color-mo-amber: #FFD600;
-  --color-mo-rose: #FF3333;
-  --color-mo-violet: #6B6B6B;
-  --color-mo-cyan-rgb: 0, 255, 102;
-  --color-mo-emerald-rgb: 0, 255, 102;
-  --color-mo-amber-rgb: 255, 214, 0;
-  --color-mo-rose-rgb: 255, 51, 51;
-  --color-mo-violet-rgb: 107, 107, 107;
-  --color-mo-blue: #6B6B6B;
-  --color-mo-lime: #00FF66;
-  --color-mo-orange: #FFD600;
-  --color-mo-slate: #6B6B6B;
+  --color-mo-cyan: #4ade80;
+  --color-mo-emerald: #4ade80;
+  --color-mo-amber: #e2b857;
+  --color-mo-rose: #e05252;
+  --color-mo-violet: #9f7aea;
+  --color-mo-cyan-rgb: 74, 222, 128;
+  --color-mo-emerald-rgb: 74, 222, 128;
+  --color-mo-amber-rgb: 226, 184, 87;
+  --color-mo-rose-rgb: 224, 82, 82;
+  --color-mo-violet-rgb: 159, 122, 234;
+  --color-mo-blue: #707070;
+  --color-mo-lime: #4ade80;
+  --color-mo-orange: #e2b857;
+  --color-mo-slate: #707070;
 
   /* Semantic tokens */
-  --background: #000000;
-  --foreground: #E8E8E8;
-  --card: #111111;
-  --card-foreground: #E8E8E8;
-  --popover: #0A0A0A;
-  --popover-foreground: #E8E8E8;
-  --primary: #00FF66;
-  --primary-foreground: #000000;
-  --secondary: #1C1C1C;
-  --secondary-foreground: #C0C0C0;
-  --muted: #161616;
-  --muted-foreground: #6B6B6B;
-  --accent: #1C1C1C;
-  --accent-foreground: #E8E8E8;
-  --destructive: #FF3333;
-  --border: #2A2A2A;
+  --background: #0d0d0d;
+  --foreground: #e0e0e0;
+  --card: #1a1a1a;
+  --card-foreground: #e0e0e0;
+  --popover: #141414;
+  --popover-foreground: #e0e0e0;
+  --primary: #e2b857;
+  --primary-foreground: #0d0d0d;
+  --secondary: #222222;
+  --secondary-foreground: #a0a0a0;
+  --muted: #1a1a1a;
+  --muted-foreground: #707070;
+  --accent: #222222;
+  --accent-foreground: #e0e0e0;
+  --destructive: #e05252;
+  --border: #2d2d2d;
   --input: #333333;
-  --ring: #00FF66;
+  --ring: #e2b857;
 
-  /* Radius */
-  --radius: 4px;
-  --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 4px;
-  --radius-xl: 4px;
-  --radius-2xl: 4px;
-  --radius-3xl: 4px;
-  --radius-4xl: 4px;
+  /* Radius — Anthropic soft curves */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 14px;
+  --radius-4xl: 16px;
 
   /* Sidebar */
-  --sidebar: #0A0A0A;
-  --sidebar-foreground: #C0C0C0;
-  --sidebar-primary: #00FF66;
-  --sidebar-primary-foreground: #000000;
-  --sidebar-accent: #1C1C1C;
-  --sidebar-accent-foreground: #00FF66;
-  --sidebar-border: #2A2A2A;
-  --sidebar-ring: #00FF66;
+  --sidebar: #111111;
+  --sidebar-foreground: #a0a0a0;
+  --sidebar-primary: #e2b857;
+  --sidebar-primary-foreground: #0d0d0d;
+  --sidebar-accent: #1e1e1e;
+  --sidebar-accent-foreground: #e2b857;
+  --sidebar-border: #2d2d2d;
+  --sidebar-ring: #e2b857;
 
-  /* No shadows — depth from borders only */
-  --shadow-soft: none;
-  --shadow-card: none;
-  --shadow-elevated: none;
-  --shadow-glow-cyan: 0 0 0 1px rgba(var(--ct-green-rgb), 0.3);
-  --shadow-glow-emerald: 0 0 0 1px rgba(var(--ct-green-rgb), 0.3);
-  --shadow-glow-rose: 0 0 0 1px rgba(var(--ct-red-rgb), 0.3);
-  --shadow-glow-amber: 0 0 0 1px rgba(var(--ct-yellow-rgb), 0.3);
+  /* Subtle shadows for depth */
+  --shadow-soft: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.25);
+  --shadow-elevated: 0 4px 16px rgba(0,0,0,0.3);
+  --shadow-glow-cyan: 0 0 12px rgba(var(--ct-green-rgb), 0.15);
+  --shadow-glow-emerald: 0 0 12px rgba(var(--ct-green-rgb), 0.15);
+  --shadow-glow-rose: 0 0 12px rgba(var(--ct-red-rgb), 0.15);
+  --shadow-glow-amber: 0 0 12px rgba(var(--ct-yellow-rgb), 0.15);
 
-  /* Transition speeds — mechanical */
-  --transition-instant: 50ms;
-  --transition-fast: 100ms;
-  --transition-flash-in: 150ms;
-  --transition-flash-out: 500ms;
+  /* Transition speeds — fluid, not mechanical */
+  --transition-instant: 120ms;
+  --transition-fast: 200ms;
+  --transition-flash-in: 250ms;
+  --transition-flash-out: 400ms;
 
   /* Data font */
   --font-data: 'JetBrains Mono', monospace;
@@ -169,11 +175,11 @@
   }
   html {
     @apply font-sans text-[11px] sm:text-xs md:text-sm;
-    scroll-behavior: auto; /* No smooth scroll — mechanical */
+    scroll-behavior: smooth;
   }
   h1, h2, h3, h4, h5, h6 {
-    letter-spacing: -0.02em;
-    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-weight: 600;
   }
   /* Data font utility — ALL numbers/tickers/percentages */
   .font-mono-data {
@@ -189,60 +195,20 @@
 /* ═══ Typography Utilities ═══ */
 .text-label-uppercase {
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   font-size: 10px;
-  font-family: var(--font-data);
+  font-weight: 500;
   color: var(--ct-silver);
 }
 
-/* ═══ Carbon-Weave Background Pattern ═══ */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 1px,
-      rgba(255,255,255,0.018) 1px,
-      rgba(255,255,255,0.018) 2px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 1px,
-      rgba(255,255,255,0.018) 1px,
-      rgba(255,255,255,0.018) 2px
-    );
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* ═══ Carbon Terminal Panel Surface ═══ */
+/* ═══ Artifacts Panel Surface ═══ */
 .carbon-panel {
   background: var(--ct-carbon);
   border: 1px solid var(--ct-steel);
   border-radius: var(--radius-lg);
 }
 
-/* ═══ Chamfered Clip-Path Utilities ═══ */
-.clip-chamfer-tr {
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
-}
-
-.clip-chamfer-top {
-  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%, 0 12px);
-}
-
-.clip-chamfer-all {
-  clip-path: polygon(
-    8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-    calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px
-  );
-}
-
-/* ═══ Popover / Dialog / Tooltip — Opaque dark ═══ */
+/* ═══ Popover / Dialog / Tooltip ═══ */
 .popover-surface,
 .dialog-content-surface,
 .tooltip-surface {

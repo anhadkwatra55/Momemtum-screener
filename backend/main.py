@@ -838,6 +838,7 @@ async def get_alpha_calls_endpoint(
     limit: int = 75,
     sort_by: str = "quant_score",
     refresh: bool = False,
+    universe: str = "sp500",
     # Accept but ignore old params so frontend doesn't break
     mode: str = "atm_otm",
     min_price: float = 25.0,
@@ -852,7 +853,7 @@ async def get_alpha_calls_endpoint(
     """Alpha-Flow Options Screener — direct port of Colab AlphaFlowEngine."""
     import time as _time
 
-    cache_key = f"alpha_{limit}_{sort_by}"
+    cache_key = f"alpha_{limit}_{sort_by}_{universe}"
     cached = _CACHED_ALPHA_CALLS.get(cache_key)
     cache_time = _ALPHA_CACHE_TIMES.get(cache_key, 0)
 
@@ -864,7 +865,7 @@ async def get_alpha_calls_endpoint(
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: get_alpha_calls(limit=limit, sort_by=sort_by)
+            lambda: get_alpha_calls(limit=limit, sort_by=sort_by, universe=universe)
         )
         _CACHED_ALPHA_CALLS[cache_key] = result
         _ALPHA_CACHE_TIMES[cache_key] = _time.time()

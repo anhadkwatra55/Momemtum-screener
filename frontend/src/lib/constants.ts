@@ -29,29 +29,31 @@ export const ROUTES = {
 // maintaining 'monochrome with one accent' in general UI while
 // providing rich data context.
 export const COLORS = {
-  // Carbon Terminal base surfaces
-  background: "#000000",
-  card: "#111111",
-  // Signal colors — ONLY 3 allowed
-  cyan: "#00FF66",      // Telemetry Green (was cyan)
-  emerald: "#00FF66",   // Positive (mapped to green)
-  rose: "#FF3333",      // Negative (red)
-  amber: "#FFD600",     // Hazard Yellow
-  violet: "#6B6B6B",    // Mapped to silver (monochrome)
-  blue: "#6B6B6B",
-  lime: "#00FF66",
-  orange: "#FFD600",
-  slate: "#6B6B6B",
-  // Carbon Terminal surface tokens
-  carbon: "#111111",
-  titanium: "#1C1C1C",
-  steel: "#2A2A2A",
-  silver: "#6B6B6B",
-  chrome: "#C0C0C0",
-  white: "#E8E8E8",
-  green: "#00FF66",
-  red: "#FF3333",
-  yellow: "#FFD600",
+  // Artifacts base surfaces
+  background: "#0d0d0d",
+  card: "#1a1a1a",
+  // Signal colors — refined, softer
+  cyan: "#4ade80",       // Soft green
+  emerald: "#4ade80",    // Positive
+  rose: "#e05252",       // Negative
+  amber: "#e2b857",      // Muted gold
+  violet: "#9f7aea",     // Soft purple
+  blue: "#707070",
+  lime: "#4ade80",
+  orange: "#e2b857",
+  slate: "#707070",
+  // Artifacts surface tokens
+  carbon: "#1a1a1a",
+  titanium: "#222222",
+  steel: "#2d2d2d",
+  silver: "#707070",
+  chrome: "#a0a0a0",
+  white: "#e0e0e0",
+  green: "#4ade80",
+  red: "#e05252",
+  yellow: "#e2b857",
+  gold: "#e2b857",
+  purple: "#9f7aea",
 } as const;
 
 // ── Sidebar Navigation Items ─────────────────────────────────────────────────

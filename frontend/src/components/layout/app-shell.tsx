@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { TopNav } from "./topnav";
 
@@ -9,44 +10,64 @@ interface AppShellProps {
   dbStats?: string;
 }
 
-export function AppShell({ children, dbStats }: AppShellProps) {
-  const [activePage, setActivePage] = useState("market-pulse");
+function AppShellInner({ children, dbStats }: AppShellProps) {
+  const searchParams = useSearchParams();
+  const initialView = searchParams.get("view") || "market-pulse";
+
+  const [activePage, setActivePage] = useState(initialView);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Sync with URL changes (e.g. back/forward navigation)
+  useEffect(() => {
+    const view = searchParams.get("view");
+    if (view && view !== activePage) {
+      setActivePage(view);
+    }
+  }, [searchParams]);
 
   const handleNavigate = useCallback((page: string) => {
     setActivePage(page);
     setSidebarOpen(false);
+    // Update URL without full page reload
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", page);
+    window.history.replaceState({}, "", url.toString());
   }, []);
 
-  return (
-    <div className="flex min-h-screen bg-[#000000]">
-      {/* Engine Status Bar (Top) */}
-      <TopNav />
+  const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
+  const handleCloseSidebar = useCallback(() => setSidebarOpen(false), []);
 
-      {/* Sidebar */}
+  return (
+    <div className="flex min-h-screen bg-[#0d0d0d]" style={{ fontFamily: "'Inter', var(--font-sans), sans-serif" }}>
+      {/* Top Nav — z-50 */}
+      <TopNav onMenuClick={handleOpenSidebar} />
+
+      {/* Sidebar — desktop z-30, mobile overlay z-90, mobile panel z-100 */}
       <Sidebar
         activePage={activePage}
         onNavigate={handleNavigate}
         dbStats={dbStats}
         isOpen={sidebarOpen}
-        onClose={useCallback(() => setSidebarOpen(false), [])}
+        onClose={handleCloseSidebar}
       />
 
-      {/* Mobile hamburger */}
-      <button
-        className="fixed top-[10px] left-2 z-50 md:hidden w-8 h-8 flex items-center justify-center bg-[#111111] border border-[#2A2A2A] rounded-[2px] text-[#C0C0C0] hover:text-[#00FF66] hover:border-[#00FF66] transition-all duration-[50ms]"
-        aria-label="Open menu"
-        onClick={() => setSidebarOpen(true)}
-      >
-        <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
-          <path d="M2 4h12v1H2zm0 3.5h12v1H2zm0 3.5h12v1H2z" />
-        </svg>
-      </button>
-
-      {/* Main content */}
-      <main className="ml-0 md:ml-[200px] flex-1 min-w-0 overflow-x-hidden p-2 md:p-3 min-h-screen relative z-[1] pt-[56px] md:pt-[56px]">
+      {/* Main content — no z-index needed, natural flow */}
+      <main className="ml-0 md:ml-[220px] flex-1 min-w-0 overflow-x-hidden px-3 py-3 md:px-5 md:py-5 min-h-screen pt-[54px] md:pt-[54px]">
         {children(activePage, setActivePage)}
       </main>
     </div>
+  );
+}
+
+// Wrap in Suspense for useSearchParams
+export function AppShell(props: AppShellProps) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#2d2d2d] border-t-[#e2b857] rounded-full animate-spin" />
+      </div>
+    }>
+      <AppShellInner {...props} />
+    </Suspense>
   );
 }

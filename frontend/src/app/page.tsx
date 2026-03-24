@@ -1,447 +1,373 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import React, { useMemo, useCallback } from "react";
+import { motion } from "framer-motion";
+import React, { useState, useCallback } from "react";
 
-import { TopNav } from "@/components/layout/topnav";
-import { KPIStrip } from "@/components/momentum/kpi-strip";
-import { SectorHeatmap } from "@/components/momentum/sector-heatmap";
-import { QuoteRotator } from "@/components/momentum/quote-rotator";
-import { SentimentBadge } from "@/components/momentum/sentiment-badge";
-import { AppleCard } from "@/components/ui/apple-card";
-import { AppleButton } from "@/components/ui/apple-button";
-import { SFIcon } from "@/components/ui/SFIcon";
-import { useSignals } from "@/hooks/use-signals";
-import {
-  COLORS,
-  ROUTES,
-  SIDEBAR_NAV,
-  TOP_SIGNALS_LIMIT,
-  HIGH_CONFIDENCE_THRESHOLD,
-  PAGE_TRANSITION_DURATION,
-  SPRING_TRANSITION,
-  STAGGER_CHILDREN_DELAY,
-  INITIAL_STAGGER_DELAY,
-  HOVER_Y_LIFT,
-  Z_INDEX_STICKY_HEADER,
-  SHADOW_STICKY_HEADER,
-  TEXT_SHADOW_CYAN_GRADIENT,
-  SHADOW_GLOW_CYAN,
-} from "@/lib/constants";
-import { Signal } from "@/types/momentum";
-import { cn, getBackgroundColorClass, getTextColorClass, type PaletteColorKey } from "@/lib/utils";
+/* ── Anthropic Cream Palette ── */
+const P = {
+  cream: "#f5f2ed",
+  warmGray: "#e8e4de",
+  charcoal: "#1a1a1a",
+  charcoalLight: "#2d2d2d",
+  textPrimary: "#1a1a1a",
+  textSecondary: "#5a5a5a",
+  textMuted: "#8a8a8a",
+  gold: "#e2b857",
+  goldSoft: "rgba(226,184,87,0.15)",
+  green: "#4ade80",
+  purple: "#9f7aea",
+};
 
-// ── Animations ──
-const staggerContainer = {
+const ease = [0.33, 1, 0.68, 1] as const;
+
+/* ── Animations ── */
+const fadeUp = {
+  hidden: { opacity: 0, y: 30 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease } },
+};
+const stagger = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: STAGGER_CHILDREN_DELAY, delayChildren: INITIAL_STAGGER_DELAY },
-  },
-};
-const fadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: SPRING_TRANSITION },
-};
-const pageTransition = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0, transition: { duration: PAGE_TRANSITION_DURATION, ease: [0.33, 1, 0.68, 1] as const } },
-  exit: { opacity: 0, y: -20, transition: { duration: PAGE_TRANSITION_DURATION, ease: [0.33, 1, 0.68, 1] as const } },
+  show: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.3 } },
 };
 
-// ── Skeleton ──
-function CommandCenterSkeleton() {
+/* ── Feature Card ── */
+function FeatureCard({ title, description, tag, href }: { title: string; description: string; tag: string; href: string }) {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="flex flex-col items-center gap-6">
-        <div className="w-16 h-16 rounded-[3px] bg-[#00FF66]/20 animate-pulse" />
-        <div className="w-48 h-4 rounded-[2px] bg-[#1C1C1C] animate-pulse" />
-        <div className="w-32 h-3 rounded-[2px] bg-[#1C1C1C] animate-pulse" />
-      </div>
+    <Link href={href}>
+      <motion.div
+        variants={fadeUp}
+        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+        style={{
+          background: "white",
+          border: `1px solid ${P.warmGray}`,
+          borderRadius: 12,
+          padding: "32px 28px",
+          cursor: "pointer",
+          transition: "box-shadow 0.3s ease, border-color 0.3s ease",
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(0,0,0,0.08)";
+          (e.currentTarget as HTMLElement).style.borderColor = P.gold;
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.boxShadow = "none";
+          (e.currentTarget as HTMLElement).style.borderColor = P.warmGray;
+        }}
+      >
+        <span style={{
+          display: "inline-block", fontSize: 10, fontFamily: "var(--font-mono)",
+          fontWeight: 500, color: P.gold, letterSpacing: "0.1em",
+          textTransform: "uppercase", marginBottom: 12,
+          padding: "3px 8px", borderRadius: 4,
+          background: P.goldSoft,
+        }}>{tag}</span>
+        <h3 style={{
+          fontFamily: "var(--font-serif), Georgia, serif",
+          fontSize: 22, fontWeight: 500, color: P.charcoal,
+          marginBottom: 8, lineHeight: 1.3,
+        }}>{title}</h3>
+        <p style={{
+          fontSize: 14, lineHeight: 1.6, color: P.textSecondary,
+          fontFamily: "var(--font-sans)",
+        }}>{description}</p>
+      </motion.div>
+    </Link>
+  );
+}
+
+/* ── Stat Pill ── */
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+      padding: "12px 24px", background: "white", borderRadius: 8,
+      border: `1px solid ${P.warmGray}`,
+    }}>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: P.charcoal }}>{value}</span>
+      <span style={{ fontSize: 11, color: P.textMuted, fontWeight: 400, letterSpacing: "0.02em" }}>{label}</span>
     </div>
   );
 }
 
-// ── Rating Badge ──
-function RatingBadge({ sentiment }: { sentiment: string }) {
-  const styles = {
-    "Strong Bullish": "bg-[#00FF66]/10 text-[#00FF66]",
-    "Bullish": "bg-[#00FF66]/8 text-[#00FF66]",
-    "Neutral": "bg-[#6B6B6B]/10 text-[#6B6B6B]",
-    "Bearish": "bg-[#FFD600]/8 text-[#FFD600]",
-    "Strong Bearish": "bg-[#FF3333]/10 text-[#FF3333]",
-  };
-  return (
-    <span className={cn("text-[9px] font-mono-data font-semibold px-1.5 py-0.5 rounded-[2px] uppercase tracking-[0.08em]", styles[sentiment as keyof typeof styles] || styles.Neutral)}>
-      {sentiment}
-    </span>
-  );
-}
-
-// ── Platform Feature Card ──
-interface FeatureCardProps {
-  icon: string;
-  title: string;
-  desc: string;
-  tags: string[];
-  href: string;
-  color: PaletteColorKey;
-  delay: number;
-}
-
-function FeatureCard({ icon, title, desc, tags, href, color, delay }: FeatureCardProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...SPRING_TRANSITION, delay }}
-    >
-      <Link href={href} className="block h-full">
-        <AppleCard glowColor={color} className="h-full group flex flex-col justify-between p-5">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-[3px] bg-[#00FF66]/10 border border-[#2A2A2A] flex items-center justify-center">
-                <SFIcon icon={icon} size={20} className="text-[#00FF66]" />
-              </div>
-              <SFIcon icon="arrow.right" size={16} className="text-muted-foreground/30 group-hover:text-foreground/60 transition-all group-hover:translate-x-1 duration-200" />
-            </div>
-            <h3 className="font-semibold text-base text-foreground/90 mb-1.5 group-hover:text-foreground transition-colors tracking-tight">{title}</h3>
-            <p className="text-sm text-muted-foreground/60 font-light leading-relaxed mb-4">{desc}</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map(t => (
-              <span key={t} className="text-[10px] px-2 py-0.5 rounded-[2px] bg-[#1C1C1C] text-[#6B6B6B] font-mono-data font-medium uppercase tracking-[0.08em] border border-[#2A2A2A]">{t}</span>
-            ))}
-          </div>
-        </AppleCard>
-      </Link>
-    </motion.div>
-  );
-}
-
-// ── Main Page ──
-export default function CommandCenter() {
+/* ════════════════════════════════════════════════════ */
+export default function LandingPage() {
   const router = useRouter();
-  const { data, loading, error } = useSignals();
+  const [query, setQuery] = useState("");
 
-  const navigateToDashboard = useCallback(() => {
-    router.push(`${ROUTES.dashboard}?view=market-pulse`);
-  }, [router]);
-  const navigateToReceipts = useCallback(() => {
-    router.push(ROUTES.receipts);
-  }, [router]);
-  const navigateToDashboardWithTicker = useCallback((ticker: string) => {
-    router.push(`${ROUTES.dashboard}?view=ticker-detail&ticker=${ticker}`);
-  }, [router]);
-  const navigateToDashboardWithView = useCallback((view: string) => {
-    router.push(`${ROUTES.dashboard}?view=${view}`);
-  }, [router]);
-
-  // ── Memoized data ──
-  const bullishMomentum = useMemo(() => data?.bullish_momentum?.slice(0, 5) || [], [data?.bullish_momentum]);
-  const topSignals = useMemo(() => data?.signals?.slice(0, 8) || [], [data?.signals]);
-  const freshCount = useMemo(() => data?.fresh_momentum?.length || 0, [data?.fresh_momentum]);
-  const sectorCount = useMemo(() => data?.sector_regimes ? Object.keys(data.sector_regimes).length : 0, [data?.sector_regimes]);
-  const kpiStripItems = useMemo(() => {
-    if (!data?.summary) return [];
-    return [
-      { label: "Universe", value: data.summary.total_screened, colorKey: "cyan" as const },
-      { label: "Bullish", value: data.summary.bullish, colorKey: "emerald" as const },
-      { label: "Bearish", value: data.summary.bearish, colorKey: "rose" as const },
-      { label: "Avg Confidence", value: `${data.summary.avg_probability}%`, colorKey: "amber" as const },
-      { label: "Top Bull", value: data.summary.top_bull, colorKey: "emerald" as const },
-      { label: "Top Bear", value: data.summary.top_bear, colorKey: "rose" as const },
-    ];
-  }, [data?.summary]);
-
-  if (loading) return <CommandCenterSkeleton />;
-
-  if (error || !data) {
-    return (
-      <AnimatePresence mode="wait">
-        <motion.div key="error" initial="initial" animate="animate" exit="exit" variants={pageTransition} className="min-h-screen flex items-center justify-center p-4">
-          <AppleCard className="max-w-md w-full p-8 text-center flex flex-col items-center">
-            <SFIcon icon="exclamationmark.triangle.fill" size={48} className="text-rose-500 mb-4 animate-pulse" />
-            <h2 className="text-3xl font-bold text-rose-400 mb-3 tracking-tight">System Offline</h2>
-            <p className="text-muted-foreground/70 mb-6 max-w-sm text-base leading-relaxed">
-              {typeof error === 'string' ? error : error?.message || "No data available."}
-            </p>
-            <p className="text-muted-foreground/50 text-sm mb-8 font-light">Backend server must be running (port 8060).</p>
-            <AppleButton variant="primary" size="lg" onClick={() => window.location.reload()}>
-              <SFIcon icon="arrow.clockwise" size={18} className="mr-2" /> Retry Connection
-            </AppleButton>
-          </AppleCard>
-        </motion.div>
-      </AnimatePresence>
-    );
-  }
+  const handleSearch = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (query.trim()) {
+      router.push(`/dashboard?search=${encodeURIComponent(query.trim())}`);
+    } else {
+      router.push("/dashboard");
+    }
+  }, [query, router]);
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div key="headstart-landing" initial="initial" animate="animate" exit="exit" variants={pageTransition} className="min-h-screen">
-        <TopNav title="HEADSTART" icon="bolt.fill" />
+    <div style={{ background: P.cream, minHeight: "100vh", color: P.textPrimary }}>
 
-        <div className="pt-[72px] pb-14 px-4 sm:px-6 max-w-[1440px] mx-auto relative z-[1]">
-
-          {/* ═══ HERO ═══ */}
-          <motion.section
-            className="text-center mb-14 pt-8"
-            initial={{ opacity: 0, y: 28 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...SPRING_TRANSITION, delay: 0.05 }}
-          >
-            <div className="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground/50 font-semibold mb-5">
-              4-System Momentum · Real-Time Screening · Strategy Backtesting
-            </div>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-[-0.04em] mb-6 leading-[1.05]">
-              <span className="text-[#00FF66]">
-                HEADSTART
-              </span>
-              <span className="text-[#6B6B6B] font-light ml-2 text-3xl sm:text-4xl lg:text-5xl align-middle">AI</span>
-            </h1>
-            <p className="text-muted-foreground/60 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed mb-8 font-light">
-              Turns real-time market data into simple, actionable intelligence for stocks, ETFs, and AI-driven investments. Screening <span className="font-mono-data font-bold text-[#00FF66]">{data.summary.total_screened}+</span> tickers across momentum, fundamentals, and thematic strategies.
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-3">
-              <AppleButton variant="primary" size="lg" onClick={navigateToDashboard}>
-                Open Dashboard <SFIcon icon="arrow.right" size={18} className="ml-2 inline-block" />
-              </AppleButton>
-              <AppleButton variant="secondary" size="lg" onClick={navigateToReceipts}>
-                View Track Record
-              </AppleButton>
-            </div>
-
-            {/* Research Methodology Highlights */}
-            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-5xl mx-auto">
-              {[
-                { icon: "chart.line.uptrend.xyaxis", label: "4-System Ensemble", desc: "ADX/TRIX, Elder Impulse, Renko, and Heikin-Ashi/HMA scored independently then averaged" },
-                { icon: "waveform.path.ecg", label: "Regime Classification", desc: "Every ticker classified as Trending, Mean-Reverting, or Choppy based on ADX + Stochastic analysis" },
-                { icon: "percent", label: "Probability Engine", desc: "0–98% confidence from directional agreement across all 4 systems with 1.2x unanimity bonus" },
-                { icon: "cylinder.fill", label: "Persisted Indicators", desc: "All data stored in 5 SQL tables — signals survive restarts, fast filtered queries" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-start gap-2.5 rounded-[3px] bg-[#111111] border border-[#2A2A2A] px-3.5 py-3">
-                  <SFIcon icon={item.icon} size={14} className="text-[#00FF66]/50 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="text-[11px] font-semibold text-foreground/70 mb-0.5">{item.label}</div>
-                    <div className="text-[10px] text-muted-foreground/45 leading-relaxed">{item.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.section>
-
-          {/* ═══ KPI STRIP ═══ */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.15 }}>
-            <KPIStrip className="mb-10" items={kpiStripItems} />
-          </motion.div>
-
-          {/* ═══ BULLISH MOMENTUM RIGHT NOW ═══ */}
-          {bullishMomentum.length > 0 && (
-            <motion.section
-              className="mb-10"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...SPRING_TRANSITION, delay: 0.2 }}
-            >
-              <AppleCard interactive={false} className="overflow-hidden">
-                <div className="flex items-center justify-between mb-4 px-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-2 h-2 rounded-full bg-[#00FF66] ct-pulse" />
-                    <h2 className="text-lg font-bold tracking-tight">Stocks with Bullish Momentum Right Now</h2>
-                  </div>
-                  <AppleButton variant="ghost" size="sm" onClick={() => navigateToDashboardWithView("bullish-momentum")}>
-                    View All <SFIcon icon="arrow.right" size={14} className="ml-1 inline-block" />
-                  </AppleButton>
-                </div>
-                <p className="text-xs text-muted-foreground/50 mb-4 px-1">
-                  Stocks with strong composite scores, positive daily action, trending regime, and high probability alignment.
-                </p>
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left min-w-[600px]">
-                    <thead>
-                      <tr className="border-b border-[#2A2A2A]">
-                        {["Ticker", "Sentiment", "Composite", "Probability", "Δ Day", "Price"].map(h => (
-                          <th key={h} className="py-2.5 px-3 text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bullishMomentum.map((s: Signal, i: number) => (
-                        <motion.tr
-                          key={s.ticker}
-                          className="border-b border-[#2A2A2A]/50 hover:bg-[#1C1C1C] cursor-pointer transition-all duration-[50ms]"
-                          onClick={() => navigateToDashboardWithTicker(s.ticker)}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.25 + i * 0.05 }}
-                        >
-                          <td className="py-2.5 px-3 font-mono-data font-bold text-[#00FF66] text-sm">{s.ticker}</td>
-                          <td className="py-2.5 px-3"><RatingBadge sentiment={s.sentiment} /></td>
-                          <td className={cn("py-2.5 px-3 font-mono-data text-sm font-semibold", s.composite > 0 ? "text-[#00FF66]" : "text-[#FF3333]")}>{s.composite.toFixed(2)}</td>
-                          <td className="py-2.5 px-3 font-mono-data text-sm text-[#FFD600]">{s.probability}%</td>
-                          <td className={cn("py-2.5 px-3 font-mono-data text-sm", s.daily_change > 0 ? "text-[#00FF66]" : "text-[#FF3333]")}>{s.daily_change > 0 ? "+" : ""}{s.daily_change}%</td>
-                          <td className="py-2.5 px-3 font-mono-data text-sm text-[#E8E8E8]">${s.price.toFixed(2)}</td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </AppleCard>
-            </motion.section>
-          )}
-
-          {/* ═══ PLATFORM FEATURES GRID ═══ */}
-          <motion.section className="mb-10" variants={staggerContainer} initial="hidden" animate="show">
-            <motion.div variants={fadeIn} className="text-center mb-6">
-              <h2 className="text-2xl font-bold tracking-tight mb-2">Explore the Platform</h2>
-              <p className="text-sm text-muted-foreground/50">Dedicated screeners for every edge</p>
-            </motion.div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <FeatureCard
-                icon="chart.line.uptrend.xyaxis"
-                title="Stock Screeners"
-                desc={`${freshCount} fresh momentum signals across S&P 500 + NASDAQ 100 — stocks only, no ETFs.`}
-                tags={["Momentum", "Stocks Only", "4-System"]}
-                href={`${ROUTES.dashboard}?view=fresh`}
-                color="cyan"
-                delay={0.3}
-              />
-              <FeatureCard
-                icon="chart.line.uptrend.rectangle.fill"
-                title="ETF Screener"
-                desc="Dedicated ETF screening — high-yield bonds, dividend equity, REITs, covered calls."
-                tags={["ETFs Only", "Income", "Yield"]}
-                href={`${ROUTES.dashboard}?view=etf-screener`}
-                color="violet"
-                delay={0.35}
-              />
-              <FeatureCard
-                icon="brain.fill"
-                title="AI Stocks"
-                desc="Track NVDA, AMD, GOOGL, MSFT, META, PLTR and 25+ AI/ML/semiconductor plays."
-                tags={["AI/ML", "Semiconductors", "Cloud"]}
-                href={`${ROUTES.dashboard}?view=ai-stocks`}
-                color="cyan"
-                delay={0.4}
-              />
-              <FeatureCard
-                icon="arrow.up.right.circle.fill"
-                title="Bullish Momentum"
-                desc="Stocks with comprehensive bullish technical alignment — MACD, RSI, Bollinger, volume."
-                tags={["Momentum", "Bullish", "Volume"]}
-                href={`${ROUTES.dashboard}?view=bullish-momentum`}
-                color="emerald"
-                delay={0.45}
-              />
-              <FeatureCard
-                icon="chart.bar.doc.horizontal.fill"
-                title="Volume Gappers"
-                desc="High-volume movers with notable price gaps, above-average RVOL, and bullish action."
-                tags={["Gaps", "Volume", "Breakouts"]}
-                href={`${ROUTES.dashboard}?view=volume-gappers`}
-                color="amber"
-                delay={0.5}
-              />
-              <FeatureCard
-                icon="briefcase.fill"
-                title="Portfolio Intelligence"
-                desc="Input your holdings. Get scored. Expose blind spots. Discover alpha rotations."
-                tags={["Aura Score", "Alpha Alerts", "Rotation"]}
-                href={`${ROUTES.dashboard}?view=portfolio-intel`}
-                color="violet"
-                delay={0.55}
-              />
-            </div>
-          </motion.section>
-
-          {/* ═══ MARKET HEAT ═══ */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.6 }} className="mb-10">
-            <AppleCard interactive={false} className="overflow-hidden">
-              <div className="flex items-center justify-between mb-5 px-0">
-                <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
-                  <SFIcon icon="map.fill" size={20} /> Market Heat
-                </h2>
-                <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">{sectorCount} sectors</span>
-              </div>
-              <div className="flex items-start gap-2 mb-4 rounded-lg bg-white/[0.02] border border-white/[0.03] px-3.5 py-2.5">
-                <SFIcon icon="info.circle.fill" size={12} className="text-violet-400/50 mt-0.5 shrink-0" />
-                <p className="text-[10px] text-muted-foreground/45 leading-relaxed">
-                  Each sector is classified into <span className="text-emerald-400/70 font-medium">Trending</span> (ADX ≥ 25, momentum strategies have edge), <span className="text-amber-400/70 font-medium">Mean-Reverting</span> (ADX 15–25, oscillator plays), or <span className="text-rose-400/70 font-medium">Choppy</span> (ADX &lt; 15, reduce exposure). Bull/Bear bars show sentiment distribution within each sector.
-                </p>
-              </div>
-              <SectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
-            </AppleCard>
-          </motion.div>
-
-          {/* ═══ LIVE SIGNAL FEED ═══ */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.65 }} className="mb-10">
-            <AppleCard interactive={false} padded={false}>
-              <div className="px-6 pt-5 pb-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold tracking-[-0.01em] flex items-center gap-2">
-                  <SFIcon icon="antenna.radiowaves.left.and.right" size={20} /> Live Signal Feed
-                </h2>
-                <span className="text-xs text-muted-foreground/50 uppercase tracking-[0.1em] font-medium">Top {topSignals.length}</span>
-              </div>
-              <div className="px-6 pb-3">
-                <div className="flex items-start gap-2 rounded-lg bg-white/[0.02] border border-white/[0.03] px-3.5 py-2.5">
-                  <SFIcon icon="info.circle.fill" size={12} className="text-cyan-400/50 mt-0.5 shrink-0" />
-                  <p className="text-[10px] text-muted-foreground/45 leading-relaxed">
-                    Ranked by composite score — the average of 4 independent indicator systems. <span className="text-foreground/40 font-medium">Confidence</span> reflects directional agreement: unanimous bullish/bearish alignment across all systems gets a 1.2x multiplier. Click any ticker for full analysis.
-                  </p>
-                </div>
-              </div>
-              <div className="horizontal-scroll-on-mobile custom-scrollbar px-6 pb-6">
-                <table className="w-full text-left border-separate border-spacing-y-1 min-w-[700px]">
-                  <thead>
-                    <tr>
-                      {["Ticker", "Sentiment", "Composite", "Confidence", "Δ Day", "Price", "Sector"].map(h => (
-                        <th key={h} className="py-2.5 px-3 text-[10px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 bg-card">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topSignals.map((s: Signal, i: number) => (
-                      <motion.tr
-                        key={s.ticker}
-                        className="hover:bg-white/[0.02] cursor-pointer transition-colors"
-                        onClick={() => navigateToDashboardWithTicker(s.ticker)}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.7 + i * 0.04 }}
-                      >
-                        <td className="py-2 px-3 font-mono-data font-bold text-cyan-400 text-sm">{s.ticker}</td>
-                        <td className="py-2 px-3"><SentimentBadge sentiment={s.sentiment} /></td>
-                        <td className={cn("py-2 px-3 font-mono-data text-sm font-semibold", s.composite > 0 ? "text-emerald-400" : "text-rose-400")}>{s.composite.toFixed(2)}</td>
-                        <td className={cn("py-2 px-3 font-mono-data text-sm", s.probability > HIGH_CONFIDENCE_THRESHOLD ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</td>
-                        <td className={cn("py-2 px-3 font-mono-data text-sm", s.daily_change > 0 ? "text-emerald-400" : "text-rose-400")}>{s.daily_change > 0 ? "+" : ""}{s.daily_change.toFixed(2)}%</td>
-                        <td className="py-2 px-3 font-mono-data text-sm text-foreground/80">${s.price.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-xs text-muted-foreground/60">{s.sector}</td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </AppleCard>
-          </motion.div>
-
-          {/* ═══ QUOTE ═══ */}
-          {data.all_quotes?.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING_TRANSITION, delay: 0.75 }} className="mb-10">
-              <AppleCard interactive={false} padded={false} className="overflow-hidden">
-                <QuoteRotator quotes={data.all_quotes} />
-              </AppleCard>
-            </motion.div>
-          )}
-
-          {/* Footer */}
-          <div className="text-center py-8">
-            <p className="text-xs text-muted-foreground/25 uppercase tracking-[0.15em] font-medium">
-              HEADSTART · headstart.ai · Built for Speed
-            </p>
-          </div>
+      {/* ── Top Nav ── */}
+      <nav style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "16px 40px", borderBottom: `1px solid ${P.warmGray}`,
+        position: "sticky", top: 0, zIndex: 50,
+        background: `${P.cream}f0`, backdropFilter: "blur(12px)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600,
+            color: P.charcoal, letterSpacing: "0.06em",
+          }}>HEADSTART</span>
+          <span style={{
+            fontSize: 9, fontFamily: "var(--font-mono)", color: P.textMuted,
+            padding: "2px 6px", borderRadius: 4, border: `1px solid ${P.warmGray}`,
+          }}>BETA</span>
         </div>
-      </motion.div>
-    </AnimatePresence>
+        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <Link href="/dashboard" style={{ fontSize: 13, color: P.textSecondary, textDecoration: "none", fontWeight: 400 }}>
+            Dashboard
+          </Link>
+          <Link href="/dashboard" style={{
+            fontSize: 12, fontFamily: "var(--font-mono)", fontWeight: 500,
+            padding: "6px 16px", borderRadius: 6,
+            background: P.charcoal, color: P.cream,
+            textDecoration: "none", letterSpacing: "0.02em",
+          }}>
+            Launch Terminal →
+          </Link>
+        </div>
+      </nav>
+
+      {/* ── Dark Hero with Logo Image ── */}
+      <motion.section
+        initial="hidden"
+        animate="show"
+        variants={stagger}
+        style={{
+          background: "linear-gradient(180deg, #111111 0%, #1a1a1a 60%, #2a2520 85%, #f5f2ed 100%)",
+          textAlign: "center",
+          padding: "60px 24px 80px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {/* Subtle radial glow */}
+        <div style={{
+          position: "absolute", top: "30%", left: "50%", transform: "translateX(-50%)",
+          width: 500, height: 300, borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(226,184,87,0.06) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
+
+        <motion.p variants={fadeUp} style={{
+          fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
+          color: P.gold, letterSpacing: "0.14em", textTransform: "uppercase",
+          marginBottom: 24, position: "relative", zIndex: 1,
+        }}>
+          HEADSTART
+        </motion.p>
+
+        <motion.h1 variants={fadeUp} style={{
+          fontFamily: "var(--font-serif), Georgia, serif",
+          fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 400,
+          lineHeight: 1.15, letterSpacing: "-0.02em",
+          color: "#f5f2ed", marginBottom: 20,
+          position: "relative", zIndex: 1,
+        }}>
+          Smarter Alpha.
+        </motion.h1>
+
+        <motion.p variants={fadeUp} style={{
+          fontSize: 17, lineHeight: 1.7, color: "rgba(245,242,237,0.65)",
+          maxWidth: 520, margin: "0 auto",
+          fontFamily: "var(--font-sans)",
+          position: "relative", zIndex: 1,
+        }}>
+          The edge you didn&apos;t know you were missing. We scan thousands of options, track momentum shifts, and surface the trades that actually matter.
+        </motion.p>
+      </motion.section>
+
+      {/* ── Search Bar Section (cream zone) ── */}
+      <motion.section
+        initial="hidden"
+        animate="show"
+        variants={stagger}
+        style={{ maxWidth: 600, margin: "-30px auto 0", padding: "0 24px 50px", position: "relative", zIndex: 2 }}
+      >
+        <motion.form variants={fadeUp} onSubmit={handleSearch} style={{
+          display: "flex", maxWidth: 520, margin: "0 auto",
+          background: "white", borderRadius: 10,
+          border: `1px solid ${P.warmGray}`,
+          boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+          overflow: "hidden",
+          transition: "box-shadow 0.3s ease, border-color 0.3s ease",
+        }}
+        onFocus={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 24px ${P.goldSoft}`;
+          (e.currentTarget as HTMLElement).style.borderColor = P.gold;
+        }}
+        onBlur={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(0,0,0,0.08)";
+          (e.currentTarget as HTMLElement).style.borderColor = P.warmGray;
+        }}
+        >
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="How can I help you trade today?"
+            style={{
+              flex: 1, padding: "14px 20px", border: "none", outline: "none",
+              fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 400,
+              color: P.charcoal, background: "transparent",
+            }}
+          />
+          <button type="submit" style={{
+            padding: "14px 24px", border: "none", cursor: "pointer",
+            fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500,
+            background: P.charcoal, color: P.cream,
+            letterSpacing: "0.04em",
+            transition: "background 0.2s ease",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = P.charcoalLight)}
+          onMouseLeave={e => (e.currentTarget.style.background = P.charcoal)}
+          >
+            Explore →
+          </button>
+        </motion.form>
+      </motion.section>
+
+      {/* ── Stats Strip ── */}
+      <motion.section
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-50px" }}
+        variants={stagger}
+        style={{
+          display: "flex", justifyContent: "center", gap: 16,
+          padding: "0 24px 60px", flexWrap: "wrap",
+        }}
+      >
+        {[
+          { label: "S&P 500 Universe", value: "500+" },
+          { label: "Options Scanned Daily", value: "50K+" },
+          { label: "Quant Signals", value: "Real-time" },
+          { label: "Win Rate Tracking", value: "Verified" },
+        ].map(s => (
+          <motion.div key={s.label} variants={fadeUp}>
+            <StatPill {...s} />
+          </motion.div>
+        ))}
+      </motion.section>
+
+      {/* ── Divider ── */}
+      <div style={{ maxWidth: 120, margin: "0 auto 60px", height: 1, background: P.warmGray }} />
+
+      {/* ── Feature Cards ── */}
+      <motion.section
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-80px" }}
+        variants={stagger}
+        style={{
+          maxWidth: 1000, margin: "0 auto", padding: "0 24px 80px",
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: 20,
+        }}
+      >
+        <FeatureCard
+          tag="Options Flow"
+          title="Alpha-Flow Options"
+          description="Scans S&P 500 call options for high-conviction swing trades using institutional filters, Black-Scholes delta, and a composite quant score."
+          href="/dashboard?view=alpha-calls"
+        />
+        <FeatureCard
+          tag="Momentum"
+          title="Momentum Lifecycle"
+          description="Track emerging, trending, and exhausting momentum phases across the entire market with multi-timeframe confirmation signals."
+          href="/dashboard?view=momentum-lifecycle"
+        />
+        <FeatureCard
+          tag="Portfolio"
+          title="Portfolio X-Ray"
+          description="Diagnose concentration risk, correlation clusters, and sector exposure across your holdings with institutional-grade analytics."
+          href="/dashboard?view=portfolio-intel"
+        />
+      </motion.section>
+
+      {/* ── Philosophy Section ── */}
+      <motion.section
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true }}
+        variants={stagger}
+        style={{
+          maxWidth: 640, margin: "0 auto", padding: "0 24px 100px",
+          textAlign: "center",
+        }}
+      >
+        <motion.h2 variants={fadeUp} style={{
+          fontFamily: "var(--font-serif), Georgia, serif",
+          fontSize: 32, fontWeight: 400, color: P.charcoal,
+          marginBottom: 20, lineHeight: 1.2,
+        }}>
+          Research-grade clarity.<br />
+          <span style={{ fontStyle: "italic", color: P.textSecondary }}>Not another trading app.</span>
+        </motion.h2>
+        <motion.p variants={fadeUp} style={{
+          fontSize: 15, lineHeight: 1.8, color: P.textSecondary,
+          fontFamily: "var(--font-sans)",
+        }}>
+          Every signal comes with a reasoning trace — a transparent explanation of <em>why</em> the system flagged it. No black boxes. No hype. Just quantitative evidence presented with the precision of a research publication.
+        </motion.p>
+      </motion.section>
+
+      {/* ── CTA Footer ── */}
+      <section style={{
+        padding: "60px 24px", textAlign: "center",
+        borderTop: `1px solid ${P.warmGray}`,
+        background: "white",
+      }}>
+        <p style={{
+          fontFamily: "var(--font-serif), Georgia, serif",
+          fontSize: 24, fontWeight: 400, color: P.charcoal, marginBottom: 24,
+        }}>
+          Ready to think differently about markets?
+        </p>
+        <Link href="/dashboard" style={{
+          display: "inline-block", padding: "12px 32px", borderRadius: 8,
+          fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
+          background: P.charcoal, color: P.cream,
+          textDecoration: "none", letterSpacing: "0.04em",
+          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+          (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 20px rgba(0,0,0,0.12)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+          (e.currentTarget as HTMLElement).style.boxShadow = "none";
+        }}
+        >
+          Launch Terminal →
+        </Link>
+        <p style={{ marginTop: 16, fontSize: 12, color: P.textMuted }}>
+          No account required. Explore free.
+        </p>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer style={{
+        padding: "24px 40px",
+        borderTop: `1px solid ${P.warmGray}`,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        fontSize: 11, color: P.textMuted,
+      }}>
+        <span style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}>HEADSTART © 2026</span>
+        <span>Built for quantitative minds.</span>
+      </footer>
+    </div>
   );
 }
