@@ -674,15 +674,13 @@ async def lifespan(app: FastAPI):
     pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
     pipeline_thread.start()
 
-    # Warm alpha calls cache after a short delay (let momentum pipeline start first)
-    def _delayed_alpha_warmup():
-        import time
-        time.sleep(30)  # Wait 30s for momentum pipeline to get going
+    # Warm alpha calls cache immediately — sp500 first (most used), then others async
+    def _immediate_alpha_warmup():
         _refresh_alpha_cache_background()
 
-    alpha_warmup = threading.Thread(target=_delayed_alpha_warmup, daemon=True)
+    alpha_warmup = threading.Thread(target=_immediate_alpha_warmup, daemon=True)
     alpha_warmup.start()
-    print("  📊 Alpha cache warm-up scheduled (30s delay)")
+    print("  📊 Alpha cache warm-up started (sp500 first)")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
@@ -877,6 +875,8 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
 _CACHED_ALPHA_CALLS: dict[str, dict] = {}
 _ALPHA_CACHE_TIMES: dict[str, float] = {}
 ALPHA_CACHE_TTL = 1800  # 30 minutes
+_alpha_scan_lock = threading.Lock()
+_alpha_scan_running: set[str] = set()  # track which universes are scanning
 
 
 @app.get("/api/screener/alpha-calls")
@@ -906,19 +906,58 @@ async def get_alpha_calls_endpoint(
     if cached and not refresh and (_time.time() - cache_time) < ALPHA_CACHE_TTL:
         return encode_response(cached)
 
-    try:
-        from options_alpha import get_alpha_calls
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: get_alpha_calls(limit=limit, sort_by=sort_by, universe=universe)
+    # Also check if a larger scan for this universe is cached (derive smaller results)
+    full_key = f"alpha_500_quant_score_{universe}"
+    full_cached = _CACHED_ALPHA_CALLS.get(full_key)
+    full_time = _ALPHA_CACHE_TIMES.get(full_key, 0)
+    if full_cached and not refresh and (_time.time() - full_time) < ALPHA_CACHE_TTL:
+        return encode_response(full_cached)
+
+    # Non-blocking: if a scan is already running for this universe, return whatever we have
+    with _alpha_scan_lock:
+        already_running = universe in _alpha_scan_running
+
+    if already_running:
+        # Return stale cache if available, otherwise 202
+        if cached:
+            return encode_response(cached)
+        if full_cached:
+            return encode_response(full_cached)
+        return JSONResponse(
+            content={"calls": [], "meta": {"warming_up": True, "message": "Alpha scan in progress — data will appear shortly"}, "timestamp": _dt.datetime.now().isoformat()},
+            status_code=202,
         )
-        _CACHED_ALPHA_CALLS[cache_key] = result
-        _ALPHA_CACHE_TIMES[cache_key] = _time.time()
-        return encode_response(result)
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+    # Kick off scan in background thread so the endpoint returns fast
+    def _background_scan():
+        with _alpha_scan_lock:
+            _alpha_scan_running.add(universe)
+        try:
+            from options_alpha import get_alpha_calls as _get_alpha
+            result = _get_alpha(limit=limit, sort_by=sort_by, universe=universe)
+            _CACHED_ALPHA_CALLS[cache_key] = result
+            _ALPHA_CACHE_TIMES[cache_key] = _time.time()
+            # Also cache as the full-scan key if limit is large
+            if limit >= 500:
+                _CACHED_ALPHA_CALLS[full_key] = result
+                _ALPHA_CACHE_TIMES[full_key] = _time.time()
+        except Exception:
+            traceback.print_exc()
+        finally:
+            with _alpha_scan_lock:
+                _alpha_scan_running.discard(universe)
+
+    threading.Thread(target=_background_scan, daemon=True).start()
+
+    # Return stale cache if we have it, otherwise 202
+    if cached:
+        return encode_response(cached)
+    if full_cached:
+        return encode_response(full_cached)
+    return JSONResponse(
+        content={"calls": [], "meta": {"warming_up": True, "message": "Scanning options chains — refresh in 30 seconds"}, "timestamp": _dt.datetime.now().isoformat()},
+        status_code=202,
+    )
 
 
 # ── Whale Flow Intelligence ──

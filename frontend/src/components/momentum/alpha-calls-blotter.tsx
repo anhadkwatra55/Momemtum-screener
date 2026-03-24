@@ -14,7 +14,7 @@ interface AlphaCall {
 
 interface AlphaCallsData {
   calls: AlphaCall[];
-  meta: { universe_source: string; universe_size: number; tickers_scanned: number; contracts_found: number; tickers_with_calls: number; errors: number; partial?: boolean; scan_time_seconds?: number; filters: Record<string, string>; };
+  meta: { universe_source: string; universe_size: number; tickers_scanned: number; contracts_found: number; tickers_with_calls: number; errors: number; partial?: boolean; scan_time_seconds?: number; warming_up?: boolean; message?: string; filters: Record<string, string>; };
   timestamp: string;
 }
 
@@ -123,24 +123,27 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const fetchData = useCallback(async (refresh = false, retryCount = 0) => {
     setLoading(true); setError(null);
     const controller = new AbortController();
-    // 3 minute timeout for large scans
     const timeoutMs = scanLimit >= 500 ? 180_000 : 120_000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const params = new URLSearchParams({ limit: String(scanLimit), sort_by: "quant_score", universe, ...(refresh && { refresh: "true" }) });
       const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`, { signal: controller.signal });
       clearTimeout(timer);
-      if (!res.ok) throw new Error(`Server error (HTTP ${res.status})`);
       const result = await res.json();
+
+      // 202 = warming up, auto-poll until data arrives
+      if (res.status === 202 || result.meta?.warming_up) {
+        setLoading(true);
+        setTimeout(() => fetchData(false, 0), 10_000); // poll every 10s
+        return;
+      }
+      if (!res.ok) throw new Error(`Server error (HTTP ${res.status})`);
       if (result.error) throw new Error(result.error);
       setData(result);
     } catch (e: any) {
       clearTimeout(timer);
       if (e.name === "AbortError") {
-        if (retryCount < 1) {
-          // Auto-retry once on timeout
-          return fetchData(refresh, retryCount + 1);
-        }
+        if (retryCount < 1) return fetchData(refresh, retryCount + 1);
         setError(`Scan timed out — try scanning fewer tickers (current: ${scanLimit})`);
       } else {
         setError(e.message || "Failed to fetch options data");
