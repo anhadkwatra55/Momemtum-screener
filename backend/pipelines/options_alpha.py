@@ -288,7 +288,7 @@ def _scan_one_ticker(symbol: str) -> list[dict]:
 
 def get_alpha_calls(
     limit: int = 75,
-    max_workers: int = 8,
+    max_workers: int = 2,
     sort_by: str = "quant_score",
     universe: str = "sp500",
     **kwargs,  # Accept extra params from API without breaking

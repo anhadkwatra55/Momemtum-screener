@@ -17,13 +17,14 @@ Design constraints:
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import os
 import random
 import time
 import traceback
 import warnings
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -43,13 +44,14 @@ warnings.filterwarnings("ignore")
 #  CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# CPU workers for indicator math (leave 1 core for the event loop)
-# In cloud mode, cap at 2 — Railway/Render report many shared CPUs but have limited RAM
+# Thread workers for indicator math
+# In cloud mode, cap at 1 — Railway hobby plan has very limited RAM (~512MB)
+# NOTE: We use ThreadPoolExecutor (not ProcessPool) to avoid duplicating memory per-subprocess
 _is_cloud = bool(os.environ.get("DEPLOY_TICKER_LIMIT") or os.environ.get("RAILWAY_ENVIRONMENT"))
-CPU_WORKERS = 2 if _is_cloud else max(1, (os.cpu_count() or 4) - 1)
+CPU_WORKERS = int(os.environ.get("PIPELINE_CPU_WORKERS", "1" if _is_cloud else str(max(1, (os.cpu_count() or 4) - 1))))
 
 # I/O workers for network requests — reduce in cloud to avoid thread exhaustion
-IO_WORKERS = 5 if _is_cloud else 20
+IO_WORKERS = int(os.environ.get("PIPELINE_IO_WORKERS", "3" if _is_cloud else "20"))
 
 # Chunk size for batched screening (controls peak memory)
 SCREEN_CHUNK_SIZE = 50
@@ -81,11 +83,12 @@ def screen_universe_parallel(
     progress: bool = True,
 ) -> List[dict]:
     """
-    Screen the full universe using ProcessPoolExecutor.
-    Each worker runs screen_ticker() in a separate process,
-    bypassing the GIL for true parallel CPU execution.
+    Screen the full universe using ThreadPoolExecutor.
+    Uses threads instead of processes to avoid memory duplication.
+    NumPy/pandas release the GIL during C-level math so threads
+    still achieve meaningful parallelism.
 
-    Falls back to serial screening if multiprocessing fails.
+    Falls back to serial screening if thread pool fails.
     """
     workers = max_workers or CPU_WORKERS
     tickers = sorted(ohlcv.keys())
@@ -94,10 +97,10 @@ def screen_universe_parallel(
     start_time = time.perf_counter()
 
     if progress:
-        print(f"    ⚡ Parallel screening: {len(tickers)} tickers across {workers} processes …")
+        print(f"    ⚡ Threaded screening: {len(tickers)} tickers across {workers} threads …")
 
     try:
-        with ProcessPoolExecutor(max_workers=workers) as pool:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             # Submit all tickers as (ticker, df) tuples
             future_to_ticker = {
                 pool.submit(_screen_single, (ticker, ohlcv[ticker])): ticker
@@ -117,7 +120,7 @@ def screen_universe_parallel(
 
     except Exception as e:
         if progress:
-            print(f"    ⚠ ProcessPool failed ({e}). Falling back to serial …")
+            print(f"    ⚠ ThreadPool failed ({e}). Falling back to serial …")
         # Fallback to serial screening
         return screen_universe(ohlcv, progress=progress)
 
@@ -739,7 +742,6 @@ def run_pipeline_progressive(
 
     # Accumulated results across waves
     all_results: List[dict] = []
-    all_ohlcv: Dict[str, pd.DataFrame] = {}
 
     # ━━━━━━━━━━━ WAVE 1 — Priority tickers (instant render) ━━━━━━━━━━━
     print(f"\n[Wave 1/3] Fetching {len(wave1_tickers)} priority tickers …")
@@ -748,12 +750,14 @@ def run_pipeline_progressive(
     try:
         ohlcv1 = smart_fetch(tickers=wave1_tickers, progress=True)
         ohlcv1, _ = validate_universe(ohlcv1, progress=False)
-        all_ohlcv.update(ohlcv1)
 
         if use_parallel:
             results1 = screen_universe_parallel(ohlcv1, progress=True)
         else:
             results1 = screen_universe(ohlcv1, progress=True)
+
+        # Free OHLCV DataFrames immediately to reclaim memory
+        del ohlcv1; gc.collect()
 
         all_results.extend(results1)
         all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
@@ -777,12 +781,14 @@ def run_pipeline_progressive(
     try:
         ohlcv2 = smart_fetch(tickers=wave2_tickers, progress=True)
         ohlcv2, _ = validate_universe(ohlcv2, progress=False)
-        all_ohlcv.update(ohlcv2)
 
         if use_parallel:
             results2 = screen_universe_parallel(ohlcv2, progress=True)
         else:
             results2 = screen_universe(ohlcv2, progress=True)
+
+        # Free OHLCV DataFrames immediately to reclaim memory
+        del ohlcv2; gc.collect()
 
         all_results.extend(results2)
         all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
@@ -806,12 +812,14 @@ def run_pipeline_progressive(
     try:
         ohlcv3 = smart_fetch(tickers=wave3_tickers, progress=True)
         ohlcv3, _ = validate_universe(ohlcv3, progress=False)
-        all_ohlcv.update(ohlcv3)
 
         if use_parallel:
             results3 = screen_universe_parallel(ohlcv3, progress=True)
         else:
             results3 = screen_universe(ohlcv3, progress=True)
+
+        # Free OHLCV DataFrames immediately to reclaim memory
+        del ohlcv3; gc.collect()
 
         all_results.extend(results3)
         all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)

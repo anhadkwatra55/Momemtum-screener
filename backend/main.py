@@ -876,7 +876,7 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
         results = fetch_insider_buys_parallel(
             scan_tickers,
             lookback_days=lookback_days,
-            max_workers=15,
+            max_workers=3,
             progress=True,
         )
         _CACHED_INSIDER_BUYS = results
