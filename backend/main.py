@@ -935,6 +935,18 @@ async def get_alpha_calls_endpoint(
     if full_cached and not refresh and (_time.time() - full_time) < ALPHA_CACHE_TTL:
         return encode_response(full_cached)
 
+    # GUARD: Never start an alpha scan while the momentum pipeline is running — OOM risk
+    pipeline_active = _engine_status.state == "running"
+    if pipeline_active:
+        if cached:
+            return encode_response(cached)
+        if full_cached:
+            return encode_response(full_cached)
+        return JSONResponse(
+            content={"calls": [], "meta": {"warming_up": True, "message": "Pipeline is running — alpha data will be available once it finishes"}, "timestamp": _dt.datetime.now().isoformat()},
+            status_code=202,
+        )
+
     # Non-blocking: if a scan is already running for this universe, return whatever we have
     with _alpha_scan_lock:
         already_running = universe in _alpha_scan_running
