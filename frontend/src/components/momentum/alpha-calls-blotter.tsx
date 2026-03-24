@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
 
@@ -119,8 +119,11 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const [selected, setSelected] = useState<AlphaCall | null>(null);
   const [universe, setUniverse] = useState<"sp500" | "nasdaq100" | "both">("sp500");
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async (refresh = false, retryCount = 0) => {
+    // Cancel any pending poll before starting a new fetch
+    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
     setLoading(true); setError(null);
     const controller = new AbortController();
     const timeoutMs = scanLimit >= 500 ? 180_000 : 120_000;
@@ -131,28 +134,35 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
       clearTimeout(timer);
       const result = await res.json();
 
-      // 202 = warming up, auto-poll until data arrives
+      // 202 = warming up, schedule a single poll (previous poll already cancelled above)
       if (res.status === 202 || result.meta?.warming_up) {
-        setLoading(true);
-        setTimeout(() => fetchData(false, 0), 10_000); // poll every 10s
-        return;
+        pollRef.current = setTimeout(() => fetchData(false, 0), 10_000);
+        return; // keep loading=true (don't hit finally)
       }
       if (!res.ok) throw new Error(`Server error (HTTP ${res.status})`);
       if (result.error) throw new Error(result.error);
       setData(result);
+      setError(null);
+      setLoading(false);
     } catch (e: any) {
       clearTimeout(timer);
       if (e.name === "AbortError") {
         if (retryCount < 1) return fetchData(refresh, retryCount + 1);
         setError(`Scan timed out — try scanning fewer tickers (current: ${scanLimit})`);
       } else {
-        setError(e.message || "Failed to fetch options data");
+        // Don't overwrite good data with an error — only show error if no data exists
+        if (!data?.calls?.length) {
+          setError(e.message || "Failed to fetch options data");
+        }
       }
+      setLoading(false);
     }
-    finally { setLoading(false); }
-  }, [scanLimit, universe]);
+  }, [scanLimit, universe, data?.calls?.length]);
 
-  useEffect(() => { fetchData(); }, [universe, scanLimit]);
+  useEffect(() => {
+    fetchData();
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [universe, scanLimit]);
 
   /* ── Group by Ticker → Expiry → Strikes ── */
   const grouped: TickerGroup[] = useMemo(() => {
