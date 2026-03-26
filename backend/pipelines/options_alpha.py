@@ -50,33 +50,10 @@ except ImportError:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 0. SHARED SESSION (Connection Pooling)
+# 0. NOTE: yfinance handles its own sessions (requires curl_cffi).
+#    We do NOT pass a custom requests.Session — it would break.
+#    Anti-ban jitter + retry logic is applied manually below.
 # ═══════════════════════════════════════════════════════════════
-
-def _make_session() -> "_requests.Session":
-    """Create a requests.Session with connection pooling for yfinance."""
-    s = _requests.Session()
-    s.headers.update({"User-Agent": "Mozilla/5.0"})
-    # Keep-alive with connection pooling — reuses TCP connections
-    adapter = _requests.adapters.HTTPAdapter(
-        pool_connections=6,
-        pool_maxsize=6,
-        max_retries=2,
-    )
-    s.mount("https://", adapter)
-    s.mount("http://", adapter)
-    return s
-
-
-_shared_session: "_requests.Session | None" = None
-
-
-def _get_session() -> "_requests.Session":
-    """Lazy-init a module-level shared session."""
-    global _shared_session
-    if _shared_session is None:
-        _shared_session = _make_session()
-    return _shared_session
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -223,8 +200,7 @@ def _scan_one_ticker(symbol: str) -> list[dict]:
     _time.sleep(random.uniform(0.05, 0.3))
 
     try:
-        session = _get_session()
-        t = yf.Ticker(symbol.replace(".", "-"), session=session)
+        t = yf.Ticker(symbol.replace(".", "-"))
 
         # Use retry wrapper for the initial price fetch
         price = _yf_retry(lambda: t.fast_info["lastPrice"])
@@ -517,3 +493,41 @@ def get_alpha_calls(
         },
         "timestamp": datetime.now().isoformat(),
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 5. DB-BACKED PIPELINE — Scan + persist to SQLite
+# ═══════════════════════════════════════════════════════════════
+
+def run_alpha_pipeline(
+    universe: str = "sp500",
+    max_workers: int = 4,
+) -> dict:
+    """
+    Run a full alpha scan and persist results to the alpha_calls DB table.
+    Called on startup and by the daily scheduler.
+
+    Returns scan metadata dict.
+    """
+    try:
+        import db
+    except ImportError:
+        from pipelines import db
+
+    # Use get_alpha_calls() for the actual scanning
+    # Scan ALL tickers (no limit) for a complete DB
+    result = get_alpha_calls(
+        limit=500,  # scan up to 500 tickers
+        max_workers=max_workers,
+        sort_by="quant_score",
+        universe=universe,
+    )
+
+    calls = result.get("calls", [])
+    meta = result.get("meta", {})
+
+    # Persist to SQLite
+    n = db.upsert_alpha_calls_bulk(calls, universe, meta)
+    logger.info(f"Alpha pipeline: persisted {n} contracts for {universe}")
+
+    return meta

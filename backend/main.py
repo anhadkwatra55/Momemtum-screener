@@ -555,69 +555,30 @@ def _seconds_until_next_run() -> float:
 
 
 def _refresh_alpha_cache_background(startup: bool = False):
-    """Pre-compute alpha calls and fill the cache.
-    When startup=True, runs a fast 30-ticker scan so frontend populates in <60s.
-    When startup=False (daily refresh), scans all universes with 500 tickers."""
+    """Run alpha pipeline and persist results to SQLite.
+    On startup: scans sp500 (500 tickers) and saves to DB.
+    On daily refresh: scans all universes."""
     import time as _t
     try:
-        from options_alpha import get_alpha_calls
+        from options_alpha import run_alpha_pipeline
 
         if startup:
-            # Fast startup scan: 30 tickers ≈ 30-45s
-            universes = [("sp500", 30)]
+            universes = ["sp500"]
         else:
-            # Full daily scan: all universes, 500 tickers
-            universes = [("sp500", 500), ("nasdaq100", 500), ("both", 500)]
+            universes = ["sp500", "nasdaq100", "both"]
 
-        for univ, lim in universes:
-            cache_key = f"alpha_{lim}_quant_score_{univ}"
-            print(f"  📊 Alpha {'startup' if startup else 'daily'} scan: {univ} ({lim} tickers)…")
+        for univ in universes:
+            print(f"  \U0001f4ca Alpha {'startup' if startup else 'daily'} pipeline: {univ}\u2026")
             t0 = _t.monotonic()
-            result = get_alpha_calls(limit=lim, sort_by="quant_score", universe=univ)
+            meta = run_alpha_pipeline(universe=univ, max_workers=4)
             elapsed = round(_t.monotonic() - t0, 1)
-            n = result.get("meta", {}).get("contracts_found", 0)
-            _CACHED_ALPHA_CALLS[cache_key] = result
-            _ALPHA_CACHE_TIMES[cache_key] = _t.time()
-            # Also cache common smaller limits from the same data
-            for small_lim in (30, 50, 75, 100, 200):
-                if small_lim <= lim:
-                    small_key = f"alpha_{small_lim}_quant_score_{univ}"
-                    _CACHED_ALPHA_CALLS[small_key] = {
-                        "calls": result["calls"][:small_lim * 3],
-                        "meta": result["meta"],
-                        "timestamp": result["timestamp"],
-                    }
-                    _ALPHA_CACHE_TIMES[small_key] = _t.time()
-            # Also cache as full key for endpoint fallback
-            full_key = f"alpha_500_quant_score_{univ}"
-            if full_key not in _CACHED_ALPHA_CALLS:
-                _CACHED_ALPHA_CALLS[full_key] = result
-                _ALPHA_CACHE_TIMES[full_key] = _t.time()
-            print(f"  ✓ Alpha {univ}: {n} contracts in {elapsed}s")
+            n = meta.get("contracts_found", 0)
+            print(f"  \u2713 Alpha {univ}: {n} contracts persisted to DB in {elapsed}s")
 
-        # On startup, schedule a follow-up 75-ticker scan in the background
-        if startup:
-            print("  📊 Scheduling follow-up 75-ticker alpha scan…")
-            def _followup_scan():
-                _t.sleep(5)  # Brief pause
-                try:
-                    r75 = get_alpha_calls(limit=75, sort_by="quant_score", universe="sp500")
-                    key75 = "alpha_75_quant_score_sp500"
-                    _CACHED_ALPHA_CALLS[key75] = r75
-                    _ALPHA_CACHE_TIMES[key75] = _t.time()
-                    full_k = "alpha_500_quant_score_sp500"
-                    _CACHED_ALPHA_CALLS[full_k] = r75
-                    _ALPHA_CACHE_TIMES[full_k] = _t.time()
-                    n2 = r75.get("meta", {}).get("contracts_found", 0)
-                    print(f"  ✓ Alpha follow-up: {n2} contracts (75 tickers)")
-                except Exception as e2:
-                    print(f"  ⚠ Alpha follow-up failed: {e2}")
-            threading.Thread(target=_followup_scan, daemon=True).start()
-
-        status = "startup warm" if startup else "fully warmed"
-        print(f"  ✅ Alpha cache {status}")
+        status = "startup" if startup else "fully refreshed"
+        print(f"  \u2705 Alpha pipeline {status} \u2014 data in SQLite")
     except Exception as e:
-        print(f"  ⚠ Alpha pre-scan failed: {e}")
+        print(f"  \u26a0 Alpha pipeline failed: {e}")
         import traceback
         traceback.print_exc()
 
@@ -913,36 +874,9 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
-# ── Alpha Call Options Screener ──
-_CACHED_ALPHA_CALLS: dict[str, dict] = {}
-_ALPHA_CACHE_TIMES: dict[str, float] = {}
+# ── Alpha Call Options Screener (DB-backed) ──
 _alpha_scan_lock = threading.Lock()
-_alpha_scan_running: set[str] = set()  # track which universes are scanning
-
-
-def _alpha_cache_ttl() -> int:
-    """Dynamic cache TTL — short during market hours, long after hours.
-    Market hours: 9:30 AM – 4:00 PM ET → 20 min TTL
-    After hours / weekends → 4 hours TTL
-    """
-    try:
-        import zoneinfo
-        tz = zoneinfo.ZoneInfo("America/New_York")
-        now = _dt.datetime.now(tz)
-    except Exception:
-        now = _dt.datetime.now()
-
-    # Weekend
-    if now.weekday() >= 5:
-        return 14400  # 4 hours
-
-    market_open = now.replace(hour=9, minute=30, second=0)
-    market_close = now.replace(hour=16, minute=0, second=0)
-
-    if market_open <= now <= market_close:
-        return 1200  # 20 minutes during market hours
-    else:
-        return 14400  # 4 hours after hours
+_alpha_scan_running: set[str] = set()
 
 
 @app.get("/api/screener/alpha-calls")
@@ -962,79 +896,70 @@ async def get_alpha_calls_endpoint(
     premium_max: float = 8.0,
     min_oi: int = 100,
 ):
-    """Alpha-Flow Options Screener — direct port of Colab AlphaFlowEngine."""
-    import time as _time
+    """Alpha-Flow Options Screener — reads pre-scanned data from SQLite.
+    No on-demand scanning. Pipeline populates DB on startup + daily schedule."""
 
-    cache_key = f"alpha_{limit}_{sort_by}_{universe}"
-    cached = _CACHED_ALPHA_CALLS.get(cache_key)
-    cache_time = _ALPHA_CACHE_TIMES.get(cache_key, 0)
+    # Read from DB — instant (<10ms)
+    result = db.load_alpha_calls(universe=universe, sort_by=sort_by, limit=limit)
 
-    ttl = _alpha_cache_ttl()
-    if cached and not refresh and (_time.time() - cache_time) < ttl:
-        return encode_response(cached)
+    # If DB has data, return it immediately
+    if result["calls"] or db.has_alpha_data(universe):
+        # If refresh requested, kick off background re-scan (but still return current data)
+        if refresh:
+            with _alpha_scan_lock:
+                already_running = universe in _alpha_scan_running
+            if not already_running:
+                def _bg_refresh():
+                    with _alpha_scan_lock:
+                        _alpha_scan_running.add(universe)
+                    try:
+                        from options_alpha import run_alpha_pipeline
+                        run_alpha_pipeline(universe=universe, max_workers=4)
+                        print(f"  \u2713 Alpha refresh complete: {universe}")
+                    except Exception:
+                        traceback.print_exc()
+                    finally:
+                        with _alpha_scan_lock:
+                            _alpha_scan_running.discard(universe)
+                threading.Thread(target=_bg_refresh, daemon=True).start()
+        return encode_response(result)
 
-    # Also check if a larger scan for this universe is cached (derive smaller results)
-    full_key = f"alpha_500_quant_score_{universe}"
-    full_cached = _CACHED_ALPHA_CALLS.get(full_key)
-    full_time = _ALPHA_CACHE_TIMES.get(full_key, 0)
-    if full_cached and not refresh and (_time.time() - full_time) < ttl:
-        return encode_response(full_cached)
-
-    # GUARD: Never start an alpha scan while the momentum pipeline is running — OOM risk
-    pipeline_active = _engine_status.state == "running"
-    if pipeline_active:
-        if cached:
-            return encode_response(cached)
-        if full_cached:
-            return encode_response(full_cached)
-        return JSONResponse(
-            content={"calls": [], "meta": {"warming_up": True, "message": "Pipeline is running — alpha data will be available once it finishes"}, "timestamp": _dt.datetime.now().isoformat()},
-            status_code=202,
-        )
-
-    # Non-blocking: if a scan is already running for this universe, return whatever we have
+    # DB is empty (cold start) — pipeline hasn't run yet
+    # Check if pipeline is currently scanning
     with _alpha_scan_lock:
-        already_running = universe in _alpha_scan_running
+        scanning = universe in _alpha_scan_running
 
-    if already_running:
-        # Return stale cache if available, otherwise 202
-        if cached:
-            return encode_response(cached)
-        if full_cached:
-            return encode_response(full_cached)
+    if scanning or _engine_status.state == "running":
         return JSONResponse(
-            content={"calls": [], "meta": {"warming_up": True, "message": "Alpha scan in progress — data will appear shortly"}, "timestamp": _dt.datetime.now().isoformat()},
+            content={
+                "calls": [],
+                "meta": {"warming_up": True, "message": "Alpha pipeline is scanning — data will appear shortly"},
+                "timestamp": _dt.datetime.now().isoformat(),
+            },
             status_code=202,
         )
 
-    # Kick off scan in background thread so the endpoint returns fast
-    def _background_scan():
+    # Nothing in DB and not scanning — trigger a scan
+    def _cold_start_scan():
         with _alpha_scan_lock:
             _alpha_scan_running.add(universe)
         try:
-            from options_alpha import get_alpha_calls as _get_alpha
-            result = _get_alpha(limit=limit, sort_by=sort_by, universe=universe)
-            _CACHED_ALPHA_CALLS[cache_key] = result
-            _ALPHA_CACHE_TIMES[cache_key] = _time.time()
-            # Also cache as the full-scan key if limit is large
-            if limit >= 500:
-                _CACHED_ALPHA_CALLS[full_key] = result
-                _ALPHA_CACHE_TIMES[full_key] = _time.time()
+            from options_alpha import run_alpha_pipeline
+            run_alpha_pipeline(universe=universe, max_workers=4)
+            print(f"  \u2713 Alpha cold-start complete: {universe}")
         except Exception:
             traceback.print_exc()
         finally:
             with _alpha_scan_lock:
                 _alpha_scan_running.discard(universe)
+    threading.Thread(target=_cold_start_scan, daemon=True).start()
 
-    threading.Thread(target=_background_scan, daemon=True).start()
-
-    # Return stale cache if we have it, otherwise 202
-    if cached:
-        return encode_response(cached)
-    if full_cached:
-        return encode_response(full_cached)
     return JSONResponse(
-        content={"calls": [], "meta": {"warming_up": True, "message": "Scanning options chains — refresh in 30 seconds"}, "timestamp": _dt.datetime.now().isoformat()},
+        content={
+            "calls": [],
+            "meta": {"warming_up": True, "message": "First scan starting — data will appear in ~60 seconds"},
+            "timestamp": _dt.datetime.now().isoformat(),
+        },
         status_code=202,
     )
 
