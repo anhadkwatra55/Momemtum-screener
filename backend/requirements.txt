@@ -5,6 +5,8 @@ pydantic>=2.0.0
 redis>=5.0.0
 # Existing pipeline dependencies
 yfinance>=0.2.0
+lxml>=5.0.0
+html5lib>=1.1
 pandas>=2.0.0
 numpy>=1.24.0
 scipy>=1.10.0

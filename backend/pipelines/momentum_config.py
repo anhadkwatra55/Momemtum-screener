@@ -361,8 +361,11 @@ ETF_TICKERS = sorted(HIGH_YIELD_ETFS)   # ETFs only
 
 # Cloud deployment: limit universe size to avoid resource exhaustion
 # Set DEPLOY_TICKER_LIMIT=200 (or any number) on Railway/Render
+# Auto-detect Railway and default to 200 tickers if not explicitly set
 _full_tickers = sorted(_stock_tickers | set(HIGH_YIELD_ETFS) | set(HIGH_DIVIDEND_STOCKS))
-_ticker_limit = int(os.environ.get("DEPLOY_TICKER_LIMIT", "0"))
+_is_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_SERVICE_NAME"))
+_default_limit = "200" if _is_railway else "0"
+_ticker_limit = int(os.environ.get("DEPLOY_TICKER_LIMIT", _default_limit))
 if _ticker_limit > 0:
     # Prioritize S&P 500 stocks + all ETFs + dividend stocks
     _sp500_sectors = ["Technology", "Healthcare", "Financials", "Consumer Discretionary",
