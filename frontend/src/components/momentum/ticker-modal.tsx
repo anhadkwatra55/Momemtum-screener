@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { SFIcon } from "@/components/ui/SFIcon";
 import {
   SPRING_PHYSICS_DEFAULT,
@@ -150,7 +151,7 @@ export function TickerModal({ signal, onClose, onViewDetail }: TickerModalProps)
     ? { hidden: { y: "100%", opacity: 0 }, visible: { y: 0, opacity: 1 }, exit: { y: "100%", opacity: 0 } }
     : { hidden: { scale: 0.92, opacity: 0 }, visible: { scale: 1, opacity: 1 }, exit: { scale: 0.92, opacity: 0 } };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {signal && (
         <motion.div
@@ -158,7 +159,7 @@ export function TickerModal({ signal, onClose, onViewDetail }: TickerModalProps)
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+          style={{ zIndex: 9999 }}
           onClick={onClose}
         >
           <motion.div
@@ -180,10 +181,10 @@ export function TickerModal({ signal, onClose, onViewDetail }: TickerModalProps)
           >
             {/* ── Header ─────────────────────────────────────────────── */}
             <div className="px-6 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
                 <h2
                   id="ticker-modal-title"
-                  className="text-3xl sm:text-4xl font-extrabold font-mono text-cyan-400"
+                  className="text-3xl sm:text-4xl font-extrabold font-mono text-cyan-400 flex-shrink-0"
                   style={{ textShadow: TEXT_GLOW_CYAN, letterSpacing: LETTER_SPACING.HEADINGS }}
                 >
                   {s.ticker}
@@ -192,7 +193,7 @@ export function TickerModal({ signal, onClose, onViewDetail }: TickerModalProps)
                 <RegimeBadge regime={s.regime} />
                 {s.momentum_phase === "Fresh" && (
                   <span className={cn(
-                    "text-[10px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest",
+                    "text-[10px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest flex-shrink-0",
                     getBackgroundColorClass("emerald", "500", "12"),
                     getTextColorClass("emerald", "400")
                   )}>
@@ -202,7 +203,7 @@ export function TickerModal({ signal, onClose, onViewDetail }: TickerModalProps)
               </div>
               <button
                 onClick={onClose}
-                className="text-muted-foreground/60 hover:text-foreground transition-colors text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-white/[0.08]"
+                className="text-muted-foreground/60 hover:text-foreground transition-colors text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex-shrink-0"
                 aria-label="Close modal"
               >
                 ✕
@@ -307,4 +308,8 @@ export function TickerModal({ signal, onClose, onViewDetail }: TickerModalProps)
       )}
     </AnimatePresence>
   );
+
+  // Render via portal to escape any parent stacking contexts (AppleCard, table containers, etc.)
+  if (typeof document === "undefined") return modalContent;
+  return createPortal(modalContent, document.body);
 }
