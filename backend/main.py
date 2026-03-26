@@ -513,7 +513,8 @@ def _publish_wave(data: dict) -> None:
 
 
 def _run_pipeline_background():
-    """Run the progressive pipeline engine — publishes partial results per wave."""
+    """Run the progressive pipeline engine — publishes partial results per wave.
+    After momentum completes, starts alpha pipeline (sequential to avoid OOM)."""
     try:
         run_pipeline_progressive(
             publish_callback=_publish_wave,
@@ -522,6 +523,14 @@ def _run_pipeline_background():
     except Exception as e:
         traceback.print_exc()
         _engine_status.update("error", str(e))
+
+    # Start alpha AFTER momentum finishes — prevents OOM on Railway
+    try:
+        print("  \U0001f4ca Starting alpha pipeline (post-momentum)\u2026")
+        _refresh_alpha_cache_background(startup=True)
+    except Exception as e:
+        print(f"  \u26a0 Alpha pipeline failed: {e}")
+        traceback.print_exc()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -671,19 +680,9 @@ async def lifespan(app: FastAPI):
     pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
     pipeline_thread.start()
 
-    # Alpha warm-up: start concurrently with 15s offset (decoupled from momentum)
-    def _alpha_warmup_concurrent():
-        import time as _tw
-        _tw.sleep(15)  # 15s head start for momentum pipeline
-        print("  📊 Starting alpha cache warm-up (concurrent, 30 tickers)…")
-        try:
-            _refresh_alpha_cache_background(startup=True)
-        except Exception as e:
-            print(f"  ⚠ Alpha warm-up failed: {e}")
-
-    alpha_warmup = threading.Thread(target=_alpha_warmup_concurrent, daemon=True)
-    alpha_warmup.start()
-    print("  📊 Alpha warm-up queued (starts in 15s, concurrent with momentum)")
+    # Alpha warm-up: deferred until after momentum pipeline finishes
+    # (launched from _run_pipeline_background to avoid OOM on Railway)
+    print("  \U0001f4ca Alpha pipeline will start after momentum completes")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
