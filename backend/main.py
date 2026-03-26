@@ -556,16 +556,15 @@ def _seconds_until_next_run() -> float:
 
 def _refresh_alpha_cache_background(startup: bool = False):
     """Pre-compute alpha calls and fill the cache.
-    When startup=True, runs a lightweight scan (sp500 only, 75 tickers) to
-    get data visible fast without overwhelming the server.
+    When startup=True, runs a fast 30-ticker scan so frontend populates in <60s.
     When startup=False (daily refresh), scans all universes with 500 tickers."""
     import time as _t
     try:
         from options_alpha import get_alpha_calls
 
         if startup:
-            # Lightweight startup scan: sp500 only, 75 tickers
-            universes = [("sp500", 75)]
+            # Fast startup scan: 30 tickers ≈ 30-45s
+            universes = [("sp500", 30)]
         else:
             # Full daily scan: all universes, 500 tickers
             universes = [("sp500", 500), ("nasdaq100", 500), ("both", 500)]
@@ -580,7 +579,7 @@ def _refresh_alpha_cache_background(startup: bool = False):
             _CACHED_ALPHA_CALLS[cache_key] = result
             _ALPHA_CACHE_TIMES[cache_key] = _t.time()
             # Also cache common smaller limits from the same data
-            for small_lim in (50, 75, 100, 200):
+            for small_lim in (30, 50, 75, 100, 200):
                 if small_lim <= lim:
                     small_key = f"alpha_{small_lim}_quant_score_{univ}"
                     _CACHED_ALPHA_CALLS[small_key] = {
@@ -595,6 +594,26 @@ def _refresh_alpha_cache_background(startup: bool = False):
                 _CACHED_ALPHA_CALLS[full_key] = result
                 _ALPHA_CACHE_TIMES[full_key] = _t.time()
             print(f"  ✓ Alpha {univ}: {n} contracts in {elapsed}s")
+
+        # On startup, schedule a follow-up 75-ticker scan in the background
+        if startup:
+            print("  📊 Scheduling follow-up 75-ticker alpha scan…")
+            def _followup_scan():
+                _t.sleep(5)  # Brief pause
+                try:
+                    r75 = get_alpha_calls(limit=75, sort_by="quant_score", universe="sp500")
+                    key75 = "alpha_75_quant_score_sp500"
+                    _CACHED_ALPHA_CALLS[key75] = r75
+                    _ALPHA_CACHE_TIMES[key75] = _t.time()
+                    full_k = "alpha_500_quant_score_sp500"
+                    _CACHED_ALPHA_CALLS[full_k] = r75
+                    _ALPHA_CACHE_TIMES[full_k] = _t.time()
+                    n2 = r75.get("meta", {}).get("contracts_found", 0)
+                    print(f"  ✓ Alpha follow-up: {n2} contracts (75 tickers)")
+                except Exception as e2:
+                    print(f"  ⚠ Alpha follow-up failed: {e2}")
+            threading.Thread(target=_followup_scan, daemon=True).start()
+
         status = "startup warm" if startup else "fully warmed"
         print(f"  ✅ Alpha cache {status}")
     except Exception as e:
@@ -691,18 +710,19 @@ async def lifespan(app: FastAPI):
     pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
     pipeline_thread.start()
 
-    # Warm alpha calls cache AFTER pipeline finishes (not concurrently — avoids OOM on Railway)
-    def _alpha_warmup_after_pipeline():
+    # Alpha warm-up: start concurrently with 15s offset (decoupled from momentum)
+    def _alpha_warmup_concurrent():
+        import time as _tw
+        _tw.sleep(15)  # 15s head start for momentum pipeline
+        print("  📊 Starting alpha cache warm-up (concurrent, 30 tickers)…")
         try:
-            pipeline_thread.join()  # Wait for momentum pipeline to fully complete
-            print("  📊 Momentum pipeline done — starting alpha cache warm-up…")
             _refresh_alpha_cache_background(startup=True)
         except Exception as e:
-            print(f"  ⚠ Alpha warm-up skipped: {e}")
+            print(f"  ⚠ Alpha warm-up failed: {e}")
 
-    alpha_warmup = threading.Thread(target=_alpha_warmup_after_pipeline, daemon=True)
+    alpha_warmup = threading.Thread(target=_alpha_warmup_concurrent, daemon=True)
     alpha_warmup.start()
-    print("  📊 Alpha warm-up queued (waits for pipeline to finish)")
+    print("  📊 Alpha warm-up queued (starts in 15s, concurrent with momentum)")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
@@ -896,9 +916,33 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
 # ── Alpha Call Options Screener ──
 _CACHED_ALPHA_CALLS: dict[str, dict] = {}
 _ALPHA_CACHE_TIMES: dict[str, float] = {}
-ALPHA_CACHE_TTL = 1800  # 30 minutes
 _alpha_scan_lock = threading.Lock()
 _alpha_scan_running: set[str] = set()  # track which universes are scanning
+
+
+def _alpha_cache_ttl() -> int:
+    """Dynamic cache TTL — short during market hours, long after hours.
+    Market hours: 9:30 AM – 4:00 PM ET → 20 min TTL
+    After hours / weekends → 4 hours TTL
+    """
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo("America/New_York")
+        now = _dt.datetime.now(tz)
+    except Exception:
+        now = _dt.datetime.now()
+
+    # Weekend
+    if now.weekday() >= 5:
+        return 14400  # 4 hours
+
+    market_open = now.replace(hour=9, minute=30, second=0)
+    market_close = now.replace(hour=16, minute=0, second=0)
+
+    if market_open <= now <= market_close:
+        return 1200  # 20 minutes during market hours
+    else:
+        return 14400  # 4 hours after hours
 
 
 @app.get("/api/screener/alpha-calls")
@@ -925,14 +969,15 @@ async def get_alpha_calls_endpoint(
     cached = _CACHED_ALPHA_CALLS.get(cache_key)
     cache_time = _ALPHA_CACHE_TIMES.get(cache_key, 0)
 
-    if cached and not refresh and (_time.time() - cache_time) < ALPHA_CACHE_TTL:
+    ttl = _alpha_cache_ttl()
+    if cached and not refresh and (_time.time() - cache_time) < ttl:
         return encode_response(cached)
 
     # Also check if a larger scan for this universe is cached (derive smaller results)
     full_key = f"alpha_500_quant_score_{universe}"
     full_cached = _CACHED_ALPHA_CALLS.get(full_key)
     full_time = _ALPHA_CACHE_TIMES.get(full_key, 0)
-    if full_cached and not refresh and (_time.time() - full_time) < ALPHA_CACHE_TTL:
+    if full_cached and not refresh and (_time.time() - full_time) < ttl:
         return encode_response(full_cached)
 
     # GUARD: Never start an alpha scan while the momentum pipeline is running — OOM risk
