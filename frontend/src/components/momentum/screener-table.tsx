@@ -4,10 +4,8 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { TickerModal } from "./ticker-modal";
 import type { Signal } from "@/types/momentum";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn, getTextColorClass, getRgbaString } from "@/lib/utils"; // Assuming getRgbaString is available from lib/utils.ts
+import { cn, getTextColorClass, getRgbaString } from "@/lib/utils";
 import { AppleCard } from "@/components/ui/apple-card";
-import { Dialog } from "@/components/ui/dialog";
-import { Sheet } from "@/components/ui/sheet";
 import {
   Table,
   TableHeader,
@@ -193,16 +191,6 @@ const ScreenerTableComponent = ({ data, title, icon, description, onSelectTicker
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("ALL");
   const [modalSignal, setModalSignal] = useState<Signal | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
 
   const sectors = useMemo(() => {
     const s = new Set(data.map((d) => d.sector).filter(Boolean));
@@ -234,11 +222,6 @@ const ScreenerTableComponent = ({ data, title, icon, description, onSelectTicker
       </AppleCard>
     );
   }
-
-  const ModalWrapper = isMobile ? Sheet : Dialog;
-  const modalProps = isMobile
-    ? { open: !!modalSignal, onOpenChange: (open: boolean) => !open && setModalSignal(null) }
-    : { open: !!modalSignal, onOpenChange: (open: boolean) => !open && setModalSignal(null) };
 
   return (
     <AppleCard className="p-4 sm:p-6 lg:p-8">
@@ -377,20 +360,15 @@ const ScreenerTableComponent = ({ data, title, icon, description, onSelectTicker
         </Table>
       )}
 
-      <AnimatePresence>
-        {modalSignal && (
-          <ModalWrapper {...modalProps}>
-            <TickerModal
-              signal={modalSignal}
-              onClose={() => setModalSignal(null)}
-              onViewDetail={(ticker) => {
-                onSelectTicker?.(ticker);
-                setModalSignal(null);
-              }}
-            />
-          </ModalWrapper>
-        )}
-      </AnimatePresence>
+      {/* TickerModal renders via portal — always above all stacking contexts */}
+      <TickerModal
+        signal={modalSignal}
+        onClose={() => setModalSignal(null)}
+        onViewDetail={(ticker) => {
+          onSelectTicker?.(ticker);
+          setModalSignal(null);
+        }}
+      />
     </AppleCard>
   );
 };
