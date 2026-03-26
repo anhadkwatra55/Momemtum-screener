@@ -1,20 +1,21 @@
 """
-options_alpha.py — Alpha-Flow Options Intelligence Pipeline
-============================================================
-DIRECT PORT of proven Google Colab AlphaFlowEngine.
+options_alpha.py — Alpha-Flow Options Intelligence Pipeline (v2 — Optimized)
+==============================================================================
+High-performance options scanner with:
+  1. Per-ticker HV caching (eliminates N+1 yfinance bug)
+  2. Vectorized Pandas gates (no iterrows for filtering)
+  3. Connection pooling + anti-ban jitter
+  4. Module-level ticker list caching (24h TTL)
+  5. Retry with exponential backoff on yfinance calls
 
-This is an exact copy of the user's working Colab code, adapted for
-the FastAPI backend with two optimizations:
-  1. ThreadPoolExecutor for parallel ticker scanning
-  2. Chunked processing: first 50 tickers fast, then remaining in background
-
-The math and filter logic are UNCHANGED from the Colab version.
+The quant math and 7 institutional gate logic are UNCHANGED.
 """
 
 from __future__ import annotations
 
 import logging
 import math
+import random
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -49,7 +50,37 @@ except ImportError:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 1. CORE QUANT PROTOCOL (THE MATH) — Unchanged from Colab
+# 0. SHARED SESSION (Connection Pooling)
+# ═══════════════════════════════════════════════════════════════
+
+def _make_session() -> "_requests.Session":
+    """Create a requests.Session with connection pooling for yfinance."""
+    s = _requests.Session()
+    s.headers.update({"User-Agent": "Mozilla/5.0"})
+    # Keep-alive with connection pooling — reuses TCP connections
+    adapter = _requests.adapters.HTTPAdapter(
+        pool_connections=6,
+        pool_maxsize=6,
+        max_retries=2,
+    )
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    return s
+
+
+_shared_session: "_requests.Session | None" = None
+
+
+def _get_session() -> "_requests.Session":
+    """Lazy-init a module-level shared session."""
+    global _shared_session
+    if _shared_session is None:
+        _shared_session = _make_session()
+    return _shared_session
+
+
+# ═══════════════════════════════════════════════════════════════
+# 1. CORE QUANT PROTOCOL (THE MATH) — Unchanged
 # ═══════════════════════════════════════════════════════════════
 
 class FlowProtocol:
@@ -62,8 +93,7 @@ class FlowProtocol:
             d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
             d2 = d1 - sigma * np.sqrt(T)
             delta = float(norm.cdf(d1))
-            pop = float(norm.cdf(d2))  # Proxy for probability of expiring ITM
-            # Guard against NaN
+            pop = float(norm.cdf(d2))
             if math.isnan(delta) or math.isinf(delta):
                 delta = 0
             if math.isnan(pop) or math.isinf(pop):
@@ -72,29 +102,35 @@ class FlowProtocol:
         except Exception:
             return 0, 0
 
-    @staticmethod
-    def get_iv_hv_edge(ticker_obj, iv):
-        """Calculates the spread between Implied and Historical Volatility"""
-        try:
-            hist = ticker_obj.history(period="30d")["Close"]
-            if len(hist) < 20:
-                return 0
-            hv = float(np.log(hist / hist.shift(1)).dropna().std() * np.sqrt(252))
-            if math.isnan(hv) or math.isinf(hv):
-                return 0
-            return round(hv - iv, 3)
-        except Exception:
-            return 0
-
 
 # ═══════════════════════════════════════════════════════════════
-# 2. S&P 500 UNIVERSE FETCH — Unchanged from Colab
+# 2. TICKER UNIVERSE FETCH — With 24-Hour Module-Level Cache
 # ═══════════════════════════════════════════════════════════════
 
-def get_sp500():
-    """Fetch S&P 500 tickers from Wikipedia with retry."""
+_TICKER_CACHE: dict[str, tuple[list[str], float]] = {}
+_TICKER_CACHE_TTL = 86400  # 24 hours
+
+# Hardcoded fallback for when Wikipedia is unreachable
+_SP500_FALLBACK = [
+    "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA", "BRK-B",
+    "UNH", "JNJ", "V", "XOM", "JPM", "PG", "MA", "HD", "CVX", "MRK",
+    "ABBV", "LLY", "PEP", "KO", "COST", "AVGO", "WMT", "MCD", "CSCO",
+    "TMO", "ACN", "ABT", "DHR", "NEE", "LIN", "CRM", "AMD", "TXN",
+    "PM", "UNP", "QCOM", "HON", "MS", "GS", "BA", "CAT", "RTX",
+    "INTC", "AMGN", "IBM", "GE",
+]
+
+
+def get_sp500() -> list[str]:
+    """Fetch S&P 500 tickers from Wikipedia with 24h cache."""
     if not HAS_PD or not HAS_REQ:
-        return []
+        return _SP500_FALLBACK
+
+    cached = _TICKER_CACHE.get("sp500")
+    if cached and (_time.monotonic() - cached[1]) < _TICKER_CACHE_TTL:
+        logger.info(f"Using cached S&P 500 tickers ({len(cached[0])})")
+        return cached[0]
+
     for attempt in range(3):
         try:
             url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -102,19 +138,28 @@ def get_sp500():
             resp = _requests.get(url, headers=headers, timeout=15)
             resp.raise_for_status()
             tickers = pd.read_html(resp.text)[0]["Symbol"].tolist()
-            logger.info(f"Fetched {len(tickers)} S&P 500 tickers")
+            _TICKER_CACHE["sp500"] = (tickers, _time.monotonic())
+            logger.info(f"Fetched {len(tickers)} S&P 500 tickers (cached for 24h)")
             return tickers
         except Exception as e:
             logger.warning(f"S&P 500 fetch attempt {attempt + 1}/3 failed: {e}")
             if attempt < 2:
-                _time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
-    return []
+                _time.sleep(2 ** attempt)
+
+    logger.warning("All S&P 500 fetch attempts failed, using fallback")
+    return _SP500_FALLBACK
 
 
-def get_nasdaq100():
-    """Fetch NASDAQ 100 tickers from Wikipedia with retry."""
+def get_nasdaq100() -> list[str]:
+    """Fetch NASDAQ 100 tickers from Wikipedia with 24h cache."""
     if not HAS_PD or not HAS_REQ:
         return []
+
+    cached = _TICKER_CACHE.get("nasdaq100")
+    if cached and (_time.monotonic() - cached[1]) < _TICKER_CACHE_TTL:
+        logger.info(f"Using cached NASDAQ 100 tickers ({len(cached[0])})")
+        return cached[0]
+
     for attempt in range(3):
         try:
             url = "https://en.wikipedia.org/wiki/Nasdaq-100"
@@ -122,12 +167,12 @@ def get_nasdaq100():
             resp = _requests.get(url, headers=headers, timeout=15)
             resp.raise_for_status()
             tables = pd.read_html(resp.text)
-            # The NASDAQ 100 table typically has a 'Ticker' or 'Symbol' column
             for t in tables:
                 for col in ['Ticker', 'Symbol', 'ticker', 'symbol']:
                     if col in t.columns:
                         tickers = t[col].tolist()
-                        logger.info(f"Fetched {len(tickers)} NASDAQ 100 tickers")
+                        _TICKER_CACHE["nasdaq100"] = (tickers, _time.monotonic())
+                        logger.info(f"Fetched {len(tickers)} NASDAQ 100 tickers (cached for 24h)")
                         return tickers
             logger.warning("NASDAQ 100 table not found")
             return []
@@ -139,116 +184,177 @@ def get_nasdaq100():
 
 
 # ═══════════════════════════════════════════════════════════════
-# 3. SINGLE-TICKER SCAN — Exact Colab logic, parallelizable
+# 3. SINGLE-TICKER SCAN — Optimized with:
+#    - Per-ticker HV caching (closure, computed ONCE)
+#    - Vectorized Pandas gates (no iterrows for filtering)
+#    - Anti-ban jitter + retry with backoff
+#    - Connection pooling via shared session
 # ═══════════════════════════════════════════════════════════════
+
+def _yf_retry(fn, retries=2, base_delay=1.0):
+    """Retry a yfinance call with exponential backoff."""
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == retries:
+                raise
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+            logger.debug(f"yfinance retry {attempt + 1}/{retries}: {e}, sleeping {delay:.1f}s")
+            _time.sleep(delay)
+
 
 def _scan_one_ticker(symbol: str) -> list[dict]:
     """
-    Scan a single ticker — this is the inner loop of AlphaFlowEngine.execute_scan(),
-    extracted so it can be run in parallel via ThreadPoolExecutor.
+    Scan a single ticker with all optimizations applied.
 
-    The filter logic is IDENTICAL to the Colab version:
-      - Price >= $25
-      - DTE 90-150 days
-      - Premium $1-$8
-      - ATM/OTM only (strike >= price)
-      - Spread <= 10%
-      - OI > 100
-      - Delta >= 0.35
+    Key changes from v1:
+      1. HV is computed ONCE per ticker via closure (not per-contract)
+      2. Vectorized Pandas filtering for gates 3-6
+      3. Anti-ban jitter before yfinance calls
+      4. Shared requests.Session for connection pooling
     """
     if not HAS_YF:
         return []
 
     results = []
-    try:
-        t = yf.Ticker(symbol.replace(".", "-"))
-        price = t.fast_info["lastPrice"]
 
-        # Institutional Gate 1: Price Floor
+    # Anti-ban jitter: small random delay to spread requests
+    _time.sleep(random.uniform(0.05, 0.3))
+
+    try:
+        session = _get_session()
+        t = yf.Ticker(symbol.replace(".", "-"), session=session)
+
+        # Use retry wrapper for the initial price fetch
+        price = _yf_retry(lambda: t.fast_info["lastPrice"])
+
+        # ── Gate 1: Price Floor ($25) ──
         if price < 25:
             return []
 
-        expirations = t.options
+        expirations = _yf_retry(lambda: t.options)
         if not expirations:
             return []
 
         today = datetime.now()
 
-        # Institutional Gate 2: Time Buffer (90-150 Days)
+        # ── Gate 2: DTE 90-150 days (pre-filter expirations) ──
         valid_expiries = [
             e for e in expirations
             if 90 <= (datetime.strptime(e, "%Y-%m-%d") - today).days <= 150
         ]
-
         if not valid_expiries:
             return []
 
+        # ── Pre-compute HV ONCE for this ticker (fixes N+1 bug) ──
+        _hv: float | None = None
+
+        def _get_edge(iv: float) -> float:
+            nonlocal _hv
+            if _hv is None:
+                try:
+                    hist = t.history(period="30d")["Close"]
+                    if len(hist) >= 20:
+                        _hv = float(np.log(hist / hist.shift(1)).dropna().std() * np.sqrt(252))
+                    else:
+                        _hv = 0.0
+                except Exception:
+                    _hv = 0.0
+                if math.isnan(_hv) or math.isinf(_hv):
+                    _hv = 0.0
+            if _hv == 0.0:
+                return 0
+            return round(_hv - iv, 3)
+
         for exp in valid_expiries:
             try:
-                chain = t.option_chain(exp).calls
-                if chain.empty:
+                chain = _yf_retry(lambda: t.option_chain(exp).calls)
+                if chain is None or chain.empty:
                     continue
 
                 dte_days = (datetime.strptime(exp, "%Y-%m-%d") - today).days
                 dte_years = dte_days / 365.0
 
-                for _, opt in chain.iterrows():
-                    bid = float(opt.get("bid", 0) or 0)
-                    ask = float(opt.get("ask", 0) or 0)
-                    last_price = float(opt.get("lastPrice", 0) or 0)
+                # ══════════════════════════════════════════════════
+                # VECTORIZED GATES (3-6) — filter DataFrame in bulk
+                # ══════════════════════════════════════════════════
 
-                    # After-hours fallback: use lastPrice when bid/ask are 0
-                    if bid > 0 and ask > 0:
-                        mid = (bid + ask) / 2
-                        spread_pct = ((ask - bid) / mid) * 100
-                        after_hours = False
-                    elif last_price > 0:
-                        mid = last_price
-                        spread_pct = 0  # Can't calculate spread without bid/ask
-                        after_hours = True
-                    else:
-                        continue  # No pricing data at all
+                # Ensure numeric columns, fill NaN with 0
+                chain = chain.copy()
+                for col in ["bid", "ask", "lastPrice", "openInterest", "impliedVolatility", "volume"]:
+                    if col in chain.columns:
+                        chain[col] = pd.to_numeric(chain[col], errors="coerce").fillna(0)
 
-                    # Institutional Gate 3: Premium ($1-$8)
-                    if not (1.0 <= mid <= 8.0):
-                        continue
-                    if opt["strike"] < price:
-                        continue  # ATM/OTM only
+                # Compute mid price (bid/ask → mid, fallback to lastPrice)
+                has_quotes = (chain["bid"] > 0) & (chain["ask"] > 0)
+                chain["mid"] = 0.0
+                chain.loc[has_quotes, "mid"] = (chain.loc[has_quotes, "bid"] + chain.loc[has_quotes, "ask"]) / 2
+                chain.loc[~has_quotes, "mid"] = chain.loc[~has_quotes, "lastPrice"]
+                chain["after_hours"] = ~has_quotes
 
-                    # Spread check (skip if after-hours — no live bid/ask)
-                    if not after_hours and spread_pct > 10:
-                        continue
+                # Spread %
+                chain["spread_pct"] = 0.0
+                chain.loc[has_quotes, "spread_pct"] = (
+                    (chain.loc[has_quotes, "ask"] - chain.loc[has_quotes, "bid"]) / chain.loc[has_quotes, "mid"] * 100
+                )
 
-                    # Institutional Gate 4: Liquidity Floor (OI > 100)
-                    # Skip in after-hours mode — yfinance returns OI=0 when market closed
-                    oi = int(opt.get("openInterest", 0) or 0)
-                    if not after_hours and oi < 100:
-                        continue
+                # Must have SOME price
+                has_price = chain["mid"] > 0
 
-                    iv = float(opt.get("impliedVolatility", 0) or 0)
+                # Gate 3: Premium $1-$8
+                gate3 = (chain["mid"] >= 1.0) & (chain["mid"] <= 8.0)
+
+                # Gate 4: ATM/OTM only (strike >= stock price)
+                gate4 = chain["strike"] >= price
+
+                # Gate 5: Spread <= 10% (skip for after-hours)
+                gate5 = chain["after_hours"] | (chain["spread_pct"] <= 10)
+
+                # Gate 6: OI > 100 (skip for after-hours)
+                oi_col = chain["openInterest"].astype(int)
+                gate6 = chain["after_hours"] | (oi_col > 100)
+
+                # Combined vectorized mask
+                mask = has_price & gate3 & gate4 & gate5 & gate6
+                survivors = chain[mask]
+
+                if survivors.empty:
+                    continue
+
+                # ══════════════════════════════════════════════════
+                # ITERATE only survivors — compute Greeks + score
+                # ══════════════════════════════════════════════════
+
+                for _, opt in survivors.iterrows():
+                    bid = float(opt["bid"])
+                    ask = float(opt["ask"])
+                    mid = float(opt["mid"])
+                    after_hours = bool(opt["after_hours"])
+                    oi = int(opt["openInterest"])
+                    iv = float(opt["impliedVolatility"])
+                    spread_pct_val = float(opt["spread_pct"])
 
                     # Calculate Quant Metrics
                     if after_hours or iv < 0.10:
-                        # After-hours: IV is garbage (0.01-0.06), use moneyness approximation
                         ratio = price / float(opt["strike"])
                         delta = round(max(0, min(1.0, 0.5 + (ratio - 1.0) * 2.5)), 2)
                         pop = round(max(0, min(1.0, delta * 0.85)), 2)
-                        edge = 0  # Can't compute HV-IV edge with bad IV
+                        edge = 0
                     else:
                         delta, pop = FlowProtocol.calculate_greeks(
                             price, opt["strike"], dte_years, 0.04, iv
                         )
-                        edge = FlowProtocol.get_iv_hv_edge(t, iv)
+                        edge = _get_edge(iv)  # Uses cached HV — no extra API call
 
-                    # Veto Logic: Delta Floor
+                    # ── Gate 7: Delta >= 0.35 ──
                     if delta < 0.35:
                         continue
 
-                    # Calculate Breakeven %
+                    # Breakeven %
                     be_pct = (((opt["strike"] + mid) / price) - 1) * 100
 
                     # COMPOSITE QUANT SCORE (0-100)
-                    # Weights: 40% POP, 40% Vol Edge (HV > IV), 20% Liquidity (OI)
                     quant_score = (pop * 40) + (max(0, edge) * 100 * 4) + (min(10, oi / 1000) * 2)
 
                     results.append({
@@ -267,7 +373,7 @@ def _scan_one_ticker(symbol: str) -> list[dict]:
                         "open_interest": oi,
                         "volume": int(opt.get("volume", 0) or 0),
                         "implied_volatility": round(iv * 100, 1),
-                        "spread_pct": round(spread_pct, 1),
+                        "spread_pct": round(spread_pct_val, 1),
                         "quant_score": round(quant_score, 2),
                         "moneyness": "ATM" if abs(opt["strike"] - price) / price < 0.03 else "OTM",
                     })
@@ -283,52 +389,49 @@ def _scan_one_ticker(symbol: str) -> list[dict]:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 4. PUBLIC API — Parallel scan with chunked processing
+# 4. PUBLIC API — Parallel scan with optimized orchestration
 # ═══════════════════════════════════════════════════════════════
 
 def get_alpha_calls(
     limit: int = 75,
-    max_workers: int = 2,
+    max_workers: int = 4,
     sort_by: str = "quant_score",
     universe: str = "sp500",
-    **kwargs,  # Accept extra params from API without breaking
+    **kwargs,
 ) -> dict:
     """
     Run the Alpha-Flow scan across S&P 500 and/or NASDAQ 100.
 
-    Args:
-        limit: Number of tickers to scan (default 75)
-        max_workers: Thread pool size
-        sort_by: Sort key for results
-        universe: 'sp500', 'nasdaq100', or 'both'
-
-    Returns:
-        dict with calls, meta, timestamp
+    v2 changes:
+      - 4 workers (up from 2)
+      - Connection pooling via shared session
+      - Ticker list cached 24h
+      - HV computed once per ticker
+      - Vectorized gate filtering
     """
-    # Fetch universe based on selection
+    # Fetch universe (cached for 24h)
     if universe == "nasdaq100":
         tickers = get_nasdaq100()
         src = "NASDAQ 100"
     elif universe == "both":
         sp = get_sp500()
         nq = get_nasdaq100()
-        # Merge and deduplicate, preserving order
         seen = set()
         tickers = []
-        for t in sp + nq:
-            if t not in seen:
-                seen.add(t)
-                tickers.append(t)
+        for t_sym in sp + nq:
+            if t_sym not in seen:
+                seen.add(t_sym)
+                tickers.append(t_sym)
         src = "S&P 500 + NASDAQ 100"
     else:
         tickers = get_sp500()
         src = "S&P 500"
+
     if not tickers:
         # Fallback to momentum universe
         try:
             import json
             from pathlib import Path
-
             p = Path(__file__).parent / "momentum_data.json"
             if p.exists():
                 with open(p) as f:
@@ -346,17 +449,16 @@ def get_alpha_calls(
         }
 
     scan_tickers = tickers[:limit]
-    logger.info(f"Alpha-Flow: Scanning {len(scan_tickers)}/{len(tickers)} {src} tickers")
+    logger.info(f"Alpha-Flow v2: Scanning {len(scan_tickers)}/{len(tickers)} {src} tickers ({max_workers} workers)")
 
     all_calls: list[dict] = []
     errors = 0
     timed_out = False
 
-    # Overall scan timeout: 4 minutes — return partial results if exceeded
-    SCAN_TIMEOUT = 240  # seconds
+    # Overall scan timeout: 4 minutes
+    SCAN_TIMEOUT = 240
     scan_start = _time.monotonic()
 
-    # Parallel scan via ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(_scan_one_ticker, sym): sym
@@ -364,33 +466,32 @@ def get_alpha_calls(
         }
         completed = 0
         for future in as_completed(futures):
-            # Check overall timeout
             elapsed = _time.monotonic() - scan_start
             if elapsed > SCAN_TIMEOUT:
                 logger.warning(
-                    f"Alpha-Flow: Overall timeout ({SCAN_TIMEOUT}s) hit after "
-                    f"{completed}/{len(scan_tickers)} tickers. Returning partial results."
+                    f"Alpha-Flow: Timeout ({SCAN_TIMEOUT}s) after "
+                    f"{completed}/{len(scan_tickers)} tickers. Returning partial."
                 )
                 timed_out = True
-                # Cancel remaining futures
                 for f in futures:
                     f.cancel()
                 break
             try:
-                results = future.result(timeout=30)  # 30s per-ticker timeout
+                results = future.result(timeout=30)
                 all_calls.extend(results)
             except Exception:
                 errors += 1
             completed += 1
 
-    # Sort — default by Quant_Score descending (matching Colab)
+    # Sort
     reverse = sort_by not in ("breakeven_pct", "spread_pct")
     all_calls.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse)
 
     scan_elapsed = round(_time.monotonic() - scan_start, 1)
+    tickers_with_calls = len(set(c["ticker"] for c in all_calls))
     logger.info(
-        f"Alpha-Flow: Done in {scan_elapsed}s — "
-        f"{len(all_calls)} contracts from {len(set(c['ticker'] for c in all_calls))} tickers"
+        f"Alpha-Flow v2: Done in {scan_elapsed}s — "
+        f"{len(all_calls)} contracts from {tickers_with_calls} tickers"
     )
 
     return {
@@ -400,7 +501,7 @@ def get_alpha_calls(
             "universe_size": len(tickers),
             "tickers_scanned": completed if timed_out else len(scan_tickers),
             "contracts_found": len(all_calls),
-            "tickers_with_calls": len(set(c["ticker"] for c in all_calls)),
+            "tickers_with_calls": tickers_with_calls,
             "errors": errors,
             "partial": timed_out,
             "scan_time_seconds": scan_elapsed,
