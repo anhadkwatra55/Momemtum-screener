@@ -69,7 +69,7 @@ def db_session(db_path=None):
 #  SCHEMA INIT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 -- OHLCV daily bars
@@ -229,6 +229,48 @@ CREATE TABLE IF NOT EXISTS momentum_daily_top (
 );
 CREATE INDEX IF NOT EXISTS idx_mdt_date   ON momentum_daily_top(date);
 CREATE INDEX IF NOT EXISTS idx_mdt_ticker ON momentum_daily_top(ticker);
+
+-- Alpha-Flow Options Intelligence results (pre-scanned)
+CREATE TABLE IF NOT EXISTS alpha_calls (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    universe          TEXT    NOT NULL,
+    ticker            TEXT    NOT NULL,
+    stock_price       REAL,
+    strike            REAL,
+    expiration        TEXT,
+    dte               INTEGER,
+    bid               REAL,
+    ask               REAL,
+    mid_price         REAL,
+    delta             REAL,
+    pop               REAL,
+    vol_edge          REAL,
+    breakeven_pct     REAL,
+    open_interest     INTEGER,
+    volume            INTEGER,
+    implied_volatility REAL,
+    spread_pct        REAL,
+    quant_score       REAL,
+    moneyness         TEXT,
+    scanned_at        TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_alpha_universe ON alpha_calls(universe);
+CREATE INDEX IF NOT EXISTS idx_alpha_score    ON alpha_calls(quant_score);
+CREATE INDEX IF NOT EXISTS idx_alpha_ticker   ON alpha_calls(ticker);
+
+-- Alpha scan metadata (one row per universe)
+CREATE TABLE IF NOT EXISTS alpha_scan_meta (
+    universe          TEXT PRIMARY KEY,
+    tickers_scanned   INTEGER,
+    contracts_found   INTEGER,
+    tickers_with_calls INTEGER,
+    scan_time_seconds REAL,
+    universe_source   TEXT,
+    universe_size     INTEGER,
+    errors            INTEGER DEFAULT 0,
+    partial           INTEGER DEFAULT 0,
+    scanned_at        TEXT DEFAULT (datetime('now'))
+);
 """
 
 
@@ -842,3 +884,173 @@ def load_weekly_top(start_date: str, end_date: str) -> dict:
         "daily": daily,
         "tickers": ticker_data,
     }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  ALPHA CALLS  (pre-scanned options intelligence)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_ALPHA_COLS = [
+    "universe", "ticker", "stock_price", "strike", "expiration", "dte",
+    "bid", "ask", "mid_price", "delta", "pop", "vol_edge", "breakeven_pct",
+    "open_interest", "volume", "implied_volatility", "spread_pct",
+    "quant_score", "moneyness",
+]
+
+
+def upsert_alpha_calls_bulk(calls: List[dict], universe: str, meta: dict) -> int:
+    """
+    Replace all alpha_calls rows for a universe with fresh scan results.
+    Also updates the alpha_scan_meta table.
+    Returns number of rows written.
+    """
+    with db_session() as conn:
+        # Delete old rows for this universe
+        conn.execute("DELETE FROM alpha_calls WHERE universe = ?", (universe,))
+
+        if calls:
+            placeholders = ", ".join(["?"] * len(_ALPHA_COLS))
+            cols = ", ".join(_ALPHA_COLS)
+            sql = f"INSERT INTO alpha_calls ({cols}) VALUES ({placeholders})"
+            rows = []
+            for c in calls:
+                rows.append((
+                    universe,
+                    c.get("ticker", ""),
+                    c.get("stock_price", 0),
+                    c.get("strike", 0),
+                    c.get("expiration", ""),
+                    c.get("dte", 0),
+                    c.get("bid", 0),
+                    c.get("ask", 0),
+                    c.get("mid_price", 0),
+                    c.get("delta", 0),
+                    c.get("pop", 0),
+                    c.get("vol_edge", 0),
+                    c.get("breakeven_pct", 0),
+                    c.get("open_interest", 0),
+                    c.get("volume", 0),
+                    c.get("implied_volatility", 0),
+                    c.get("spread_pct", 0),
+                    c.get("quant_score", 0),
+                    c.get("moneyness", ""),
+                ))
+            conn.executemany(sql, rows)
+
+        # Upsert scan metadata
+        conn.execute(
+            """INSERT OR REPLACE INTO alpha_scan_meta
+               (universe, tickers_scanned, contracts_found, tickers_with_calls,
+                scan_time_seconds, universe_source, universe_size, errors, partial, scanned_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            (
+                universe,
+                meta.get("tickers_scanned", 0),
+                meta.get("contracts_found", 0),
+                meta.get("tickers_with_calls", 0),
+                meta.get("scan_time_seconds", 0),
+                meta.get("universe_source", ""),
+                meta.get("universe_size", 0),
+                meta.get("errors", 0),
+                int(meta.get("partial", False)),
+            ),
+        )
+
+    return len(calls)
+
+
+def load_alpha_calls(
+    universe: str = "sp500",
+    sort_by: str = "quant_score",
+    limit: int = 500,
+) -> dict:
+    """
+    Load pre-scanned alpha calls from DB. Returns the same format as
+    the old get_alpha_calls() so the endpoint response is unchanged.
+    """
+    # Sanitize sort column
+    allowed_sort = {
+        "quant_score", "delta", "pop", "vol_edge", "breakeven_pct",
+        "spread_pct", "open_interest", "mid_price", "dte",
+    }
+    sort_col = sort_by if sort_by in allowed_sort else "quant_score"
+    reverse = sort_col not in ("breakeven_pct", "spread_pct")
+    order = "DESC" if reverse else "ASC"
+
+    with db_session() as conn:
+        # Load calls
+        rows = conn.execute(
+            f"""SELECT * FROM alpha_calls
+                WHERE universe = ?
+                ORDER BY {sort_col} {order}
+                LIMIT ?""",
+            (universe, limit),
+        ).fetchall()
+
+        # Load scan metadata
+        meta_row = conn.execute(
+            "SELECT * FROM alpha_scan_meta WHERE universe = ?",
+            (universe,),
+        ).fetchone()
+
+    calls = []
+    for r in rows:
+        calls.append({
+            "ticker": r["ticker"],
+            "stock_price": r["stock_price"],
+            "strike": r["strike"],
+            "expiration": r["expiration"],
+            "dte": r["dte"],
+            "bid": r["bid"],
+            "ask": r["ask"],
+            "mid_price": r["mid_price"],
+            "delta": r["delta"],
+            "pop": r["pop"],
+            "vol_edge": r["vol_edge"],
+            "breakeven_pct": r["breakeven_pct"],
+            "open_interest": r["open_interest"],
+            "volume": r["volume"],
+            "implied_volatility": r["implied_volatility"],
+            "spread_pct": r["spread_pct"],
+            "quant_score": r["quant_score"],
+            "moneyness": r["moneyness"],
+        })
+
+    meta = {
+        "universe_source": meta_row["universe_source"] if meta_row else "",
+        "universe_size": meta_row["universe_size"] if meta_row else 0,
+        "tickers_scanned": meta_row["tickers_scanned"] if meta_row else 0,
+        "contracts_found": meta_row["contracts_found"] if meta_row else 0,
+        "tickers_with_calls": meta_row["tickers_with_calls"] if meta_row else 0,
+        "errors": meta_row["errors"] if meta_row else 0,
+        "partial": bool(meta_row["partial"]) if meta_row else False,
+        "scan_time_seconds": meta_row["scan_time_seconds"] if meta_row else 0,
+        "filters": {
+            "price_floor": "$25",
+            "dte_range": "90-150d",
+            "premium_range": "$1-$8",
+            "spread_max": "10%",
+            "oi_floor": "100",
+            "delta_floor": "0.35",
+            "moneyness": "ATM/OTM",
+        },
+    }
+
+    timestamp = meta_row["scanned_at"] if meta_row else datetime.now().isoformat()
+
+    return {
+        "calls": calls,
+        "meta": meta,
+        "timestamp": timestamp,
+    }
+
+
+def has_alpha_data(universe: str = "sp500") -> bool:
+    """Check if we have any alpha scan data for a universe."""
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) as c FROM alpha_scan_meta WHERE universe = ?",
+            (universe,),
+        ).fetchone()
+        return row["c"] > 0 if row else False
+
