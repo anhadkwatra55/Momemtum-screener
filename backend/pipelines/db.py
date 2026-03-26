@@ -1054,3 +1054,19 @@ def has_alpha_data(universe: str = "sp500") -> bool:
         ).fetchone()
         return row["c"] > 0 if row else False
 
+
+def get_alpha_scan_age(universe: str = "sp500") -> "float | None":
+    """Return age of last alpha scan in seconds, or None if no scan exists."""
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT scanned_at FROM alpha_scan_meta WHERE universe = ?",
+            (universe,),
+        ).fetchone()
+        if not row or not row["scanned_at"]:
+            return None
+        try:
+            scanned = datetime.fromisoformat(row["scanned_at"])
+            return (datetime.now() - scanned).total_seconds()
+        except Exception:
+            return None
+
