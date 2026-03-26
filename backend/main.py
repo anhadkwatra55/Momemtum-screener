@@ -565,9 +565,14 @@ def _seconds_until_next_run() -> float:
 
 def _refresh_alpha_cache_background(startup: bool = False):
     """Run alpha pipeline and persist results to SQLite.
-    On startup: scans sp500 (500 tickers) and saves to DB.
-    On daily refresh: scans all universes."""
+    On startup: checks if DB already has fresh data — skips scan if <4h old.
+    On daily refresh: always re-scans all universes.
+    Set env FORCE_ALPHA_RESCAN=true to force a full re-scan (e.g. after math changes)."""
     import time as _t
+
+    force_rescan = os.environ.get("FORCE_ALPHA_RESCAN", "").lower() in ("true", "1", "yes")
+    MAX_AGE_SECONDS = 4 * 3600  # 4 hours
+
     try:
         from options_alpha import run_alpha_pipeline
 
@@ -577,6 +582,16 @@ def _refresh_alpha_cache_background(startup: bool = False):
             universes = ["sp500", "nasdaq100", "both"]
 
         for univ in universes:
+            # Check if DB already has fresh data (skip scan to save time + memory)
+            if startup and not force_rescan:
+                age = db.get_alpha_scan_age(univ)
+                if age is not None and age < MAX_AGE_SECONDS:
+                    count = db.load_alpha_calls(universe=univ, limit=1)
+                    n = len(count.get("calls", []))
+                    hrs = round(age / 3600, 1)
+                    print(f"  \u2713 Alpha {univ}: DB data is {hrs}h old — skipping scan (has data)")
+                    continue
+
             print(f"  \U0001f4ca Alpha {'startup' if startup else 'daily'} pipeline: {univ}\u2026")
             t0 = _t.monotonic()
             meta = run_alpha_pipeline(universe=univ, max_workers=4)
