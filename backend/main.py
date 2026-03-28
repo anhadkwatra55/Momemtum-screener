@@ -760,7 +760,9 @@ if _SERVER_MODE:
 
     @app.middleware("http")
     async def api_key_middleware(request: Request, call_next):
-        """Enforce API key on all /api/* routes (except health)."""
+        """Enforce API key on all /api/* routes (except health and OPTIONS preflight)."""
+        if request.method == "OPTIONS":
+            return await call_next(request)
         if request.url.path.startswith("/api/") and request.url.path != "/api/health":
             if _API_KEY:
                 key = request.headers.get("x-api-key", "")

@@ -89,43 +89,29 @@ openssl rand -hex 32
 ```
 Copy the output — this is your API_KEY. You'll set it in both your server AND Vercel.
 
-### Step 4: Start prod backend (background, survives terminal close)
+### Step 4: Start prod backend (with live logs in terminal)
 ```bash
 cd ~/Desktop/momentum-screener-server/backend
 source venv/bin/activate
-MAC_MINI_SERVER_MODE=true \
-API_KEY=<paste-your-64-char-key> \
-ALLOWED_ORIGINS=https://momentum-screener.vercel.app \
-nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1 \
-  > nohup.out 2>&1 &
-echo "Backend PID: $!"
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 ```
+You should see: `🔒 [SERVER MODE] Security active: CORS=..., Rate=60/min, API-Key=SET`
 
-### Step 5: Start Cloudflare Tunnel (connects your Mac to the internet)
+### Step 5: Start Cloudflare Tunnel (new terminal tab)
 ```bash
-nohup cloudflared tunnel --url http://localhost:8060 > ~/cloudflared.log 2>&1 &
+cloudflared tunnel --url http://localhost:8060
 ```
-Check the log for your public URL:
-```bash
-grep -o 'https://.*trycloudflare.com' ~/cloudflared.log
-```
-This gives you a URL like `https://something-random.trycloudflare.com`.
+Copy the `https://______.trycloudflare.com` URL it prints.
 
-For a permanent custom domain, use a named tunnel instead:
-```bash
-cloudflared tunnel login
-cloudflared tunnel create momentum-api
-cloudflared tunnel route dns momentum-api api.yourdomain.com
-cloudflared tunnel run momentum-api --url http://localhost:8060
-```
+Note: URL stays constant as long as this terminal is running. If you restart cloudflared, you get a new URL and must update Vercel.
 
 ### Step 6: Connect Vercel
-In Vercel Dashboard → Project → Settings → Environment Variables:
+In Vercel Dashboard → momemtum-screener → Settings → Environment Variables:
 ```
-NEXT_PUBLIC_API_URL = https://something-random.trycloudflare.com  (or https://api.yourdomain.com)
-NEXT_PUBLIC_API_KEY = <same API_KEY from step 3>
+NEXT_PUBLIC_API_URL = <paste the trycloudflare.com URL from step 5>
+NEXT_PUBLIC_API_KEY = 911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c
 ```
-Then **redeploy** the Vercel project.
+Then go to Deployments → ... → **Redeploy**.
 
 ---
 
@@ -135,47 +121,43 @@ Then **redeploy** the Vercel project.
 # Check if backend is running
 lsof -i :8060
 
-# View live logs
-tail -f ~/Desktop/momentum-screener-server/backend/nohup.out
-
 # Stop prod backend
-kill $(lsof -ti :8060)
+Ctrl+C in the server terminal (or: kill $(lsof -ti :8060))
 
 # Restart prod backend
 cd ~/Desktop/momentum-screener-server/backend
 source venv/bin/activate
-MAC_MINI_SERVER_MODE=true \
-API_KEY=<your-key> \
-ALLOWED_ORIGINS=https://momentum-screener.vercel.app \
-nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1 \
-  > nohup.out 2>&1 &
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 
-# Check Cloudflare tunnel
-lsof -i :8060
-grep trycloudflare ~/cloudflared.log
+# Restart Cloudflare tunnel (new terminal tab)
+cloudflared tunnel --url http://localhost:8060
+# If URL changed, update NEXT_PUBLIC_API_URL in Vercel and redeploy
+
+# Check all ports
+lsof -i :8000 -i :8060 -i :3001 -i :9090
 ```
 
 ---
 
 ## Deploy New Code (Dev → Prod)
 
-### Push from dev, pull in server
+### Step 1: Push from dev
 ```bash
-# In dev clone — push your changes
 cd ~/Desktop/momentum-screener-dev
-git add -A && git commit -m "your changes" && git push origin main
+git add -A && git commit -m "describe your changes" && git push origin main
+```
 
-# In server clone — pull and restart
+### Step 2: Pull into server + restart
+```bash
+# Stop the running server (Ctrl+C), then:
 cd ~/Desktop/momentum-screener-server
 git pull origin main
-kill $(lsof -ti :8060)   # stop old backend
-cd backend && source venv/bin/activate
-MAC_MINI_SERVER_MODE=true \
-API_KEY=<your-key> \
-ALLOWED_ORIGINS=https://momentum-screener.vercel.app \
-nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1 \
-  > nohup.out 2>&1 &
+cd backend
+source venv/bin/activate
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 ```
+
+Cloudflare tunnel stays running — no need to restart it or update Vercel unless you restarted cloudflared.
 
 ---
 
