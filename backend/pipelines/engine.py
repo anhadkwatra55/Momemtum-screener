@@ -44,6 +44,10 @@ warnings.filterwarnings("ignore")
 #  CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Feature flag: set MAC_MINI_SERVER_MODE=true in Docker env to activate
+# chunked/RAM-diet logic. When unset, the original full-memory path runs.
+_SERVER_MODE = os.environ.get("MAC_MINI_SERVER_MODE", "").lower() == "true"
+
 # Thread workers for indicator math
 # In cloud mode, cap at 1 — Railway hobby plan has very limited RAM (~512MB)
 # NOTE: We use ThreadPoolExecutor (not ProcessPool) to avoid duplicating memory per-subprocess
@@ -54,7 +58,7 @@ CPU_WORKERS = int(os.environ.get("PIPELINE_CPU_WORKERS", "1" if _is_cloud else s
 IO_WORKERS = int(os.environ.get("PIPELINE_IO_WORKERS", "3" if _is_cloud else "20"))
 
 # Chunk size for batched screening (controls peak memory)
-SCREEN_CHUNK_SIZE = 50
+SCREEN_CHUNK_SIZE = int(os.environ.get("SCREEN_CHUNK_SIZE", "75")) if _SERVER_MODE else 50
 
 # Retry configuration for yfinance rate limits
 MAX_RETRIES = 3
@@ -77,6 +81,67 @@ def _screen_single(args: Tuple[str, pd.DataFrame]) -> Optional[dict]:
         return None
 
 
+def _screen_universe_chunked(
+    ohlcv: Dict[str, pd.DataFrame],
+    workers: int,
+    progress: bool,
+) -> List[dict]:
+    """
+    SERVER MODE: Chunked screening with gc.collect() between batches.
+    Keeps peak memory under ~400MB for 1500+ tickers.
+    """
+    tickers = sorted(ohlcv.keys())
+    results: List[dict] = []
+    completed = 0
+    start_time = time.perf_counter()
+    chunk_size = SCREEN_CHUNK_SIZE
+    n_chunks = (len(tickers) + chunk_size - 1) // chunk_size
+
+    if progress:
+        print(f"    ⚡ [SERVER MODE] Chunked screening: {len(tickers)} tickers in {n_chunks} chunks "
+              f"(chunk={chunk_size}, workers={workers}) …")
+
+    for chunk_idx in range(n_chunks):
+        chunk_start = chunk_idx * chunk_size
+        chunk_end = min(chunk_start + chunk_size, len(tickers))
+        chunk_tickers = tickers[chunk_start:chunk_end]
+
+        chunk_ohlcv = {t: ohlcv[t] for t in chunk_tickers if t in ohlcv}
+        chunk_results: List[dict] = []
+
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                future_to_ticker = {
+                    pool.submit(_screen_single, (ticker, chunk_ohlcv[ticker])): ticker
+                    for ticker in chunk_ohlcv
+                }
+                for future in as_completed(future_to_ticker):
+                    result = future.result()
+                    if result is not None:
+                        chunk_results.append(result)
+                    completed += 1
+        except Exception as e:
+            if progress:
+                print(f"    ⚠ Chunk {chunk_idx+1} ThreadPool failed ({e}). Serial fallback …")
+            for ticker in chunk_ohlcv:
+                r = _screen_single((ticker, chunk_ohlcv[ticker]))
+                if r is not None:
+                    chunk_results.append(r)
+                completed += 1
+
+        results.extend(chunk_results)
+        del chunk_ohlcv, chunk_results
+        gc.collect()
+
+        if progress and (chunk_idx + 1) % 3 == 0:
+            elapsed = time.perf_counter() - start_time
+            rate = completed / elapsed if elapsed > 0 else 0
+            print(f"    Chunk {chunk_idx+1}/{n_chunks}: {completed}/{len(tickers)} "
+                  f"({rate:.0f}/sec) …")
+
+    return results
+
+
 def screen_universe_parallel(
     ohlcv: Dict[str, pd.DataFrame],
     max_workers: Optional[int] = None,
@@ -88,7 +153,9 @@ def screen_universe_parallel(
     NumPy/pandas release the GIL during C-level math so threads
     still achieve meaningful parallelism.
 
-    Falls back to serial screening if thread pool fails.
+    If MAC_MINI_SERVER_MODE=true, delegates to the chunked path
+    which processes in batches with gc.collect() between chunks.
+    Otherwise, runs the standard full-universe path.
     """
     workers = max_workers or CPU_WORKERS
     tickers = sorted(ohlcv.keys())
@@ -96,12 +163,22 @@ def screen_universe_parallel(
     completed = 0
     start_time = time.perf_counter()
 
+    # ── SERVER MODE: chunked path ──
+    if _SERVER_MODE:
+        results = _screen_universe_chunked(ohlcv, workers, progress)
+        results.sort(key=lambda x: abs(x["composite"]), reverse=True)
+        elapsed = time.perf_counter() - start_time
+        if progress:
+            rate = len(results) / elapsed if elapsed > 0 else 0
+            print(f"    ✓ Screened {len(results)} tickers in {elapsed:.1f}s ({rate:.0f}/sec)")
+        return results
+
+    # ── STANDARD MODE: original full-universe path ──
     if progress:
         print(f"    ⚡ Threaded screening: {len(tickers)} tickers across {workers} threads …")
 
     try:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            # Submit all tickers as (ticker, df) tuples
             future_to_ticker = {
                 pool.submit(_screen_single, (ticker, ohlcv[ticker])): ticker
                 for ticker in tickers
@@ -121,10 +198,8 @@ def screen_universe_parallel(
     except Exception as e:
         if progress:
             print(f"    ⚠ ThreadPool failed ({e}). Falling back to serial …")
-        # Fallback to serial screening
         return screen_universe(ohlcv, progress=progress)
 
-    # Sort by |composite| descending (same as serial version)
     results.sort(key=lambda x: abs(x["composite"]), reverse=True)
 
     elapsed = time.perf_counter() - start_time
@@ -778,54 +853,72 @@ def run_pipeline_progressive(
     print(f"\n[Wave 2/3] Fetching {len(wave2_tickers)} S&P 500 tickers …")
     pipeline_status.update("running", f"Wave 2/3 — Screening {len(wave2_tickers)} S&P 500 tickers…")
 
-    try:
-        ohlcv2 = smart_fetch(tickers=wave2_tickers, progress=True)
-        ohlcv2, _ = validate_universe(ohlcv2, progress=False)
+    if _SERVER_MODE:
+        # ── SERVER MODE: sub-chunked fetch to cap peak memory ──
+        w2_chunk_size = SCREEN_CHUNK_SIZE * 2
+        for w2i in range(0, len(wave2_tickers), w2_chunk_size):
+            w2_chunk = wave2_tickers[w2i:w2i + w2_chunk_size]
+            try:
+                ohlcv2 = smart_fetch(tickers=w2_chunk, progress=True)
+                ohlcv2, _ = validate_universe(ohlcv2, progress=False)
+                r2 = screen_universe_parallel(ohlcv2, progress=True) if use_parallel else screen_universe(ohlcv2, progress=True)
+                all_results.extend(r2)
+                del ohlcv2, r2; gc.collect()
+            except Exception as e:
+                print(f"  ⚠ Wave 2 sub-chunk failed: {e}")
+                traceback.print_exc()
+    else:
+        # ── STANDARD MODE: fetch entire wave at once ──
+        try:
+            ohlcv2 = smart_fetch(tickers=wave2_tickers, progress=True)
+            ohlcv2, _ = validate_universe(ohlcv2, progress=False)
+            results2 = screen_universe_parallel(ohlcv2, progress=True) if use_parallel else screen_universe(ohlcv2, progress=True)
+            del ohlcv2; gc.collect()
+            all_results.extend(results2)
+        except Exception as e:
+            print(f"  ⚠ Wave 2 failed: {e}")
+            traceback.print_exc()
 
-        if use_parallel:
-            results2 = screen_universe_parallel(ohlcv2, progress=True)
-        else:
-            results2 = screen_universe(ohlcv2, progress=True)
+    all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
+    elapsed2 = time.perf_counter() - total_start
+    print(f"  ✓ Wave 2 complete: {len(all_results)} total tickers in {elapsed2:.1f}s")
 
-        # Free OHLCV DataFrames immediately to reclaim memory
-        del ohlcv2; gc.collect()
-
-        all_results.extend(results2)
-        all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
-
-        elapsed2 = time.perf_counter() - total_start
-        print(f"  ✓ Wave 2 complete: {len(all_results)} total tickers in {elapsed2:.1f}s")
-
-        # Publish wave 2
-        data2 = _package_dashboard(all_results, elapsed=elapsed2, wave=2, total_waves=3)
-        _wave_version += 1
-        pipeline_status.update("running", f"Wave 2/3 done — {len(all_results)} tickers. Loading full universe…")
-        publish_callback(data2)
-    except Exception as e:
-        print(f"  ⚠ Wave 2 failed: {e}")
-        traceback.print_exc()
+    data2 = _package_dashboard(all_results, elapsed=elapsed2, wave=2, total_waves=3)
+    _wave_version += 1
+    pipeline_status.update("running", f"Wave 2/3 done — {len(all_results)} tickers. Loading full universe…")
+    publish_callback(data2)
 
     # ━━━━━━━━━━━ WAVE 3 — Full universe + yield data ━━━━━━━━━━━
     print(f"\n[Wave 3/3] Fetching {len(wave3_tickers)} remaining tickers + yield data …")
     pipeline_status.update("running", f"Wave 3/3 — Screening {len(wave3_tickers)} remaining tickers…")
 
-    try:
-        ohlcv3 = smart_fetch(tickers=wave3_tickers, progress=True)
-        ohlcv3, _ = validate_universe(ohlcv3, progress=False)
+    if _SERVER_MODE:
+        # ── SERVER MODE: sub-chunked fetch ──
+        w3_chunk_size = SCREEN_CHUNK_SIZE * 2
+        for w3i in range(0, len(wave3_tickers), w3_chunk_size):
+            w3_chunk = wave3_tickers[w3i:w3i + w3_chunk_size]
+            try:
+                ohlcv3 = smart_fetch(tickers=w3_chunk, progress=True)
+                ohlcv3, _ = validate_universe(ohlcv3, progress=False)
+                r3 = screen_universe_parallel(ohlcv3, progress=True) if use_parallel else screen_universe(ohlcv3, progress=True)
+                all_results.extend(r3)
+                del ohlcv3, r3; gc.collect()
+            except Exception as e:
+                print(f"  ⚠ Wave 3 sub-chunk failed: {e}")
+                traceback.print_exc()
+    else:
+        # ── STANDARD MODE: fetch entire wave at once ──
+        try:
+            ohlcv3 = smart_fetch(tickers=wave3_tickers, progress=True)
+            ohlcv3, _ = validate_universe(ohlcv3, progress=False)
+            results3 = screen_universe_parallel(ohlcv3, progress=True) if use_parallel else screen_universe(ohlcv3, progress=True)
+            del ohlcv3; gc.collect()
+            all_results.extend(results3)
+        except Exception as e:
+            print(f"  ⚠ Wave 3 screening failed: {e}")
+            traceback.print_exc()
 
-        if use_parallel:
-            results3 = screen_universe_parallel(ohlcv3, progress=True)
-        else:
-            results3 = screen_universe(ohlcv3, progress=True)
-
-        # Free OHLCV DataFrames immediately to reclaim memory
-        del ohlcv3; gc.collect()
-
-        all_results.extend(results3)
-        all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
-    except Exception as e:
-        print(f"  ⚠ Wave 3 screening failed: {e}")
-        traceback.print_exc()
+    all_results.sort(key=lambda x: abs(x["composite"]), reverse=True)
 
     # Yield data (runs alongside wave 3 results)
     print("\n  Fetching yield data for ETFs & dividend stocks …")

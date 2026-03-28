@@ -31,7 +31,7 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -718,14 +718,84 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  SERVER MODE — Zero-Trust Security Layer
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_SERVER_MODE = os.environ.get("MAC_MINI_SERVER_MODE", "").lower() == "true"
+
+if _SERVER_MODE:
+    # ── CORS: locked to production Vercel domain only ──
+    _ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in os.environ.get(
+            "ALLOWED_ORIGINS",
+            "https://momentum-screener.vercel.app"
+        ).split(",")
+        if origin.strip()
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-API-Key", "If-None-Match"],
+    )
+
+    # ── Rate Limiter: 60 requests/minute per IP ──
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.util import get_remote_address
+
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=["60/minute"],
+        storage_uri=os.environ.get("REDIS_URL", "memory://"),
+    )
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # ── API Key Bouncer: X-API-Key header required on all /api/* routes ──
+    _API_KEY = os.environ.get("API_KEY", "")
+
+    @app.middleware("http")
+    async def api_key_middleware(request: Request, call_next):
+        """Enforce API key on all /api/* routes (except health)."""
+        if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+            if _API_KEY:
+                key = request.headers.get("x-api-key", "")
+                if key != _API_KEY:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Unauthorized — invalid or missing X-API-Key"},
+                    )
+        return await call_next(request)
+
+    print(f"  🔒 [SERVER MODE] Security active: CORS={_ALLOWED_ORIGINS}, Rate=60/min, API-Key={'SET' if _API_KEY else 'OPEN'}")
+
+else:
+    # ── STANDARD MODE: open CORS for local development ──
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+# ── Server Mode Route Blocker ──
+
+def _block_in_server_mode(route_name: str = "this endpoint"):
+    """Return a 403 if MAC_MINI_SERVER_MODE is active. Used to air-gap compute routes."""
+    if _SERVER_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Forbidden — {route_name} is disabled in read-only server mode",
+        )
+
 
 # ── Health Check for Deployment Platforms ──
 
@@ -847,6 +917,17 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
     global _CACHED_INSIDER_BUYS, _INSIDER_CACHE_TIME
     import time as _time
 
+    # In server mode: return cache only, never trigger live scrape
+    if _SERVER_MODE:
+        if _CACHED_INSIDER_BUYS and (_time.time() - _INSIDER_CACHE_TIME) < INSIDER_CACHE_TTL:
+            return encode_response({
+                "insider_buys": _CACHED_INSIDER_BUYS[:limit],
+                "total": len(_CACHED_INSIDER_BUYS),
+                "lookback_days": lookback_days,
+                "cached": True,
+            })
+        return JSONResponse(content={"error": "Insider data not yet cached"}, status_code=202)
+
     # Return cache if fresh
     if _CACHED_INSIDER_BUYS and (_time.time() - _INSIDER_CACHE_TIME) < INSIDER_CACHE_TTL:
         return encode_response({
@@ -912,6 +993,9 @@ async def get_alpha_calls_endpoint(
 ):
     """Alpha-Flow Options Screener — reads pre-scanned data from SQLite.
     No on-demand scanning. Pipeline populates DB on startup + daily schedule."""
+    # In server mode: force refresh=False to prevent compute triggers
+    if _SERVER_MODE:
+        refresh = False
 
     # Read from DB — instant (<10ms)
     result = db.load_alpha_calls(universe=universe, sort_by=sort_by, limit=limit)
@@ -989,6 +1073,10 @@ async def get_whale_tracker_endpoint(refresh: bool = False):
     """Whale Flow Intelligence — Insider + UOA fusion with FlowProtocol guardrails."""
     global _CACHED_WHALE_DATA, _WHALE_CACHE_TIME
     import time as _time
+
+    # In server mode: never allow refresh, return cache only
+    if _SERVER_MODE:
+        refresh = False
 
     if _CACHED_WHALE_DATA and not refresh and (_time.time() - _WHALE_CACHE_TIME) < WHALE_CACHE_TTL:
         return encode_response(_CACHED_WHALE_DATA)
@@ -1532,6 +1620,7 @@ async def ws_pipeline(websocket: WebSocket):
 
 @app.get("/api/screen")
 async def run_screen():
+    _block_in_server_mode("Full pipeline screen")
     try:
         data = build_dashboard_data()
         return encode_response(data)
@@ -1562,12 +1651,32 @@ async def pipeline_status():
 
 @app.post("/api/pipeline/trigger")
 async def pipeline_trigger():
-    """Manually trigger a full pipeline refresh."""
+    """Manually trigger a full pipeline refresh.
+    BLOCKED in server mode — use the management dashboard instead."""
+    _block_in_server_mode("Pipeline trigger")
     if _engine_status.state == "running":
         return JSONResponse(content={"error": "Pipeline already running"}, status_code=409)
     t = threading.Thread(target=_scheduled_pipeline_run, daemon=True)
     t.start()
     return {"message": "Pipeline refresh triggered", "state": "running"}
+
+
+# ── Internal-Only Trigger (Dashboard → API, Docker-network only) ──
+
+_INTERNAL_KEY = os.environ.get("INTERNAL_TRIGGER_KEY", "momentum-internal-2024")
+
+@app.post("/internal/pipeline/trigger")
+async def internal_pipeline_trigger(request: Request):
+    """Internal endpoint for the management dashboard to trigger pipeline runs.
+    Protected by X-Internal-Key header. NOT exposed via Cloudflare Tunnel."""
+    key = request.headers.get("x-internal-key", "")
+    if key != _INTERNAL_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden — invalid internal key")
+    if _engine_status.state == "running":
+        return JSONResponse(content={"error": "Pipeline already running"}, status_code=409)
+    t = threading.Thread(target=_scheduled_pipeline_run, daemon=True)
+    t.start()
+    return {"message": "Pipeline refresh triggered via internal dashboard", "state": "running"}
 
 
 @app.get("/api/pipeline/schedule")
@@ -1590,6 +1699,7 @@ async def pipeline_schedule():
 @app.post("/api/webhook/register")
 async def webhook_register(request: Request):
     """Register a URL to receive POST when pipeline completes."""
+    _block_in_server_mode("Webhook register")
     body = await request.json()
     url = body.get("url", "")
     if not url:
@@ -1628,6 +1738,7 @@ async def data_status():
 
 @app.get("/api/data/sync")
 async def data_sync(period: str = "1y", start: Optional[str] = None, end: Optional[str] = None):
+    _block_in_server_mode("Data sync")
     try:
         ohlcv = smart_fetch(period=period, start=start, end=end, progress=True)
         stats = db.get_db_stats()
@@ -1640,6 +1751,7 @@ async def data_sync(period: str = "1y", start: Optional[str] = None, end: Option
 
 @app.post("/api/backtest")
 async def run_backtest_endpoint(request: Request):
+    _block_in_server_mode("Backtest")
     try:
         params = await request.json()
         _CANCEL_EVENT.clear()
@@ -1750,6 +1862,7 @@ async def get_indicators():
 
 @app.post("/api/strategy/backtest")
 async def strategy_backtest(request: Request):
+    _block_in_server_mode("Strategy backtest")
     try:
         params = await request.json()
         _CANCEL_EVENT.clear()
@@ -1788,6 +1901,7 @@ async def strategy_backtest(request: Request):
 
 @app.post("/api/strategy/code")
 async def strategy_code(request: Request):
+    _block_in_server_mode("Strategy code execution")
     try:
         params = await request.json()
         _CANCEL_EVENT.clear()
@@ -1886,6 +2000,23 @@ async def compare_strategies(request: Request):
 
 @app.get("/api/ticker/search")
 async def search_ticker(q: str = ""):
+    # In server mode: DB-only search, no yfinance calls
+    if _SERVER_MODE:
+        try:
+            q_upper = (q or "").upper().strip()
+            if not q_upper:
+                return {"results": []}
+            results = []
+            with db.db_session() as conn:
+                rows = conn.execute(
+                    "SELECT ticker, name, sector FROM tickers WHERE ticker LIKE ? OR name LIKE ? LIMIT 20",
+                    (f"%{q_upper}%", f"%{q_upper}%"),
+                ).fetchall()
+                for r in rows:
+                    results.append({"ticker": r["ticker"], "name": r["name"] or "", "sector": r["sector"] or "", "source": "db"})
+            return {"results": results}
+        except Exception as e:
+            return JSONResponse(content={"error": str(e)}, status_code=500)
     try:
         import yfinance as yf
         q = q.upper().strip()
@@ -1924,6 +2055,7 @@ async def search_ticker(q: str = ""):
 
 @app.post("/api/ticker/add")
 async def add_ticker(request: Request):
+    _block_in_server_mode("Ticker add")
     try:
         params = await request.json()
         tickers = params.get("tickers", [])
@@ -2239,7 +2371,10 @@ async def predict_hybrid(ticker: str):
     1. FAST PATH: Returns legacy 4-system scores instantly.
     2. ASYNC PATH: Dispatches Celery task if Redis is available,
        otherwise runs XGBoost inference synchronously inline.
+
+    BLOCKED in server mode — use pre-computed data from /api/signals instead.
     """
+    _block_in_server_mode("ML prediction")
     ticker = ticker.upper().strip()
 
     # ── Fast Path: Legacy 4-system momentum scores ──

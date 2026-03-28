@@ -7,6 +7,7 @@ stores everything in SQLite for instant subsequent loads.
 
 from __future__ import annotations
 
+import os
 import warnings
 from datetime import datetime, timedelta
 from typing import Dict, Optional
@@ -94,15 +95,93 @@ def _download_and_store(
     fetch_list: list[tuple[str, str, str]],
     progress: bool = True,
 ) -> None:
-    """Download from yfinance and store in DB."""
-    # Group by date range for efficient bulk downloads
-    # But often each ticker has the same missing range, so try bulk first
+    """Download from yfinance and store in DB.
+
+    If MAC_MINI_SERVER_MODE=true: downloads in batches of DOWNLOAD_BATCH_SIZE
+    tickers to cap peak memory, with gc.collect() between batches.
+    Otherwise: uses the original bulk download (fast, but memory-hungry).
+    """
+    _server_mode = os.environ.get("MAC_MINI_SERVER_MODE", "").lower() == "true"
+
     all_tickers = list(set(t for t, _, _ in fetch_list))
 
     # Find the widest date range needed
     min_start = min(s for _, s, _ in fetch_list)
     max_end = max(e for _, _, e in fetch_list)
 
+    if _server_mode:
+        # ── SERVER MODE: batched downloads with gc.collect() ──
+        import gc
+
+        DOWNLOAD_BATCH_SIZE = int(os.environ.get("DOWNLOAD_BATCH_SIZE", "50"))
+        n_batches = (len(all_tickers) + DOWNLOAD_BATCH_SIZE - 1) // DOWNLOAD_BATCH_SIZE
+
+        if progress:
+            print(f"    [SERVER MODE] Downloading {len(all_tickers)} tickers in {n_batches} batches "
+                  f"({min_start} → {max_end}) …")
+
+        stored = 0
+        loaded_tickers = set()
+
+        for batch_idx in range(n_batches):
+            batch_start = batch_idx * DOWNLOAD_BATCH_SIZE
+            batch_end = min(batch_start + DOWNLOAD_BATCH_SIZE, len(all_tickers))
+            batch = all_tickers[batch_start:batch_end]
+
+            try:
+                raw = yf.download(
+                    batch, start=min_start, end=max_end,
+                    auto_adjust=True, progress=False, threads=True,
+                )
+            except Exception as e:
+                if progress:
+                    print(f"    ⚠ Batch {batch_idx+1} download failed ({e})")
+                raw = None
+
+            if raw is not None and not raw.empty:
+                for ticker in batch:
+                    try:
+                        df = raw.copy() if len(batch) == 1 else raw[ticker].copy()
+                        if isinstance(df.columns, pd.MultiIndex):
+                            df.columns = df.columns.get_level_values(0)
+                        df = df.dropna(subset=["Close"])
+                        if len(df) > 0:
+                            stored += db.upsert_ohlcv(ticker, df)
+                            loaded_tickers.add(ticker)
+                    except (KeyError, TypeError):
+                        pass
+
+            del raw
+            gc.collect()
+
+            if progress and (batch_idx + 1) % 5 == 0:
+                print(f"    Batch {batch_idx+1}/{n_batches}: stored {stored:,} rows so far …")
+
+        # Fill gaps individually
+        missing = [t for t in all_tickers if t not in loaded_tickers]
+        if missing:
+            if progress:
+                print(f"    Re-fetching {len(missing)} missing tickers individually …")
+            for t in missing:
+                try:
+                    df = yf.download(t, start=min_start, end=max_end,
+                                     auto_adjust=True, progress=False)
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
+                    df = df.dropna(subset=["Close"])
+                    if len(df) > 0:
+                        db.upsert_ohlcv(t, df)
+                        stored += len(df)
+                    del df
+                except Exception:
+                    pass
+                gc.collect()
+
+        if progress:
+            print(f"    ✓ Stored {stored:,} rows in DB.")
+        return
+
+    # ── STANDARD MODE: original bulk download ──
     if progress:
         print(f"    Downloading {len(all_tickers)} tickers ({min_start} → {max_end}) …")
 
@@ -140,7 +219,6 @@ def _download_and_store(
                 pass
 
     # Fill gaps with individual downloads
-    # Check who's still missing
     loaded_tickers = set()
     if raw is not None and not raw.empty:
         for t in all_tickers:

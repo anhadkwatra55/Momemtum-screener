@@ -28,6 +28,7 @@ Run worker:  celery -A celery_app worker --loglevel=info
 from __future__ import annotations
 
 import json
+import os
 import time
 import traceback
 import warnings
@@ -302,6 +303,10 @@ def _build_features_for_universe(ohlcv_data: dict) -> pd.DataFrame:
         - Rolling Z-Scores (21d, 63d) on close and volume
         - Gaussian Rank Normalization of composite momentum score
 
+    If MAC_MINI_SERVER_MODE=true: processes in chunks with gc.collect()
+    to stay under the 1.5GB Celery container limit.
+    Otherwise: runs the original single-pass logic.
+
     Parameters
     ----------
     ohlcv_data : dict
@@ -317,6 +322,80 @@ def _build_features_for_universe(ohlcv_data: dict) -> pd.DataFrame:
         gaussian_rank_normalize, FRAC_DIFF_D,
     )
 
+    _server_mode = os.environ.get("MAC_MINI_SERVER_MODE", "").lower() == "true"
+
+    if _server_mode:
+        # ── SERVER MODE: chunked feature engineering ──
+        import gc
+
+        FEATURE_CHUNK_SIZE = int(os.environ.get("FEATURE_CHUNK_SIZE", "25"))
+        tickers = [t for t, df in ohlcv_data.items() if df is not None and len(df) >= 100]
+
+        if not tickers:
+            return pd.DataFrame()
+
+        n_chunks = (len(tickers) + FEATURE_CHUNK_SIZE - 1) // FEATURE_CHUNK_SIZE
+        print(f"    ⚡ [SERVER MODE] Feature engineering: {len(tickers)} tickers in "
+              f"{n_chunks} chunks (chunk={FEATURE_CHUNK_SIZE})")
+
+        all_chunk_frames = []
+
+        for chunk_idx in range(n_chunks):
+            chunk_start = chunk_idx * FEATURE_CHUNK_SIZE
+            chunk_end = min(chunk_start + FEATURE_CHUNK_SIZE, len(tickers))
+            chunk_tickers = tickers[chunk_start:chunk_end]
+
+            frames = []
+            for ticker in chunk_tickers:
+                df = ohlcv_data[ticker]
+                ticker_df = pd.DataFrame({
+                    "close": df["Close"].values,
+                    "volume": df["Volume"].values,
+                    "composite_momentum_score": df.get(
+                        "composite_momentum_score",
+                        pd.Series(0.0, index=df.index)
+                    ).values,
+                }, index=df.index)
+                ticker_df["ticker"] = ticker
+                ticker_df.index.name = "date"
+                frames.append(ticker_df)
+
+            panel = pd.concat(frames).reset_index()
+            del frames
+            panel = panel.set_index(["date", "ticker"]).sort_index()
+
+            panel["log_close"] = np.log(panel["close"])
+            panel["close_ffd"] = panel.groupby(level="ticker", group_keys=False)[
+                "log_close"
+            ].apply(lambda s: frac_diff_ffd(s, d=FRAC_DIFF_D))
+
+            for col_name, raw_col, window in [
+                ("close_zscore_21", "close", 21),
+                ("close_zscore_63", "close", 63),
+                ("volume_zscore_21", "volume", 21),
+                ("volume_zscore_63", "volume", 63),
+            ]:
+                panel[col_name] = panel.groupby(level="ticker", group_keys=False)[
+                    raw_col
+                ].apply(lambda s, w=window: rolling_zscore(s, w))
+
+            all_chunk_frames.append(panel)
+            del panel
+            gc.collect()
+
+            if (chunk_idx + 1) % 3 == 0:
+                print(f"    Feature chunk {chunk_idx+1}/{n_chunks} done")
+
+        full_panel = pd.concat(all_chunk_frames)
+        del all_chunk_frames
+        gc.collect()
+
+        full_panel = gaussian_rank_normalize(
+            full_panel, "composite_momentum_score", "score_gauss_rank"
+        )
+        return full_panel
+
+    # ── STANDARD MODE: original single-pass logic ──
     frames = []
     for ticker, df in ohlcv_data.items():
         if df is None or len(df) < 100:
