@@ -4,6 +4,7 @@ import React, { useState, useEffect, memo } from "react";
 import { motion } from "framer-motion";
 import { SFIcon } from "@/components/ui/sf-icon";
 import { API_BASE } from "@/lib/constants";
+import { getAuthHeaders } from "@/services/api";
 
 interface InsiderBuy {
   ticker: string;
@@ -34,7 +35,7 @@ export const InsiderBuying = memo(({ onSelectTicker }: InsiderBuyingProps) => {
   useEffect(() => {
     setInsiderLoading(true);
     setError(null);
-    fetch(`${API_BASE}/api/insider-buys?limit=20&lookback_days=180`)
+    fetch(`${API_BASE}/api/insider-buys?limit=20&lookback_days=180`, { headers: getAuthHeaders() })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

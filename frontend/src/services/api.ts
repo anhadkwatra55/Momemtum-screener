@@ -129,9 +129,15 @@ export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Prom
     ...fetchOptions
   } = options || {};
 
-  const defaultHeaders = {
+  const defaultHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };
+
+  // Inject API key for authenticated server access
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+  if (apiKey) {
+    defaultHeaders["X-API-Key"] = apiKey;
+  }
 
   const currentHeaders = {
     ...defaultHeaders,
@@ -765,6 +771,21 @@ export const realtimeService = new RealtimeService({ url: WS_BASE });
 
 // ── API Endpoints ───────────────────────────────────────────────────────────
 // All specific API calls leverage the enhanced apiFetch wrapper.
+
+/**
+ * Returns auth headers for direct fetch() calls that bypass apiFetch.
+ * Use: fetch(url, { headers: getAuthHeaders() })
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
+  return headers;
+}
 
 /**
  * Fetches core dashboard data from the API.

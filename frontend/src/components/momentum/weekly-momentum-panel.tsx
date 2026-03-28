@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { SFIcon } from "@/components/ui/sf-icon";
 import { cn } from "@/lib/utils";
 import { API_BASE, SPRING_TRANSITION_PROPS, TRACKING_HEADING_CLASS } from "@/lib/constants";
+import { getAuthHeaders } from "@/services/api";
 
 // ── Types ──
 interface TickerWeeklyData {
@@ -104,7 +105,7 @@ export const WeeklyMomentumPanel = memo(({ onSelectTicker }: { onSelectTicker?: 
     async function fetchWeeklyTop() {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/api/weekly-top-momentum?top_n=5`);
+        const res = await fetch(`${API_BASE}/api/weekly-top-momentum?top_n=5`, { headers: getAuthHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!cancelled) {

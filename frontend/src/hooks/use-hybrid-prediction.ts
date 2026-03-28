@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE } from "@/lib/constants";
+import { getAuthHeaders } from "@/services/api";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ export function useHybridPrediction(ticker: string | null) {
     const run = async () => {
       try {
         // ── Step 1: Fetch hybrid endpoint (instant legacy + job dispatch) ──
-        const res = await fetch(`${API_BASE}/api/predict/hybrid/${encodeURIComponent(ticker)}`);
+        const res = await fetch(`${API_BASE}/api/predict/hybrid/${encodeURIComponent(ticker)}`, { headers: getAuthHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: HybridResponse = await res.json();
         if (cancelled) return;

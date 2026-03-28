@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+import { getAuthHeaders } from "@/services/api";
 
 interface WhaleSignal {
   ticker: string;
@@ -92,7 +93,7 @@ export function WhaleTrackerBlotter({ onTickerSelect }: WhaleTrackerBlotterProps
   const fetchData = useCallback(async (refresh = false) => {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API}/api/screener/whale-tracker${refresh ? "?refresh=true" : ""}`);
+      const res = await fetch(`${API}/api/screener/whale-tracker${refresh ? "?refresh=true" : ""}`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
     } catch (e: any) { setError(e.message); }

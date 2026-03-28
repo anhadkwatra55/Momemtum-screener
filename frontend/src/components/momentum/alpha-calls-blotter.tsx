@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+import { getAuthHeaders } from "@/services/api";
 
 interface AlphaCall {
   ticker: string; stock_price: number; strike: number; expiration: string;
@@ -130,7 +131,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const params = new URLSearchParams({ limit: String(scanLimit), sort_by: "quant_score", universe, ...(refresh && { refresh: "true" }) });
-      const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`, { signal: controller.signal });
+      const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`, { signal: controller.signal, headers: getAuthHeaders() });
       clearTimeout(timer);
       const result = await res.json();
 
