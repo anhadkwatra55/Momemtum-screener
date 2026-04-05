@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { AlphaContractModal } from "./alpha-contract-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
 import { getAuthHeaders } from "@/services/api";
@@ -17,6 +18,7 @@ interface AlphaCallsData {
   calls: AlphaCall[];
   meta: { universe_source: string; universe_size: number; tickers_scanned: number; contracts_found: number; tickers_with_calls: number; errors: number; partial?: boolean; scan_time_seconds?: number; warming_up?: boolean; message?: string; filters: Record<string, string>; };
   timestamp: string;
+  refresh_started?: boolean;
 }
 
 /* ── Tokens ── */
@@ -28,6 +30,7 @@ const T = {
   purple: "#9f7aea", purpleDim: "rgba(159,122,234,0.10)",
   green: "#4ade80", greenDim: "rgba(74,222,128,0.10)",
   red: "#e05252", redDim: "rgba(224,82,82,0.10)",
+  cyan: "#22d3ee", cyanDim: "rgba(34,211,238,0.08)",
 };
 
 /* ── Confidence Donut ── */
@@ -48,60 +51,23 @@ function Donut({ score, size = 36 }: { score: number; size?: number }) {
   );
 }
 
-/* ── Context Panel (right sidebar) ── */
-function ContextPanel({ call }: { call: AlphaCall | null }) {
-  if (!call) return (
-    <div style={{ padding: 32, textAlign: "center", color: T.textDim, fontSize: 13 }}>
-      <p>Select a contract</p><p style={{ fontSize: 11, marginTop: 4 }}>Click any strike in the table</p>
-    </div>
-  );
-  return (
-    <div style={{ padding: 16 }}>
-      <div style={{ marginBottom: 16 }}>
-        <div className="font-mono" style={{ fontSize: 20, fontWeight: 700, color: T.text }}>{call.ticker}</div>
-        <div className="font-mono" style={{ fontSize: 13, color: T.textSec }}>${call.stock_price}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
-        <Donut score={call.quant_score} size={48} />
-        <div>
-          <div style={{ fontSize: 11, color: T.textMuted }}>Quant Score</div>
-          <div className="font-mono" style={{ fontSize: 16, fontWeight: 700, color: call.quant_score >= 50 ? T.green : call.quant_score >= 30 ? T.gold : T.red }}>{call.quant_score}/100</div>
-        </div>
-      </div>
-      <div style={{ fontSize: 12, marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, color: T.text, marginBottom: 8 }}>Contract</div>
-        {[["Strike", `$${call.strike}`], ["Premium", `$${call.mid_price}`], ["Expiry", call.expiration], ["DTE", `${call.dte}d`]].map(([l, v]) => (
-          <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
-            <span style={{ color: T.textMuted }}>{l}</span>
-            <span className="font-mono" style={{ color: T.text, fontWeight: 500 }}>{v}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 12, marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, color: T.text, marginBottom: 8 }}>Greeks</div>
-        {[
-          ["Delta", String(call.delta), call.delta >= 0.45 ? T.green : T.textSec],
-          ["POP", `${(call.pop * 100).toFixed(0)}%`, call.pop >= 0.40 ? T.green : T.gold],
-          ["Vol Edge", `${call.vol_edge > 0 ? "+" : ""}${call.vol_edge}`, call.vol_edge > 0 ? T.green : T.red],
-          ["Breakeven", `+${call.breakeven_pct}%`, call.breakeven_pct <= 8 ? T.green : T.gold],
-          ["OI", call.open_interest.toLocaleString(), T.textSec],
-        ].map(([l, v, c]) => (
-          <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
-            <span style={{ color: T.textMuted }}>{l}</span>
-            <span className="font-mono" style={{ color: c as string, fontWeight: 600 }}>{v}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ padding: "12px 14px", background: T.purpleDim, borderRadius: 8, border: `1px solid ${T.purple}20` }}>
-        <div style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>AI Thesis</div>
-        <p style={{ fontSize: 12, lineHeight: 1.6, color: T.textSec }}>
-          {call.ticker} presents a {call.quant_score >= 40 ? "high" : "moderate"}-conviction opportunity
-          with {call.delta >= 0.45 ? "strong" : "balanced"} delta{call.vol_edge > 0 ? " and positive vol edge" : ""}.
-          {call.pop >= 0.40 ? ` ${(call.pop * 100).toFixed(0)}% POP suggests favorable risk/reward.` : ""}
-        </p>
-      </div>
-    </div>
-  );
+/* ── Human-readable time ago ── */
+function timeAgo(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    if (diffMs < 0) return "just now";
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ${mins % 60}m ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  } catch {
+    return "";
+  }
 }
 
 /* ════════════════════════════════════ */
@@ -119,13 +85,18 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const [scanLimit, setScanLimit] = useState(75);
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const [selected, setSelected] = useState<AlphaCall | null>(null);
+  const [modalCall, setModalCall] = useState<AlphaCall | null>(null);
   const [universe, setUniverse] = useState<"sp500" | "nasdaq100" | "both">("sp500");
+  const [refreshing, setRefreshing] = useState(false);
+  const [scanElapsed, setScanElapsed] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /* ── Fetch data ── */
   const fetchData = useCallback(async (refresh = false, retryCount = 0) => {
-    // Cancel any pending poll before starting a new fetch
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
-    setLoading(true); setError(null);
+    if (!refresh) { setLoading(true); }
+    setError(null);
     const controller = new AbortController();
     const timeoutMs = scanLimit >= 500 ? 180_000 : 120_000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -135,34 +106,65 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
       clearTimeout(timer);
       const result = await res.json();
 
-      // 202 = warming up, schedule a single poll (previous poll already cancelled above)
+      // 202 = warming up
       if (res.status === 202 || result.meta?.warming_up) {
         pollRef.current = setTimeout(() => fetchData(false, 0), 10_000);
-        return; // keep loading=true (don't hit finally)
+        return;
       }
       if (!res.ok) throw new Error(`Server error (HTTP ${res.status})`);
       if (result.error) throw new Error(result.error);
+
       setData(result);
       setError(null);
       setLoading(false);
+
+      // If a refresh was kicked off, start polling for completion
+      if (result.refresh_started) {
+        setRefreshing(true);
+        startRefreshPoll();
+      }
     } catch (e: any) {
       clearTimeout(timer);
       if (e.name === "AbortError") {
         if (retryCount < 1) return fetchData(refresh, retryCount + 1);
         setError(`Scan timed out — try scanning fewer tickers (current: ${scanLimit})`);
       } else {
-        // Don't overwrite good data with an error — only show error if no data exists
         if (!data?.calls?.length) {
           setError(e.message || "Failed to fetch options data");
         }
       }
       setLoading(false);
     }
-  }, [scanLimit, universe, data?.calls?.length]);
+  }, [scanLimit, universe]);
+
+  /* ── Poll for refresh completion ── */
+  const startRefreshPoll = useCallback(() => {
+    if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+    refreshPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/screener/alpha-calls/status?universe=${universe}`, { headers: getAuthHeaders() });
+        const status = await res.json();
+        setScanElapsed(status.elapsed_seconds);
+        if (!status.scanning) {
+          // Scan finished — re-fetch data
+          if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+          refreshPollRef.current = null;
+          setRefreshing(false);
+          setScanElapsed(null);
+          fetchData(false);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+  }, [universe]);
 
   useEffect(() => {
     fetchData();
-    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+      if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+    };
   }, [universe, scanLimit]);
 
   /* ── Group by Ticker → Expiry → Strikes ── */
@@ -188,6 +190,9 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
   const toggleTicker = (t: string) => setExpandedTicker(prev => prev === t ? null : t);
 
+  /* ── Filter params from meta ── */
+  const filterParams = data?.meta?.filters;
+
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: T.text }}>
       <div className="flex flex-col lg:grid" style={{ gridTemplateColumns: "1fr 300px", gap: 0, minHeight: "calc(100vh - 80px)" }}>
@@ -195,14 +200,26 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
         {/* ── CENTER PANE ── */}
         <div className="px-3 py-4 md:px-6 md:py-5 lg:border-r overflow-x-hidden" style={{ borderColor: T.border }}>
 
-          {/* Breadcrumb */}
+          {/* Breadcrumb + Scan Timestamp */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div style={{ fontSize: 12, color: T.textDim }}>
               Dashboard <span style={{ color: T.textDim }}>/</span> <span style={{ color: T.text, fontWeight: 500 }}>Alpha Options</span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: T.green, padding: "3px 10px", borderRadius: 6, background: T.greenDim, border: `1px solid ${T.green}20` }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: T.green, boxShadow: `0 0 6px ${T.green}60` }} />
-              Live Sync
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Scan timestamp */}
+              {data?.timestamp && (
+                <div style={{ fontSize: 10, color: T.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ width: 4, height: 4, borderRadius: "50%", background: T.textMuted, opacity: 0.5 }} />
+                  Scanned {timeAgo(data.timestamp)}
+                </div>
+              )}
+              {/* Refreshing indicator */}
+              {refreshing && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: T.gold, padding: "3px 10px", borderRadius: 6, background: T.goldDim, border: `1px solid ${T.gold}20` }}>
+                  <div style={{ width: 10, height: 10, border: `2px solid ${T.gold}40`, borderTopColor: T.gold, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                  Scanning{scanElapsed ? ` (${Math.round(scanElapsed)}s)` : "…"}
+                </div>
+              )}
             </div>
           </div>
 
@@ -226,7 +243,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
             {/* Universe Toggle */}
             <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: `1px solid ${T.border}` }}>
               {([["sp500", "S&P 500"], ["nasdaq100", "NASDAQ 100"], ["both", "Both"]] as const).map(([val, label]) => (
-                <button key={val} onClick={() => { setUniverse(val as any); setExpandedTicker(null); setSelected(null); }}
+                <button key={val} onClick={() => { setUniverse(val as any); setExpandedTicker(null); setSelected(null); setModalCall(null); }}
                   style={{
                     fontSize: 11, fontWeight: universe === val ? 600 : 400, padding: "5px 12px", cursor: "pointer",
                     border: "none", borderRight: val !== "both" ? `1px solid ${T.border}` : "none",
@@ -245,13 +262,16 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               </select>
             </div>
             <span style={{ width: 1, height: 16, background: T.border }} />
+            {/* Filter params - show real values from meta if available */}
             <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim }}>
-              <span>Δ ≥ 0.35</span><span>DTE: 90–150d</span><span>Prem: $1–$8</span>
+              <span>Δ ≥ {filterParams?.delta_floor || "0.35"}</span>
+              <span>DTE: {filterParams?.dte_range || "90–150d"}</span>
+              <span>Prem: {filterParams?.premium_range || "$1–$8"}</span>
             </div>
             <div style={{ flex: 1 }} />
-            <button onClick={() => fetchData(true)} disabled={loading}
-              style={{ fontSize: 12, fontWeight: 600, padding: "7px 20px", borderRadius: 6, cursor: "pointer", border: `1px solid ${loading ? T.border : T.gold}`, background: loading ? T.surface : T.goldDim, color: loading ? T.textMuted : T.gold, transition: "all 200ms ease-out" }}>
-              {loading ? "Scanning…" : "Run Scan →"}
+            <button onClick={() => fetchData(true)} disabled={loading || refreshing}
+              style={{ fontSize: 12, fontWeight: 600, padding: "7px 20px", borderRadius: 6, cursor: loading || refreshing ? "not-allowed" : "pointer", border: `1px solid ${loading || refreshing ? T.border : T.gold}`, background: loading || refreshing ? T.surface : T.goldDim, color: loading || refreshing ? T.textMuted : T.gold, transition: "all 200ms ease-out" }}>
+              {refreshing ? "Scanning…" : loading && !data ? "Loading…" : "Run Scan →"}
             </button>
           </div>
 
@@ -278,6 +298,14 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
           {data && !grouped.length && !loading && (
             <div style={{ padding: "60px 0", textAlign: "center" }}>
               <p style={{ fontSize: 14, color: T.textMuted }}>No qualifying contracts</p>
+            </div>
+          )}
+
+          {/* Refreshing overlay */}
+          {refreshing && data && grouped.length > 0 && (
+            <div style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.gold}30`, background: T.goldDim, marginBottom: 16, fontSize: 12, color: T.gold, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 12, height: 12, border: `2px solid ${T.gold}40`, borderTopColor: T.gold, borderRadius: "50%", animation: "spin 1s linear infinite", flexShrink: 0 }} />
+              Re-scanning {scanLimit === 500 ? "all" : scanLimit} tickers{scanElapsed ? ` — ${Math.round(scanElapsed)}s elapsed` : "…"} · Results will auto-refresh when complete.
             </div>
           )}
 
@@ -359,7 +387,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                                 const isSelected = selected === c;
                                 return (
                                   <tr key={ci}
-                                    onClick={() => { setSelected(c); onTickerSelect?.(c.ticker); }}
+                                    onClick={() => { setSelected(c); setModalCall(c); }}
                                     style={{
                                       cursor: "pointer", borderBottom: `1px solid ${T.border}`,
                                       background: isSelected ? `${T.gold}10` : isBest ? T.greenDim : "transparent",
@@ -393,19 +421,78 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               })}
 
               <div style={{ padding: "8px 16px", fontSize: 11, color: T.textDim, display: "flex", justifyContent: "space-between" }}>
-                <span>{data?.calls.length} contracts · {grouped.length} tickers · click ticker to expand contracts</span>
+                <span>{data?.calls.length} contracts · {grouped.length} tickers · click any contract for deep analysis</span>
                 <span>{data?.meta.universe_source}</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── RIGHT PANE (below on mobile) ── */}
+        {/* ── RIGHT PANE (desktop sidebar) ── */}
         <div className="hidden lg:block" style={{ background: T.card, overflow: "auto", position: "sticky", top: 0, height: "100vh" }}>
           <div style={{ padding: "16px 16px 8px", borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             Deep Dive
           </div>
-          <ContextPanel call={selected} />
+          {!selected ? (
+            <div style={{ padding: 32, textAlign: "center", color: T.textDim, fontSize: 13 }}>
+              <p>Select a contract</p><p style={{ fontSize: 11, marginTop: 4 }}>Click any strike in the table</p>
+            </div>
+          ) : (
+            <div style={{ padding: 16 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div className="font-mono" style={{ fontSize: 20, fontWeight: 700, color: T.text }}>{selected.ticker}</div>
+                <div className="font-mono" style={{ fontSize: 13, color: T.textSec }}>${selected.stock_price}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <Donut score={selected.quant_score} size={48} />
+                <div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>Quant Score</div>
+                  <div className="font-mono" style={{ fontSize: 16, fontWeight: 700, color: selected.quant_score >= 50 ? T.green : selected.quant_score >= 30 ? T.gold : T.red }}>{selected.quant_score}/100</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, color: T.text, marginBottom: 8 }}>Contract</div>
+                {[["Strike", `$${selected.strike}`], ["Premium", `$${selected.mid_price}`], ["Expiry", selected.expiration], ["DTE", `${selected.dte}d`]].map(([l, v]) => (
+                  <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
+                    <span style={{ color: T.textMuted }}>{l}</span>
+                    <span className="font-mono" style={{ color: T.text, fontWeight: 500 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, color: T.text, marginBottom: 8 }}>Greeks</div>
+                {[
+                  ["Delta", String(selected.delta), selected.delta >= 0.45 ? T.green : T.textSec],
+                  ["POP", `${(selected.pop * 100).toFixed(0)}%`, selected.pop >= 0.40 ? T.green : T.gold],
+                  ["Vol Edge", `${selected.vol_edge > 0 ? "+" : ""}${selected.vol_edge}`, selected.vol_edge > 0 ? T.green : T.red],
+                  ["Breakeven", `+${selected.breakeven_pct}%`, selected.breakeven_pct <= 8 ? T.green : T.gold],
+                  ["OI", selected.open_interest.toLocaleString(), T.textSec],
+                ].map(([l, v, c]) => (
+                  <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
+                    <span style={{ color: T.textMuted }}>{l}</span>
+                    <span className="font-mono" style={{ color: c as string, fontWeight: 600 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "12px 14px", background: T.purpleDim, borderRadius: 8, border: `1px solid ${T.purple}20` }}>
+                <div style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>AI Thesis</div>
+                <p style={{ fontSize: 12, lineHeight: 1.6, color: T.textSec }}>
+                  {selected.ticker} presents a {selected.quant_score >= 40 ? "high" : "moderate"}-conviction opportunity
+                  with {selected.delta >= 0.45 ? "strong" : "balanced"} delta{selected.vol_edge > 0 ? " and positive vol edge" : ""}.
+                  {selected.pop >= 0.40 ? ` ${(selected.pop * 100).toFixed(0)}% POP suggests favorable risk/reward.` : ""}
+                </p>
+              </div>
+              {/* View Full Detail button */}
+              {onTickerSelect && (
+                <button
+                  onClick={() => onTickerSelect(selected.ticker)}
+                  style={{ width: "100%", marginTop: 16, fontSize: 12, fontWeight: 600, padding: "10px 16px", borderRadius: 8, cursor: "pointer", border: `1px solid ${T.gold}40`, background: T.goldDim, color: T.gold, transition: "all 150ms" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.gold; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${T.gold}40`; }}
+                >View Ticker Detail →</button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Mobile: show context panel inline when a contract is selected */}
@@ -414,10 +501,36 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
             <div style={{ padding: "12px 0 6px", fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${T.border}` }}>
               Deep Dive — {selected.ticker} ${selected.strike}
             </div>
-            <ContextPanel call={selected} />
+            <div style={{ padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "12px 14px", background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <Donut score={selected.quant_score} size={48} />
+                <div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>Quant Score</div>
+                  <div className="font-mono" style={{ fontSize: 16, fontWeight: 700, color: selected.quant_score >= 50 ? T.green : selected.quant_score >= 30 ? T.gold : T.red }}>{selected.quant_score}/100</div>
+                </div>
+              </div>
+              <div style={{ padding: "12px 14px", background: T.purpleDim, borderRadius: 8, border: `1px solid ${T.purple}20` }}>
+                <div style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>AI Thesis</div>
+                <p style={{ fontSize: 12, lineHeight: 1.6, color: T.textSec }}>
+                  {selected.ticker} presents a {selected.quant_score >= 40 ? "high" : "moderate"}-conviction opportunity
+                  with {selected.delta >= 0.45 ? "strong" : "balanced"} delta{selected.vol_edge > 0 ? " and positive vol edge" : ""}.
+                  {selected.pop >= 0.40 ? ` ${(selected.pop * 100).toFixed(0)}% POP suggests favorable risk/reward.` : ""}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* ── Contract Detail Modal ── */}
+      <AlphaContractModal
+        call={modalCall}
+        onClose={() => setModalCall(null)}
+        onViewTicker={onTickerSelect}
+      />
+
+      {/* Spin keyframe */}
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

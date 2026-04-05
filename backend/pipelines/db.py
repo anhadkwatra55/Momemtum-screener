@@ -1070,3 +1070,27 @@ def get_alpha_scan_age(universe: str = "sp500") -> "float | None":
         except Exception:
             return None
 
+
+def get_validated_tickers(min_price: float = 25.0, limit: int = 0) -> list[str]:
+    """Get tickers from signals DB that are validated (have recent price data).
+
+    Returns tickers sorted by price DESC (large caps first) since those
+    have the most liquid options chains.
+
+    Args:
+        min_price: Minimum stock price (Gate 1 for alpha calls is $25)
+        limit: Max tickers to return (0 = all)
+
+    Returns:
+        List of ticker symbols, highest-priced first.
+    """
+    with db_session() as conn:
+        sql = "SELECT ticker FROM signals WHERE price >= ? ORDER BY price DESC"
+        params: list = [min_price]
+        if limit > 0:
+            sql += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
+        return [r["ticker"] for r in rows]
+
+

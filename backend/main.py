@@ -974,6 +974,7 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
 # ── Alpha Call Options Screener (DB-backed) ──
 _alpha_scan_lock = threading.Lock()
 _alpha_scan_running: set[str] = set()
+_alpha_scan_started: dict[str, float] = {}  # universe -> monotonic start time
 
 
 @app.get("/api/screener/alpha-calls")
@@ -994,34 +995,42 @@ async def get_alpha_calls_endpoint(
     min_oi: int = 100,
 ):
     """Alpha-Flow Options Screener — reads pre-scanned data from SQLite.
-    No on-demand scanning. Pipeline populates DB on startup + daily schedule."""
+    When refresh=true, kicks off a background re-scan with the user's limit."""
+    import time as _time
+
     # In server mode: force refresh=False to prevent compute triggers
     if _SERVER_MODE:
         refresh = False
 
     # Read from DB — instant (<10ms)
-    result = db.load_alpha_calls(universe=universe, sort_by=sort_by, limit=limit)
+    result = db.load_alpha_calls(universe=universe, sort_by=sort_by, limit=500)
 
     # If DB has data, return it immediately
+    refresh_started = False
     if result["calls"] or db.has_alpha_data(universe):
-        # If refresh requested, kick off background re-scan (but still return current data)
+        # If refresh requested, kick off background re-scan with the user's limit
         if refresh:
             with _alpha_scan_lock:
                 already_running = universe in _alpha_scan_running
             if not already_running:
+                scan_limit = limit  # capture the user's requested scan scope
                 def _bg_refresh():
                     with _alpha_scan_lock:
                         _alpha_scan_running.add(universe)
+                        _alpha_scan_started[universe] = _time.monotonic()
                     try:
                         from options_alpha import run_alpha_pipeline
-                        run_alpha_pipeline(universe=universe, max_workers=4)
-                        print(f"  \u2713 Alpha refresh complete: {universe}")
+                        run_alpha_pipeline(universe=universe, max_workers=4, limit=scan_limit)
+                        print(f"  \u2713 Alpha refresh complete: {universe} (scanned {scan_limit} tickers)")
                     except Exception:
                         traceback.print_exc()
                     finally:
                         with _alpha_scan_lock:
                             _alpha_scan_running.discard(universe)
+                            _alpha_scan_started.pop(universe, None)
                 threading.Thread(target=_bg_refresh, daemon=True).start()
+                refresh_started = True
+        result["refresh_started"] = refresh_started
         return encode_response(result)
 
     # DB is empty (cold start) — pipeline hasn't run yet
@@ -1043,15 +1052,17 @@ async def get_alpha_calls_endpoint(
     def _cold_start_scan():
         with _alpha_scan_lock:
             _alpha_scan_running.add(universe)
+            _alpha_scan_started[universe] = _time.monotonic()
         try:
             from options_alpha import run_alpha_pipeline
-            run_alpha_pipeline(universe=universe, max_workers=4)
+            run_alpha_pipeline(universe=universe, max_workers=4, limit=limit)
             print(f"  \u2713 Alpha cold-start complete: {universe}")
         except Exception:
             traceback.print_exc()
         finally:
             with _alpha_scan_lock:
                 _alpha_scan_running.discard(universe)
+                _alpha_scan_started.pop(universe, None)
     threading.Thread(target=_cold_start_scan, daemon=True).start()
 
     return JSONResponse(
@@ -1062,6 +1073,23 @@ async def get_alpha_calls_endpoint(
         },
         status_code=202,
     )
+
+
+@app.get("/api/screener/alpha-calls/status")
+async def get_alpha_calls_status(universe: str = "sp500"):
+    """Check if an alpha scan is currently running for a given universe."""
+    import time as _time
+    with _alpha_scan_lock:
+        scanning = universe in _alpha_scan_running
+        started = _alpha_scan_started.get(universe)
+    elapsed = round(_time.monotonic() - started, 1) if started else None
+    scan_age = db.get_alpha_scan_age(universe)
+    return encode_response({
+        "scanning": scanning,
+        "elapsed_seconds": elapsed,
+        "last_scan_age_seconds": round(scan_age, 0) if scan_age is not None else None,
+    })
+
 
 
 # ── Whale Flow Intelligence ──

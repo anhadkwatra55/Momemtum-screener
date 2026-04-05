@@ -81,83 +81,26 @@ class FlowProtocol:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 2. TICKER UNIVERSE FETCH — With 24-Hour Module-Level Cache
+# 2. TICKER UNIVERSE — Direct from momentum_config (DB-first, no Wikipedia)
 # ═══════════════════════════════════════════════════════════════
 
-_TICKER_CACHE: dict[str, tuple[list[str], float]] = {}
-_TICKER_CACHE_TTL = 86400  # 24 hours
-
-# Hardcoded fallback for when Wikipedia is unreachable
-_SP500_FALLBACK = [
-    "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA", "BRK-B",
-    "UNH", "JNJ", "V", "XOM", "JPM", "PG", "MA", "HD", "CVX", "MRK",
-    "ABBV", "LLY", "PEP", "KO", "COST", "AVGO", "WMT", "MCD", "CSCO",
-    "TMO", "ACN", "ABT", "DHR", "NEE", "LIN", "CRM", "AMD", "TXN",
-    "PM", "UNP", "QCOM", "HON", "MS", "GS", "BA", "CAT", "RTX",
-    "INTC", "AMGN", "IBM", "GE",
-]
+try:
+    import momentum_config as cfg
+except ImportError:
+    from pipelines import momentum_config as cfg
 
 
 def get_sp500() -> list[str]:
-    """Fetch S&P 500 tickers from Wikipedia with 24h cache."""
-    if not HAS_PD or not HAS_REQ:
-        return _SP500_FALLBACK
-
-    cached = _TICKER_CACHE.get("sp500")
-    if cached and (_time.monotonic() - cached[1]) < _TICKER_CACHE_TTL:
-        logger.info(f"Using cached S&P 500 tickers ({len(cached[0])})")
-        return cached[0]
-
-    for attempt in range(3):
-        try:
-            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            headers = {"User-Agent": "Mozilla/5.0"}
-            resp = _requests.get(url, headers=headers, timeout=15)
-            resp.raise_for_status()
-            tickers = pd.read_html(resp.text)[0]["Symbol"].tolist()
-            _TICKER_CACHE["sp500"] = (tickers, _time.monotonic())
-            logger.info(f"Fetched {len(tickers)} S&P 500 tickers (cached for 24h)")
-            return tickers
-        except Exception as e:
-            logger.warning(f"S&P 500 fetch attempt {attempt + 1}/3 failed: {e}")
-            if attempt < 2:
-                _time.sleep(2 ** attempt)
-
-    logger.warning("All S&P 500 fetch attempts failed, using fallback")
-    return _SP500_FALLBACK
+    """Return S&P 500 tickers from the hardcoded UNIVERSE config.
+    Instant — no network calls."""
+    return cfg.STOCK_TICKERS  # ~1500 tickers from S&P 1500
 
 
 def get_nasdaq100() -> list[str]:
-    """Fetch NASDAQ 100 tickers from Wikipedia with 24h cache."""
-    if not HAS_PD or not HAS_REQ:
-        return []
+    """Return NASDAQ-heavy tickers from the Technology sector in UNIVERSE.
+    Instant — no network calls."""
+    return cfg.UNIVERSE.get("Technology", [])
 
-    cached = _TICKER_CACHE.get("nasdaq100")
-    if cached and (_time.monotonic() - cached[1]) < _TICKER_CACHE_TTL:
-        logger.info(f"Using cached NASDAQ 100 tickers ({len(cached[0])})")
-        return cached[0]
-
-    for attempt in range(3):
-        try:
-            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-            headers = {"User-Agent": "Mozilla/5.0"}
-            resp = _requests.get(url, headers=headers, timeout=15)
-            resp.raise_for_status()
-            tables = pd.read_html(resp.text)
-            for t in tables:
-                for col in ['Ticker', 'Symbol', 'ticker', 'symbol']:
-                    if col in t.columns:
-                        tickers = t[col].tolist()
-                        _TICKER_CACHE["nasdaq100"] = (tickers, _time.monotonic())
-                        logger.info(f"Fetched {len(tickers)} NASDAQ 100 tickers (cached for 24h)")
-                        return tickers
-            logger.warning("NASDAQ 100 table not found")
-            return []
-        except Exception as e:
-            logger.warning(f"NASDAQ 100 fetch attempt {attempt + 1}/3 failed: {e}")
-            if attempt < 2:
-                _time.sleep(2 ** attempt)
-    return []
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -385,37 +328,40 @@ def get_alpha_calls(
       - HV computed once per ticker
       - Vectorized gate filtering
     """
-    # Fetch universe (cached for 24h)
-    if universe == "nasdaq100":
-        tickers = get_nasdaq100()
-        src = "NASDAQ 100"
-    elif universe == "both":
-        sp = get_sp500()
-        nq = get_nasdaq100()
-        seen = set()
-        tickers = []
-        for t_sym in sp + nq:
-            if t_sym not in seen:
-                seen.add(t_sym)
-                tickers.append(t_sym)
-        src = "S&P 500 + NASDAQ 100"
-    else:
-        tickers = get_sp500()
-        src = "S&P 500"
-
-    if not tickers:
-        # Fallback to momentum universe
+    # ── Build ticker universe (DB-first, config fallback) ──
+    # Priority: validated tickers from momentum pipeline DB (sorted by price DESC = large caps first)
+    # This eliminates delisted tickers automatically since only active tickers are in the signals table
+    try:
         try:
-            import json
-            from pathlib import Path
-            p = Path(__file__).parent / "momentum_data.json"
-            if p.exists():
-                with open(p) as f:
-                    data = json.load(f)
-                tickers = [s["ticker"] for s in data.get("signals", []) if s.get("price", 0) >= 10]
-                src = "Momentum"
-        except Exception:
-            pass
+            import db as _db
+        except ImportError:
+            from pipelines import db as _db
+
+        validated = _db.get_validated_tickers(min_price=25.0)
+        if validated and len(validated) >= 20:
+            # DB has validated tickers — use them (already sorted by price DESC)
+            if universe == "nasdaq100":
+                tech_set = set(cfg.UNIVERSE.get("Technology", []))
+                tickers = [t for t in validated if t in tech_set]
+                src = f"Technology ({len(tickers)} validated)"
+            else:
+                tickers = validated
+                src = f"Validated Universe ({len(tickers)} tickers)"
+            logger.info(f"Alpha-Flow: Using {len(tickers)} DB-validated tickers (sorted by price DESC)")
+        else:
+            raise ValueError("DB too small, use config fallback")
+    except Exception as e:
+        # Cold start: no signals in DB yet — use config
+        logger.info(f"Alpha-Flow: DB not ready ({e}), using config fallback")
+        if universe == "nasdaq100":
+            tickers = get_nasdaq100()
+            src = "Technology (config)"
+        elif universe == "both":
+            tickers = list(cfg.ALL_TICKERS)
+            src = "S&P 1500 (config)"
+        else:
+            tickers = get_sp500()
+            src = "S&P 1500 (config)"
 
     if not tickers:
         return {
@@ -502,10 +448,16 @@ def get_alpha_calls(
 def run_alpha_pipeline(
     universe: str = "sp500",
     max_workers: int = 4,
+    limit: int = 500,
 ) -> dict:
     """
     Run a full alpha scan and persist results to the alpha_calls DB table.
     Called on startup and by the daily scheduler.
+
+    Args:
+        universe: Which ticker universe to scan ('sp500', 'nasdaq100', 'both')
+        max_workers: Thread pool size for parallel scanning
+        limit: Max number of tickers to scan (passed from frontend)
 
     Returns scan metadata dict.
     """
@@ -515,9 +467,8 @@ def run_alpha_pipeline(
         from pipelines import db
 
     # Use get_alpha_calls() for the actual scanning
-    # Scan ALL tickers (no limit) for a complete DB
     result = get_alpha_calls(
-        limit=500,  # scan up to 500 tickers
+        limit=limit,
         max_workers=max_workers,
         sort_by="quant_score",
         universe=universe,

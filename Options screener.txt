@@ -1,0 +1,324 @@
+﻿Options screener - 
+
+
+Master Prompt 1: The "Unusual Flow & Smart Money" Heuristics
+Copy/Paste this into NotebookLM:
+Role: Expert Quantitative Options Strategist and Order Flow Architect. Task: Analyze the knowledge base to extract strict, programmable heuristics for identifying "Unusual Options Activity" and "Smart Money" footprints. I am building a dynamic options screener and need the exact mathematical conditions to categorize an options contract into specific macro-filters.
+Scan the documents and define the algorithmic logic for identifying the following trade classifications:
+1. Unusually Bullish / Bearish: What specific ratio of Volume to Open Interest (Vol/OI), combined with Implied Volatility (IV) changes and Delta ranges, signals an anomalous directional bet?
+2. Deep Conviction Calls / Puts: How do we mathematically define "Conviction"? (e.g., Is it measured by premium spent > $X million, or taking the Ask price aggressively?)
+3. Volatility Mispricing: Extract rules for identifying when a contract's Implied Volatility is significantly disjointed from its Historical Volatility (HV) or the broader Volatility Surface/Smile.
+Output Format Requirement: For every concept, you MUST output:
+* Filter Name: (e.g., Unusually Bullish)
+* The Logic Gate: Strict IF/AND/OR pseudo-code (e.g., IF Volume > 3 * OI AND Trade Price == Ask AND DTE < 30).
+* The "Why": Why this specific combination of metrics indicates institutional or hidden alpha.
+
+
+Filter Name: Market Breadth Sentiment Trigger The Logic Gate: IF (Trin_Statistic > 1.0 OR Put_Call_Ratio_Trend == RISING) THEN Signal = BEARISH IF (Confidence_Index >= 0.95) THEN Signal = BULLISH. The "Why": Behavioural finance postulates that investor decisions are subject to irrational information processing errors. The Trin statistic and Put/Call ratio act as strict quantitative proxies for broad investor pessimism; rising metrics trigger a bearish algorithm flag indicating negative sentiment. Conversely, a Confidence Index (the ratio of average yield on top-rated corporate bonds to intermediate-grade bonds) approaching 1.0 mathematically signals extreme broad investor optimism, generating a bullish signal.
+Filter Name: Information Leakage Momentum Trigger (Deep Conviction Footprint) The Logic Gate: Abnormal_Return_t = r_t - (a + b * r_Mt). IF (Abnormal_Return_t > Statistical_Significance_Threshold) AND (Public_News_Event_t == NULL) THEN Flag = INFORMATION_LEAKAGE AND Execute = MOMENTUM_BUY. The "Why": Event studies empirically confirm that inside information leaks to select market participants prior to official public announcements. The system isolates the unexpected return ($r_t$) of a security on a specific date from broad market index movements ($r_{Mt}$), utilizing historical regression coefficients ($a$ and $b$). Detection of a statistically significant positive abnormal return absent public news computationally identifies hidden smart-money accumulation.
+Filter Name: End-User Demand Pressure & Excess Implied Volatility The Logic Gate: Excess_Implied_Volatility = Implied_Volatility - Reference_Volatility_GARCH_or_Bates. IF (Non_Market_Maker_Net_Demand > Demand_Threshold) AND (Historical_Option_Volume_6_Months == LOW) THEN Price_Impact_Per_Unit = MAXIMUM AND Excess_IV_Expansion = TRUE. The "Why": The expensiveness of an option (its variance risk premium) is quantified as Excess Implied Volatility, calculated by subtracting a state-of-the-art reference volatility (e.g., Bates 2006 filtered volatility or GARCH(1,1)) from the market implied volatility. The interaction between net end-user demand and the underlying asset's trailing 6-month option volume dictates market maker capital allocation; lower historical option activity yields less market-maker capital, significantly amplifying the price impact per unit of demand and forcing excess implied volatility higher.
+Filter Name: Microstructure Gamma Cascade Vulnerability The Logic Gate: IF (Dealer_Net_Gamma_Exposure (NetGEX) < 0) AND (Spot_Price_Crosses_Gamma_Wall == TRUE) THEN Market_Maker_Delta_Hedge = BUY_RALLIES_SELL_DIPS AND Momentum_Amplification = TRUE. IF (Dealer_Net_Gamma_Exposure (NetGEX) > 0) THEN Market_Maker_Delta_Hedge = SELL_RALLIES_BUY_DIPS AND Price_Action = MEAN_REVERTING. The "Why": Option dealers dynamically delta-hedge to neutralize directional risk. When aggregate dealer positioning flips to Short Gamma (negative $\gamma$), their required hedging algorithm inverts, forcing them to hedge with the market move (buying rallies, selling dips). If the spot price breaks through a "gamma wall" (a strike with concentrated open interest where positioning flips from long to short gamma), it triggers a cascade of forced dealer hedging, mathematically amplifying directional momentum and increasing tail risk.
+Filter Name: Gamma-Theta Breakeven Range (GTBR) Inelasticity The Logic Gate: GTBR = +/- sqrt( - (Theta / 365) * 50 * Gamma ). IF (Absolute(Spot_Price_Deviation) > GTBR) AND (Market_Maker_Net_Gamma < 0) THEN Inelastic_Delta_Rebalancing_Triggered = TRUE AND Intraday_Momentum_Multiplier = ACTIVE. The "Why": Delta-neutral traders holding short gamma positions face exponential losses when underlying prices exhibit large movements, creating a complex non-linear P&L trade-off between gamma losses and theta profits. The GTBR defines the exact mathematical threshold where gamma losses exceed theta gains. Once the underlying stock price breaches this breakeven range, the trader's net P&L turns negative, forcing inelastic delta-rebalancing to stop losses, which functions as an inflection point that exacerbates intraday momentum in the underlying equity.
+Filter Name: Expiration Gamma Scalping / Volatility Arbitrage The Logic Gate: IF (Days_To_Expiration (DTE) <= 7) AND (Expected_Realized_Volatility > Straddle_Implied_Volatility) THEN Execute = LONG_ATM_STRADDLE AND Delta_Hedge = CONTINUOUS_DYNAMIC. The "Why": As expiration approaches ($\tau \rightarrow 0$), ATM gamma undergoes hyperbolic growth, necessitating substantially larger delta hedge adjustments for minimal price moves. Volatility arbitrage relies on purchasing an ATM straddle (minimizing vega, neutralizing delta, maximizing gamma) and executing continuous contrarian positioning against the underlying. A programmable edge exists strictly when the ex-post realized volatility of the underlying exceeds the ex-ante implied volatility priced into the straddle, ensuring that cumulative scalping profits overcome the accelerated negative theta decay.
+Filter Name: Dealer Directional Open Interest (DDOI) Tracking The Logic Gate: Daily_Net_Trading_Quantity_t = (Open_Buy_t - Open_Sell_t) + (Close_Buy_t - Close_Sell_t). Dealer_OI_T = -1 * SUM(Firm_Net_Trading_Quantity_t + Customer_Net_Trading_Quantity_t) for t=1 to T. The "Why": Publicly reported open interest strictly measures absolute contract existence, failing to denote directional exposure. DDOI extracts institutional footprints by calculating the net buy/sell imbalances at the Firm and Customer levels, and inverting the sum to isolate the Dealer's (Market Maker's) true aggregate open interest, providing a granular, transaction-level ledger of option-originated liquidity and directional positioning.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Master Prompt 2: Structural Alpha (Gamma Squeezes & VRP)
+Copy/Paste this into NotebookLM:
+Role: Lead Quantitative Researcher specializing in Market Microstructure and Derivatives Pricing. Task: I need to extract the deep quantitative math required to build a "Hidden Alpha" scanner based on dealer positioning and volatility premiums. Analyze the specific academic papers in this knowledge base regarding Gamma Exposure (GEX) and the Variance Risk Premium (VRP).
+Extract the following formulas and computational logic:
+1. Dealer Gamma Exposure (GEX): How do I calculate the absolute Gamma Exposure for a specific strike, and how do I calculate the "Zero Gamma" level for an underlying stock?
+2. Gamma-Theta Breakeven Range: Extract the formula to determine when a market maker's hedging demand becomes purely inelastic (triggering a squeeze).
+3. Variance Risk Premium (VRP): Extract the mathematical construction of "Model-Free Implied Variance" and how to calculate the VRP (Implied Variance minus Realized Variance).
+Output Format Requirement:
+* The Metric: Name of the calculation.
+* The Equation: The strict mathematical formula.
+* Data Requirements: What raw data does my backend need to compute this (e.g., "Requires full options chain, Bid/Ask, and underlying close").
+* Screener Trigger: At what specific threshold does this metric trigger a "BUY" or "ALERT" signal in an automated system?
+
+
+
+
+The Metric: Aggregate Dealer Gamma Exposure (GEX) and Zero Gamma Level
+The Equation: Dollar Gamma ($\Gamma$) standardizes the geometric risk of an option by measuring the notional cash value traded per 1% move in the underlying asset. Dollar_Gamma = (Black_Scholes_Gamma * S^2) / 100.
+To extract institutional positioning, the system must compute the Dealer Gamma for every specific option contract ($i$): MM_Gamma_T,i = DDOI_T,i * Dollar_Gamma_i * Contract_Size. (Note: DDOI represents Dealer Directional Open Interest, which requires parsing transaction-level data to bin buy/sell flow against dealers rather than relying on absolute Open Interest).
+Aggregate Net GEX is the summation across the entire surface: NetGEX(S) = SUM(MM_Gamma_Calls) - SUM(MM_Gamma_Puts).
+The "Zero Gamma" level is computationally solved by continuously shifting the underlying spot price ($S$) in the calculation until NetGEX(S) == 0.
+Data Requirements: Transaction-level data to derive true Dealer Directional Open Interest (DDOI), the full option chain (calls and puts) across all strikes and expirations, the underlying spot price ($S$), and implied volatility to derive individual contract gamma.
+Screener Trigger: IF (NetGEX_Aggregate < 0) AND (Spot_Price < Zero_Gamma_Level) THEN SIGNAL = "SHORT GAMMA CASCADE". Rationale: When market makers are caught in a Short Gamma (negative $\gamma$) regime, their dynamic delta-hedging algorithms are forced to trade directionally with the market (buying rallies, selling into dips). Breaking below the Zero Gamma threshold triggers a non-linear amplification of directional momentum and gap probability.
+________________
+
+
+The Metric: Gamma-Theta Breakeven Range (GTBR) Inelasticity Threshold
+The Equation: A delta-neutral dealer running short gamma faces an exponential P&L decay tradeoff between gamma losses and theta profits. The exact mathematical inflection point where daily gamma losses strictly exceed daily theta gains is defined by:
+GTBR = +/- SQRT( - (Theta / 365) / (50 * Dollar_Gamma) ).
+A computational approximation utilizing at-the-money (ATM) implied volatility ($\sigma_{imp}$) simplifies to: GTBR ≈ +/- (Implied_Volatility / SQRT(365)).
+Data Requirements: Annualized Black-Scholes Theta ($\theta$), aggregate Dollar Gamma ($\Gamma$) of the dealer's short exposure, and the underlying ATM 30-day standardized implied volatility.
+Screener Trigger: IF (ABS(Daily_Underlying_Return) > GTBR) AND (NetGEX_Aggregate < 0) THEN SIGNAL = "INELASTIC HEDGING SQUEEZE". Rationale: Within the GTBR, dealers can absorb gamma losses via theta decay. Once the underlying asset return structurally breaks outside the GTBR boundary, the dealer’s net daily PnL turns negative. This forces immediate, price-insensitive (inelastic) delta rebalancing to halt losses, exacerbating intraday stock momentum.
+________________
+
+
+The Metric: Model-Free Variance Risk Premium (VRP) & Bad VRP Asymmetry
+The Equation: The macroscopic VRP defines the premium paid to insure against variance fluctuations. It is isolated by subtracting the actual realized variance ($RV_t$) from the risk-neutral option-implied variance ($IV_t$). VRP_t = IV_t - RV_t.
+Step 1: Calculate $IV_t$ without standard Black-Scholes constraints by using the continuous integral of out-of-the-money (OTM) options across the strike ($K$) surface. IV_t = (2 / T) * [ INTEGRAL_0^S (P_t(K) / K^2) dK + INTEGRAL_S^INF (C_t(K) / K^2) dK ].
+Step 2: Calculate $RV_t$ utilizing high-frequency log returns. RV_t = SUM_j=1^N ( LN(S_{t, j}) - LN(S_{t, j-1}) )^2.
+Step 3: Isolate downside ("Bad") VRP by restricting the realized variance calculation exclusively to negative return intervals. RV_bad_t = SUM_j (r_j^2 * I(r_j < 0)). Bad_VRP_t = IV_bad_t - RV_bad_t.
+Data Requirements: A continuum of OTM put ($P_t$) and call ($C_t$) prices across strikes, current underlying forward price ($F_t$), and high-frequency intraday data (e.g., 5-minute sampling intervals) to cleanly compute the realized variance summation.
+Screener Trigger: IF (Bad_VRP_t > Cross_Sectional_90th_Percentile) AND (Good_VRP_t < Cross_Sectional_10th_Percentile) THEN SIGNAL = "DEEP CONVICTION BUY". Rationale: The total VRP mixes positive and negative uncertainty. By isolating the "Bad VRP", we directly measure the premium institutional participants are paying strictly to insure against extreme downside risk. In the cross-section, assets displaying extreme high Bad VRP combined with low Good VRP statistically mandate higher expected excess returns, generating an annualized risk-adjusted alpha signal.
+
+
+
+
+Master Prompt 3: Multi-Leg & Credit Strategy Architectures
+Copy/Paste this into NotebookLM:
+Role: Senior Options Portfolio Manager. Task: My current system only screens for naked long calls. I want to expand my scanner to identify optimal multi-leg strategies, specifically "Bullish Credit Trades", "Bearish Credit Trades", and "Put Sells" (Cash Secured Puts).
+Based on the quantitative finance and capital structure materials provided, extract the logic for screening these setups:
+1. Credit Spreads (Bull Put / Bear Call): What is the optimal delta distance between the short leg and the long leg? What is the minimum acceptable Risk/Reward ratio or Premium/Margin ratio?
+2. Put Sells: What are the mathematical conditions for finding the most lucrative cash-secured puts? (e.g., IV Rank thresholds, Delta < 0.20, and underlying stock being near a technical support or having a high Fama-French Quality factor).
+Output Format Requirement:
+* Strategy Name: (e.g., Bullish Put Credit Spread)
+* Leg 1 (Short) Rules: IF [Condition] THEN [Action]
+* Leg 2 (Long) Rules: IF [Condition] THEN [Action]
+* Screener Output Metric: How do we rank these? (e.g., Return on Capital (ROC), Annualized Yield, Probability of Profit).
+
+
+
+
+Strategy Name: Cash-Secured Put (Put Underwriting)
+Leg 1 (Short) Rules: IF (Implied_Volatility > Expected_Realized_Volatility) AND (Spot_Price <= Technical_Support_Level) AND (Beta_HML > 0) THEN Execute = SELL_OTM_PUT. The "Why": Put underwriting systematically exploits the empirical phenomenon where implied volatility trades at a premium to expected realized volatility, allowing the seller to capture the variance risk premium. Setting the strike at a technical support level ensures the investor earns a premium for identifying an entry point where they are inherently willing to take delivery of the underlying asset. Incorporating the Fama-French multifactor model, filtering for a positive $\beta_{HML}$ (High minus Low book-to-market factor loading) algorithmically restricts the screener to "value" stocks, isolating fundamentally sound equities for potential acquisition if assigned.
+Leg 2 (Cash Collateral) Rules: IF (Execute == SELL_OTM_PUT) THEN Capital_Allocation = PV(Strike_Price). The "Why": A cash-secured put strictly requires the system to hold cash collateral equal to the exercise price of the put. If the option is strictly European (no early exercise risk), the exact required margin mathematically discounts to the present value of the strike price: $X/(1 + r \times t)$, freeing up fractional capital for the risk-free rate.
+Screener Output Metric: Rank by Implied Volatility Premium (Implied Volatility minus Realized Volatility) to maximize edge, and Annualized Return on Capital (ROC), calculated as (Put_Premium / PV(Strike_Price)) * (365 / Days_To_Expiration).
+________________
+
+
+Strategy Name: Bullish Put Credit Spread (Bull Put Spread)
+Leg 1 (Short) Rules: IF (Implied_Volatility_Percentile >= High_Threshold) AND (Net_Delta_Target > 0) THEN Execute = SELL_PUT(Strike = K_High, Position = Near_ATM). The "Why": A bull put spread requires selling a put with a higher exercise price ($K_{High}$) and buying a put with a lower exercise price ($K_{Low}$), generating a net positive delta. When implied volatility is mathematically classified as "high", programmable logic dictates selling the at-the-money (ATM) or near-ATM option, because the ATM option exhibits the greatest sensitivity (in absolute points) to a collapse in overvalued implied volatility.
+Leg 2 (Long) Rules: IF (Short_Put == EXECUTED) THEN Execute = BUY_PUT(Strike = K_Low, Position = OTM). The "Why": The long put strictly acts as a catastrophic hedge, capping the maximum theoretical loss at $(K_{High} - K_{Low}) - Net_Credit$. The system must optimize the strike distance ($K_{High} - K_{Low}$); widening the delta distance between the strikes mathematically increases both the total positive delta of the position and the maximum potential profit/loss parameter.
+Screener Output Metric: Rank by Theoretical Edge and Gamma/Theta Efficiency.
+1. Theoretical_Edge = Market_Credit_Received - Theoretical_Value_of_Spread.
+2. Efficiency = ABS(Gamma / Theta). For a short premium spread (negative gamma, positive theta), the system must isolate trades with the lowest possible Efficiency ratio, ensuring the theta decay reward is mathematically maximized relative to the gamma (directional/magnitude) risk.
+________________
+
+
+Strategy Name: Bearish Call Credit Spread (Bear Call Spread)
+Leg 1 (Short) Rules: IF (Implied_Volatility_Percentile >= High_Threshold) AND (Directional_Vector == BEARISH) THEN Execute = SELL_CALL(Strike = K_Low, Position = Near_ATM). The "Why": A bear call spread is constructed by selling a call at a lower exercise price ($K_{Low}$) and buying a call at a higher exercise price ($K_{High}$), yielding a net negative delta. As with the bull put spread, high implied volatility mandates shorting the near-ATM strike to maximize the decay of inflated extrinsic value.
+Leg 2 (Long) Rules: IF (Short_Call == EXECUTED) THEN Execute = BUY_CALL(Strike = K_High, Position = OTM). The "Why": The OTM long call defines the absolute maximum risk parameter, ensuring the margin requirement remains fixed at $(K_{High} - K_{Low}) - Net_Credit$. This transforms an otherwise naked short call (which possesses theoretically infinite risk) into a strictly bounded programmable risk unit.
+Screener Output Metric: Rank by Premium-to-Margin Ratio (Risk/Reward). Ratio = Net_Credit_Received / ((K_High - K_Low) - Net_Credit_Received). The algorithm should maximize this ratio subject to the strict constraint that Implied_Volatility > Expected_Realized_Volatility. Trades must be filtered out if the expected payout under the trader's pricing model does not exceed the market price of the spread.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Master Prompt 4: through NotebookLM to get the last missing pieces:
+Role: Lead Algorithmic Trader and Options Flow Architect. Task: We are translating high-level academic microstructure models into a live Python screener. We face data limitations (no tick-by-tick buyer/seller flags, no continuous strike surfaces). I need actionable, programmable proxies for the following:
+1. Trade Inference (The Lee-Ready Proxy): Extract the exact mathematical logic to classify daily option volume as "Dealer Long" or "Dealer Short" using only end-of-day metrics (Close, Bid, Ask, Volume, OI). How do we infer directional aggression? 2. The Volume/OI Velocity Heuristic: Unusual Whales detects "Sweeps" and anomalous flow. Define the strict mathematical threshold for "Unusually Bullish/Bearish" using only Volume, Open Interest, and DTE. (e.g., IF Volume > X * OI AND DTE < Y). 3. Discrete Variance Risk Premium: Extract the formula for calculating VRP using a discrete sum of available OTM option prices instead of a continuous integral.
+Output Format: Provide the proxy name, the strict algorithmic logic gate (IF/THEN/ELSE), and the mathematical equation.
+
+
+
+
+The sources provided do not contain the "Lee-Ready Proxy" algorithm for end-of-day data, nor do they define a specific mathematical threshold for "Unusual Whales sweeps" based strictly on a Volume-to-Open Interest multiplier. However, they do provide alternative programmable logic for dealer positioning, liquidity filtering, and the discrete calculation of Model-Free Implied Variance.
+Here are the actionable, programmable proxies extracted from the text:
+1. Trade Inference & Dealer Positioning (ISE Dealer Open Interest)
+The knowledge base does not detail the Lee-Ready algorithm for end-of-day metrics, but it does define how to infer whether a trade is a "buy print" or "sell print" based on bid/ask prices. To accurately classify "Dealer Long" or "Dealer Short" positioning without tick data, the sources specify utilizing institutional transaction-level data (such as ISE data) that bins opening/closing and buy/sell flow at the firm and customer levels to deduce the Market Maker's (Dealer's) net open interest.
+Proxy Name: Dealer Directional Open Interest (DDOI) / Bid-Ask Trade Inference The Mathematical Equation: Step 1: Calculate Net Trading Quantity for Firms and Customers. FirmNetTradQty_{t,i} = (OpenBuy_{t,i} - OpenSell_{t,i}) + (CloseBuy_{t,i} - CloseSell_{t,i}). Step 2: Invert the sum to find the Dealer (Market Maker) Open Interest. MM_OI_{T,i} = -1 * SUM(FirmOI_{T,i} + CustomerOI_{T,i}).
+The Logic Gate:
+IF (Trade_Price == Ask_Price) THEN
+    Classification = "Buy_Print"
+ELSE IF (Trade_Price == Bid_Price) THEN
+    Classification = "Sell_Print"
+ELSE IF (Exchange_Data == ISE_Transaction_Level) THEN
+    Dealer_Directional_OI = -1 * (Firm_Net_Flow + Customer_Net_Flow)
+END IF
+```.
+
+
+### 2. Volume & Liquidity Velocity Heuristic
+The sources do not provide a specific `Volume > X * OI` threshold. Instead, the computational logic for filtering options relies on strict liquidity, moneyness, and days to expiration (DTE) constraints to isolate actively traded contracts. To identify broad directional sentiment, the system uses technical breadth indicators like the Put/Call Ratio and the Trin statistic.
+
+
+**Proxy Name:** Standardized Liquidity Filter and Breadth Sentiment Trigger
+**The Mathematical Equation:**
+`Moneyness = Strike_Price / Underlying_Price`.
+
+
+**The Logic Gate:**
+```text
+IF (Volume >= 25) AND (15 <= DTE <= 45) AND (0.99 <= Moneyness <= 1.01) THEN
+    Contract_Status = "Valid_For_Analysis"
+END IF
+
+
+IF (Put_Call_Ratio_Trend == RISING) OR (Trin_Statistic > 1.0) THEN
+    Macro_Signal = "BEARISH"
+END IF
+```.
+
+
+### 3. Discrete Variance Risk Premium (VRP)
+The total Variance Risk Premium is defined as the difference between the risk-neutral expected variance (implied variance) and the real-world expected variance (realized variance). Because continuous integration across an infinite number of strikes is impossible, the risk-neutral expected variance is computed using a discrete sum of available out-of-the-money (OTM) options.
+
+
+**Proxy Name:** Discrete Model-Free Implied Variance (VIX Methodology)
+**The Mathematical Equation:**
+`Implied_Variance = (2 / T) * SUM [ (Delta_K_i / K_i^2) * e^{RT} * Q(K_i) ] - (1 / T) * [ (F / K_0) - 1 ]^2`.
+
+
+*Variables:*
+*   `T` = Time to expiration in years.
+*   `R` = Risk-free interest rate to expiration.
+*   `F` = Option-implied forward price.
+*   `K_0` = The first strike equal to or immediately below the forward index level `F`.
+*   `K_i` = Strike price of the *i*th OTM option.
+*   `Delta_K_i` = Half the difference between the strikes on either side of `K_i` (e.g., `0.5 * (K_{i+1} - K_{i-1})`). At the upper and lower edges of the option strip, `Delta_K_i` is simply the difference between `K_i` and the adjacent strike.
+*   `Q(K_i)` = The midpoint of the bid-ask spread for the option at strike `K_i`.
+
+
+**The Logic Gate:**
+```text
+IF (K_i < K_0) THEN
+    Q(K_i) = Midpoint_Put_Price
+ELSE IF (K_i > K_0) THEN
+    Q(K_i) = Midpoint_Call_Price
+ELSE IF (K_i == K_0) THEN
+    Q(K_i) = Average(Midpoint_Put_Price, Midpoint_Call_Price)
+END IF
+```.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prompt 5 - Role: Chief Risk Officer and Peer Reviewing Quantitative Academic. Task: We are finalizing the architecture for a "Hidden Alpha" Options Screener. Because we are limited to End-of-Day (EOD) retail data (Volume, Open Interest, Bid, Ask, Close) and do not have tick-level ISE transaction feeds, we have had to engineer practical proxies to execute your academic models.
+Please review our three core assumptions below against the knowledge base. For each assumption, tell me if it is mathematically valid, fundamentally flawed, or how it must be modified to maintain our statistical edge.
+Assumption 1: The EOD Dealer Positioning Proxy Because we cannot see if a trade hit the bid or lifted the ask intraday, we assume: IF the End-of-Day Close Price is closer to the Ask, the aggregate volume was Customer Buy / Dealer Sell (Dealer is Short Gamma). IF Close is closer to the Bid, it is Customer Sell / Dealer Buy (Dealer is Long Gamma). Question for you: Does the literature support closing price proximity to Bid/Ask as a valid proxy for directional dealer exposure?
+Assumption 2: The Volume/OI Velocity Heuristic To detect institutional "Sweeps" without tape-reading data, we are using the heuristic: IF Volume > (Open Interest * 2.5) AND DTE < 14. Question for you: Does the literature provide any empirical validation on Volume-to-OI ratios preceding major gamma events or information leakage?
+Assumption 3: Discrete VRP Calculation We are abandoning the continuous integral for VRP and using a discrete sum of available OTM options (similar to the CBOE VIX methodology) to calculate implied variance. Question for you: What specific errors or skews are introduced when discretizing the variance swap formula, and how should we mathematically adjust for them?
+The Blindspot Check: Finally, scan the entire knowledge base for any major "Blindspots." What critical risk factor, option pricing anomaly (e.g., American vs. European early exercise premium, dividend risk, or Volatility Skew/Smile dynamics) are we completely ignoring that could ruin this screener?
+
+
+Assumption 1: The EOD Dealer Positioning Proxy
+Status: Fundamentally Flawed.
+Analysis: The literature provides zero mathematical validation for utilizing End-of-Day (EOD) closing price proximity to the bid/ask spread as a proxy for aggregate directional volume. Publicly reported Open Interest (OI) exclusively quantifies contract existence, failing to denote directional exposure. To accurately compute Dealer Directional Open Interest (DDOI) and subsequent Net Gamma Exposure (NetGEX), the system must process transaction-level feeds to isolate firm and customer net trading quantities. Aggregating flow into a single EOD price point destroys the microstructure data required to ascertain market maker inventory and the sequence of trade execution.
+Programmable Logic Correction: IF (Data_Feed == EOD_Only) THEN Proxy = INVALID. IF (Data_Feed == Transaction_Level) THEN MM_OI_T = -1 * SUM(Firm_Net_Flow_T + Customer_Net_Flow_T).
+________________
+
+
+Assumption 2: The Volume/OI Velocity Heuristic
+Status: Fundamentally Flawed.
+Analysis: The knowledge base lacks empirical validation for a static Volume > (Open Interest * 2.5) ratio acting as a strict precursor to information leakage or macro gamma events. The literature defines information leakage detection strictly through Event Studies computing Cumulative Abnormal Returns (CAR). To isolate institutional accumulation absent public news, the algorithm must calculate the unexpected return of a security by regressing it against broad market index movements.
+Programmable Logic Correction: Abnormal_Return_t = r_t - (a + b * r_Mt). IF (Abnormal_Return_t > Statistical_Significance_Threshold) AND (Public_News_Event_t == NULL) THEN Signal = INFORMATION_LEAKAGE. (Note: Filtering for a Time to Expiration of $14 \le DTE \le 60$ is mathematically valid to isolate short-term dynamics while reducing stochastic interest rate impacts).
+________________
+
+
+Assumption 3: Discrete VRP Calculation
+Status: Mathematically Valid, but necessitates strict error-correction algorithms.
+Analysis: Transitioning from the continuous integral to a discrete sum of Out-of-The-Money (OTM) options (analogous to the VIX methodology) is standard practice for establishing Model-Free Implied Variance. However, discretization introduces three specific quantitative errors: 1) Discretization error from non-continuous strike intervals ($\Delta K$); 2) Truncation error because available strikes do not span from zero to infinity; 3) Missing strike data in the options chain.
+Programmable Logic Correction: To adjust for truncation and missing data, the system must mathematically synthesize a continuous surface. IF (Strike_Prices == DISCRETE_AND_MISSING) THEN Execute = QUADRATIC_INTERPOLATION. IF (Strike_Prices == OUTSIDE_OBSERVED_RANGE) THEN Execute = LINEAR_EXTRAPOLATION. Note: Empirical analysis by Jiang and Tian (2005) confirms that underestimation on the left tail and overestimation on the right tail of the implied volatility surface partially cancel each other out, limiting the net discretization error.
+________________
+
+
+The Blindspot Check: Critical Omissions in System Architecture
+1. The American Early Exercise Premium (Confounding Variable): The architecture ignores the structural difference between European options (e.g., SPX, VIX) and American options (individual equities). Treating American equity options with standard Black-Scholes pricing creates a severe algorithmic blindspot, as the early exercise premium will drastically distort the implied volatility output. IF (Option_Type == AMERICAN_EQUITY) THEN Implied_Volatility = COX_ROSS_RUBINSTEIN_BINOMIAL_TREE. Only after extracting the clean implied volatility via binomial trees can the system input that volatility back into a Black-Scholes formula to treat the option as a "pseudo-European" contract for accurate variance premium calculations.
+2. Asymmetric Variance Risk Premium (Good VRP vs. Bad VRP): Calculating a singular Total VRP mixes two mathematically opposing market views. Investors demand a premium to insure against downside risk (Bad VRP), but are willing to pay for upside potential (Good VRP). Total VRP regressions yield weak predictability because these components cancel each other out. V_bad_t = INTEGRAL_0^S [ (1 + LN(S_t/K)) / (K^2/2) ] * P_t(K) dK. V_good_t = INTEGRAL_S^INF [ (1 - LN(K/S_t)) / (K^2/2) ] * C_t(K) dK. The screener must compute Bad_VRP using strictly OTM puts and Good_VRP using strictly OTM calls. A high Bad_VRP mathematically correlates to extreme annualized expected excess returns (up to 13%), providing the true statistical edge.
+3. Volatility Skew-Adjusted Delta: Standard Black-Scholes delta calculations assume constant volatility across strikes. Ignoring the volatility skew when calculating dealer hedging requirements (GEX) will yield fundamentally inaccurate delta values. Skew_Adjusted_Delta = Standard_Delta + Vega * (d(Implied_Vol) / d(Spot_Price)). If the skew contribution is ignored, option valuations and dealer replication thresholds can be miscalculated by significant margins (e.g., 12% of notional on digital options). The system must parameterize the skew via a polynomial function (e.g., $a + bx + cx^2 + dx^3$) to accurately map the implied order book.

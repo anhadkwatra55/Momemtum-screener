@@ -98,9 +98,19 @@ MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24
 You should see: `🔒 [SERVER MODE] Security active: CORS=..., Rate=60/min, API-Key=SET`
 
 ### Step 5: Start Cloudflare Tunnel (new terminal tab)
+
+**Option A — Resilient tunnel script (recommended):**
+```bash
+bash ~/Desktop/momentum-screener-dev/scripts/tunnel.sh
+```
+This auto-restarts cloudflared on crash with exponential backoff (2s → 4s → 8s → … → 120s max).
+Logs are saved to `~/.momentum_logs/tunnel_*.log`.
+
+**Option B — Raw cloudflared:**
 ```bash
 cloudflared tunnel --url http://localhost:8060
 ```
+
 Copy the `https://______.trycloudflare.com` URL it prints.
 
 Note: URL stays constant as long as this terminal is running. If you restart cloudflared, you get a new URL and must update Vercel.
@@ -129,8 +139,9 @@ cd ~/Desktop/momentum-screener-server/backend
 source venv/bin/activate
 MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 
-# Restart Cloudflare tunnel (new terminal tab)
-cloudflared tunnel --url http://localhost:8060
+# Restart Cloudflare tunnel (new terminal tab) — USE THE RESILIENT SCRIPT:
+bash ~/Desktop/momentum-screener-dev/scripts/tunnel.sh
+# Or raw: cloudflared tunnel --url http://localhost:8060
 # If URL changed, update NEXT_PUBLIC_API_URL in Vercel and redeploy
 
 # Check all ports
@@ -186,3 +197,35 @@ lsof -i :8000 -i :8060 -i :3001 -i :9090   # ports
 - Docker auto-restarts containers on reboot
 - Admin logs persist to ~/.momentum_logs/
 - .env.local is gitignored
+
+
+
+
+
+(Commands to Run
+Terminal 1 — Production Backend (already running on :8060 ✅)
+Your server is already up. If you need to restart it:
+
+
+cd ~/Desktop/momentum-screener-server/backend
+source venv/bin/activate
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+
+
+Terminal 2 — Cloudflare Tunnel (this is what you need NOW)
+bash ~/Desktop/momentum-screener-dev/scripts/tunnel.sh
+Or the raw version:
+
+cloudflared tunnel --url http://localhost:8060
+➡️ Copy the https://______.trycloudflare.com URL → paste into Vercel as NEXT_PUBLIC_API_URL → redeploy.
+
+
+Terminal 3 — Dev Backend (optional, for local dev)
+cd ~/Desktop/momentum-screener-dev/backend
+source venv/bin/activate
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+
+
+Terminal 4 — Dev Frontend (optional, for local dev)
+cd ~/Desktop/momentum-screener-dev/frontend
+npm run dev -- -p 3001)
