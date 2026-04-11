@@ -5,7 +5,9 @@ __pycache__/
 .pytest_cache/
 
 # Large data artifacts (runtime-generated, not source code)
-backend/pipelines/quant_screener.db
+*.db
+*.db-shm
+*.db-wal
 backend/pipelines/momentum_data.json
 backend/pipelines/features_latest.parquet
 backend/pipelines/xgb_model.json
