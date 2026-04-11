@@ -963,10 +963,15 @@ def load_alpha_calls(
     universe: str = "sp500",
     sort_by: str = "quant_score",
     limit: int = 500,
+    category: str | None = None,
 ) -> dict:
     """
     Load pre-scanned alpha calls from DB. Returns the same format as
     the old get_alpha_calls() so the endpoint response is unchanged.
+
+    Args:
+        category: Optional filter — "swing", "leaps", or "cheap_calls".
+                  If None, returns all categories.
     """
     # Sanitize sort column
     allowed_sort = {
@@ -978,14 +983,23 @@ def load_alpha_calls(
     order = "DESC" if reverse else "ASC"
 
     with db_session() as conn:
-        # Load calls
-        rows = conn.execute(
-            f"""SELECT * FROM alpha_calls
-                WHERE universe = ?
-                ORDER BY {sort_col} {order}
-                LIMIT ?""",
-            (universe, limit),
-        ).fetchall()
+        # Load calls (optionally filtered by category)
+        if category:
+            rows = conn.execute(
+                f"""SELECT * FROM alpha_calls
+                    WHERE universe = ? AND strategy_category = ?
+                    ORDER BY {sort_col} {order}
+                    LIMIT ?""",
+                (universe, category, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"""SELECT * FROM alpha_calls
+                    WHERE universe = ?
+                    ORDER BY {sort_col} {order}
+                    LIMIT ?""",
+                (universe, limit),
+            ).fetchall()
 
         # Load scan metadata
         meta_row = conn.execute(
@@ -1093,4 +1107,29 @@ def get_validated_tickers(min_price: float = 25.0, limit: int = 0) -> list[str]:
         rows = conn.execute(sql, params).fetchall()
         return [r["ticker"] for r in rows]
 
+def get_signal_by_ticker(ticker: str) -> dict | None:
+    """Load the latest momentum signal for a specific ticker."""
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT * FROM signals WHERE ticker = ?",
+            (ticker,)
+        ).fetchone()
+    return dict(row) if row else None
 
+
+def load_alpha_calls_for_ticker(ticker: str) -> dict:
+    """Load options plays for a specific ticker, grouped by category."""
+    with db_session() as conn:
+        rows = conn.execute(
+            """SELECT * FROM alpha_calls 
+               WHERE ticker = ? 
+               ORDER BY strategy_category, quant_score DESC""",
+            (ticker,)
+        ).fetchall()
+    
+    result = {"swing": [], "leaps": [], "cheap_calls": []}
+    for r in rows:
+        cat = r.get("strategy_category", "swing")
+        if cat in result:
+            result[cat].append(dict(r))
+    return result

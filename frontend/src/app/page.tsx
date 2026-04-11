@@ -97,11 +97,31 @@ export default function LandingPage() {
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
-      router.push(`/dashboard?search=${encodeURIComponent(query.trim())}`);
-    } else {
+    const q = query.trim().toUpperCase();
+    
+    if (!q) {
       router.push("/dashboard");
+      return;
     }
+    
+    // Extract ticker from natural language
+    // "help me trade TSLA" → "TSLA"
+    // "AAPL" → "AAPL"  
+    // "bullish tech stocks" → search filter
+    const tickerMatch = q.match(/\b([A-Z]{1,5})\b/);
+    const KNOWN_WORDS = new Set(["HELP", "ME", "TRADE", "BUY", "SELL", "FIND", "SHOW", "WHAT", "ABOUT", "ON"]);
+    
+    if (tickerMatch) {
+        const candidates = q.split(/\s+/).filter(w => /^[A-Z]{1,5}$/.test(w) && !KNOWN_WORDS.has(w));
+        if (candidates.length > 0) {
+            // Navigate to dashboard with ticker selection
+            router.push(`/dashboard?ticker=${candidates[0]}`);
+            return;
+        }
+    }
+    
+    // Fallback: general search
+    router.push(`/dashboard?search=${encodeURIComponent(query.trim())}`);
   }, [query, router]);
 
   return (

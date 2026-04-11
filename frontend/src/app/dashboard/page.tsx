@@ -58,6 +58,8 @@ import { DailyMovers } from "@/components/momentum/daily-movers";
 import { TodayView } from "@/components/momentum/today-view";
 const LazyAlphaCallsBlotter = dynamic(() => import('@/components/momentum/alpha-calls-blotter').then(m => ({ default: m.AlphaCallsBlotter })), { ssr: false });
 const LazyWhaleTrackerBlotter = dynamic(() => import('@/components/momentum/whale-tracker-blotter').then(m => ({ default: m.WhaleTrackerBlotter })), { ssr: false });
+const LazyAgentBriefing = dynamic(() => import('@/components/momentum/agent-briefing').then(m => ({ default: m.AgentBriefing })), { ssr: false });
+const LazyNewsletterSignup = dynamic(() => import('@/components/momentum/newsletter-signup').then(m => ({ default: m.NewsletterSignup })), { ssr: false });
 
 // ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
 const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
@@ -322,6 +324,10 @@ const DashboardPage = memo(() => {
                   </Card>
                 )}
 
+                <div className="mb-4">
+                  <LazyAgentBriefing />
+                </div>
+
                 <DataReveal
                   loading={tierLoading.summary && kpiStripItems.length === 0}
                   skeleton={<KPISkeleton />}
@@ -432,8 +438,9 @@ const DashboardPage = memo(() => {
                   </div>
 
                   {/* Right: Weekly Top Momentum Panel (sticky on desktop) */}
-                  <div className="xl:w-[300px] xl:shrink-0">
-                    <div className="xl:sticky xl:top-[90px]">
+                  <div className="xl:w-[320px] xl:shrink-0">
+                    <div className="xl:sticky xl:top-[90px] space-y-4">
+                      <LazyNewsletterSignup />
                       <LazyWeeklyMomentumPanel onSelectTicker={handlePageTickerSelect} />
                     </div>
                   </div>

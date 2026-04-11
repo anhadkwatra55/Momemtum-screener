@@ -78,6 +78,15 @@ interface TickerGroup {
   expiries: { exp: string; dte: number; contracts: AlphaCall[] }[];
 }
 
+type OptionsCategory = "" | "swing" | "leaps" | "cheap_calls";
+
+const CATEGORY_META: Record<string, { label: string; tag: string; desc: string; params: string }> = {
+  "": { label: "All", tag: "ALL", desc: "All screened options across categories", params: "Δ ≥ 0.05 · DTE: 7–730d · All moneyness" },
+  swing: { label: "Swing", tag: "SWING", desc: "High-conviction momentum plays (21-90d), ATM/OTM", params: "Δ 0.35–0.60 · DTE: 21–90d · Prem: $0.50–$8" },
+  leaps: { label: "LEAPS", tag: "LEAPS", desc: "Long-term deep ITM quality holds (180-730d)", params: "Δ 0.70–0.90 · DTE: 180–730d · ITM only" },
+  cheap_calls: { label: "Cheap Calls", tag: "CHEAP", desc: "High-volume OTM lottery tickets (7-60d)", params: "Δ 0.05–0.30 · DTE: 7–60d · Prem: $0.05–$2" },
+};
+
 export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const [data, setData] = useState<AlphaCallsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,6 +98,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const [universe, setUniverse] = useState<"sp500" | "nasdaq100" | "both">("sp500");
   const [refreshing, setRefreshing] = useState(false);
   const [scanElapsed, setScanElapsed] = useState<number | null>(null);
+  const [category, setCategory] = useState<OptionsCategory>("");
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -101,7 +111,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
     const timeoutMs = scanLimit >= 500 ? 180_000 : 120_000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const params = new URLSearchParams({ limit: String(scanLimit), sort_by: "quant_score", universe, ...(refresh && { refresh: "true" }) });
+      const params = new URLSearchParams({ limit: String(scanLimit), sort_by: "quant_score", universe, ...(category && { category }), ...(refresh && { refresh: "true" }) });
       const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`, { signal: controller.signal, headers: getAuthHeaders() });
       clearTimeout(timer);
       const result = await res.json();
@@ -135,7 +145,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
       }
       setLoading(false);
     }
-  }, [scanLimit, universe]);
+  }, [scanLimit, universe, category, data?.calls?.length]);
 
   /* ── Poll for refresh completion ── */
   const startRefreshPoll = useCallback(() => {
@@ -165,7 +175,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
       if (pollRef.current) clearTimeout(pollRef.current);
       if (refreshPollRef.current) clearInterval(refreshPollRef.current);
     };
-  }, [universe, scanLimit]);
+  }, [universe, scanLimit, category]);
 
   /* ── Group by Ticker → Expiry → Strikes ── */
   const grouped: TickerGroup[] = useMemo(() => {
@@ -225,9 +235,31 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
           {/* Header */}
           <h1 className="text-xl md:text-2xl" style={{ fontWeight: 600, color: T.text, marginBottom: 6 }}>Alpha-Flow Options</h1>
-          <p className="text-xs md:text-[13px]" style={{ color: T.textMuted, lineHeight: 1.6, maxWidth: 560, marginBottom: 20 }}>
-            Scans call options for high-conviction swing trades — ranked by composite quant score.
+          <p className="text-xs md:text-[13px]" style={{ color: T.textMuted, lineHeight: 1.6, maxWidth: 560, marginBottom: 12 }}>
+            {CATEGORY_META[category].desc}
           </p>
+
+          {/* ── Category Tabs ── */}
+          <div style={{ display: "flex", gap: 0, marginBottom: 20, borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}`, width: "fit-content" }}>
+            {(["" , "swing", "leaps", "cheap_calls"] as OptionsCategory[]).map((cat) => {
+              const meta = CATEGORY_META[cat];
+              const isActive = category === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => { setCategory(cat); setExpandedTicker(null); setSelected(null); }}
+                  style={{
+                    fontSize: 12, fontWeight: isActive ? 600 : 400, padding: "8px 18px", cursor: "pointer",
+                    border: "none", borderRight: cat !== "cheap_calls" ? `1px solid ${T.border}` : "none",
+                    background: isActive ? T.goldDim : "transparent",
+                    color: isActive ? T.gold : T.textMuted,
+                    transition: "all 200ms ease-out",
+                    letterSpacing: "0.02em",
+                  }}
+                >{meta.label}</button>
+              );
+            })}
+          </div>
 
           {/* Badges */}
           {data?.meta && (
@@ -262,11 +294,17 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               </select>
             </div>
             <span style={{ width: 1, height: 16, background: T.border }} />
+<<<<<<< Updated upstream
             {/* Filter params - show real values from meta if available */}
             <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim }}>
               <span>Δ ≥ {filterParams?.delta_floor || "0.35"}</span>
               <span>DTE: {filterParams?.dte_range || "90–150d"}</span>
               <span>Prem: {filterParams?.premium_range || "$1–$8"}</span>
+=======
+            <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim, alignItems: "center" }}>
+              <span>Filters:</span>
+              <span style={{ color: T.textSec, fontFamily: "var(--font-mono, monospace)", fontSize: 10 }}>{CATEGORY_META[category].params}</span>
+>>>>>>> Stashed changes
             </div>
             <div style={{ flex: 1 }} />
             <button onClick={() => fetchData(true)} disabled={loading || refreshing}

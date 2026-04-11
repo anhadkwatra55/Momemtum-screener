@@ -64,6 +64,8 @@ from redis_cache import get_cache, RedisCache
 from validators import validate_universe, validate_ohlcv_dataframe
 from engine import run_pipeline_sync, run_pipeline_progressive, get_wave_version, pipeline_status as _engine_status
 from insider_signals import fetch_insider_buys_parallel, fetch_insider_buys_single
+import agents.market_pulse as agent_pulse
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
 
@@ -681,6 +683,8 @@ def _dispatch_webhooks(data: dict) -> None:
 #  FASTAPI APP (v3 — async + lifespan)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+_agent_scheduler = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Modern lifespan handler — replaces deprecated @app.on_event."""
@@ -703,11 +707,23 @@ async def lifespan(app: FastAPI):
     _schedule_next_run()
     print(f"  ⏰ Daily auto-refresh enabled: every day at {_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}")
 
+    # Set up Agent Proactive Scheduler
+    global _agent_scheduler
+    _agent_scheduler = BackgroundScheduler()
+    _agent_scheduler.add_job(agent_pulse.generate_morning_briefing, 'cron', hour=8, minute=30, timezone='America/New_York')
+    _agent_scheduler.add_job(agent_pulse.generate_weekly_newsletter, 'cron', day_of_week='sun', hour=10, minute=0, timezone='America/New_York')
+    _agent_scheduler.start()
+    print("  🤖 Market Pulse Agent activated. Scheduled tasks running.")
+
     yield  # ← App runs here
 
     # ── Shutdown ──
     if _scheduler_timer:
         _scheduler_timer.cancel()
+    
+    if _agent_scheduler:
+        _agent_scheduler.shutdown()
+        
     print("  ⏹ Scheduler stopped.")
 
 
@@ -983,6 +999,7 @@ async def get_alpha_calls_endpoint(
     sort_by: str = "quant_score",
     refresh: bool = False,
     universe: str = "sp500",
+    category: str = "",
     # Accept but ignore old params so frontend doesn't break
     mode: str = "atm_otm",
     min_price: float = 25.0,
@@ -995,7 +1012,12 @@ async def get_alpha_calls_endpoint(
     min_oi: int = 100,
 ):
     """Alpha-Flow Options Screener — reads pre-scanned data from SQLite.
-    When refresh=true, kicks off a background re-scan with the user's limit."""
+    No on-demand scanning. Pipeline populates DB on startup + daily schedule.
+    
+    Args:
+        category: Filter by strategy category — "swing", "leaps", or "cheap_calls".
+                  Empty string or omitted returns all categories.
+    """
     import time as _time
 
     # In server mode: force refresh=False to prevent compute triggers
@@ -1003,7 +1025,8 @@ async def get_alpha_calls_endpoint(
         refresh = False
 
     # Read from DB — instant (<10ms)
-    result = db.load_alpha_calls(universe=universe, sort_by=sort_by, limit=500)
+    cat_filter = category if category in ("swing", "leaps", "cheap_calls") else None
+    result = db.load_alpha_calls(universe=universe, sort_by=sort_by, limit=limit, category=cat_filter)
 
     # If DB has data, return it immediately
     refresh_started = False
@@ -1834,6 +1857,40 @@ async def run_backtest_endpoint(request: Request):
         traceback.print_exc()
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+# ── Agent Endpoints ──
+
+@app.get("/api/agent/morning-brief")
+async def get_morning_brief():
+    """Fetches the morning briefing from the Market Pulse Agent."""
+    try:
+        data = agent_pulse.generate_morning_briefing()
+        return encode_response(data)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.post("/api/newsletter/subscribe")
+async def subscribe_newsletter(request: Request):
+    """Subscribes an email to the weekly newsletter."""
+    try:
+        body = await request.json()
+        email = body.get("email")
+        if not email:
+            return JSONResponse(content={"error": "Email is required"}, status_code=400)
+        # Send the welcome report immediately so they can test the Resend integration
+        result = agent_pulse.generate_weekly_newsletter(recipient_emails=[email])
+        
+        if result["status"] == "error":
+             return JSONResponse(content={"error": result["message"]}, status_code=500)
+             
+        message = "Successfully subscribed! Check your inbox for the first Sunday Quant Report."
+        if result["status"] == "simulated":
+             message = "Simulated subscription successfully. Add RESEND_API_KEY to send real emails."
+
+        return {"status": "success", "message": message}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 
 @app.post("/api/backtest/cancel")
 async def cancel_backtest():
@@ -2543,6 +2600,98 @@ async def stream_debate(job_id: str):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  TRADE CARD API
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/api/ticker/{symbol}/trade-card")
+async def get_trade_card(symbol: str):
+    """
+    Returns everything needed to render a Trade Decision Card.
+    Aggregates: momentum signal + strategy + options plays.
+    """
+    try:
+        symbol = symbol.upper().strip()
+        from momentum_screener import compute_whale_grade, compute_entry_range, compute_hold_period
+        from momentum_strategies import generate_strategy
+        
+        # 1. Get momentum signal
+        signal = db.get_signal_by_ticker(symbol)
+        if not signal:
+            # Fallback: scan if not in DB (simplified)
+            ohlcv = _fetch_ticker_data(symbol, "1y")
+            if ohlcv is not None:
+                signal = screen_universe({symbol: ohlcv}, progress=False)[0]
+                
+        if not signal:
+            return JSONResponse(content={"error": f"No signal data found for {symbol}"}, status_code=404)
+
+        # 2. Generate strategy
+        strategy = generate_strategy(signal)
+        
+        # 3. Whale Grade
+        grade = compute_whale_grade(signal)
+        
+        # 4. Entry range
+        entry_range = compute_entry_range(signal)
+        
+        # 5. Holding period
+        hold_period = compute_hold_period(signal)
+        
+        # 6. Options plays (from screener)
+        options = db.load_alpha_calls_for_ticker(symbol)
+        
+        return encode_response({
+            "ticker": symbol,
+            "sector": signal.get("sector", "Unknown"),
+            "price": signal.get("price", 0),
+            
+            # Header
+            "grade": grade,
+            "summary": signal.get("thesis", ""),
+            
+            # Execution Zone
+            "entry_low": entry_range["low"],
+            "entry_high": entry_range["high"],
+            "stop_loss": signal.get("stop_loss", 0),
+            "target": signal.get("price_target", 0),
+            "risk_reward": signal.get("risk_reward", 0),
+            
+            # Alpha Clock
+            "hold_min": hold_period["min_days"],
+            "hold_max": hold_period["max_days"],
+            "confidence": signal.get("probability", 0),
+            "momentum_phase": signal.get("momentum_phase", "Unknown"),
+            "conviction_tier": signal.get("conviction_tier", "Unknown"),
+            "action_category": signal.get("action_category", "Unknown"),
+            
+            # Strategy
+            "options_strategy": strategy.get("options_strategy", ""),
+            "options_cost": strategy.get("options_cost", ""),
+            "etf_play": strategy.get("action", ""),
+            
+            # Options plays
+            "options_plays": {
+                "swing": options.get("swing", [])[:2],
+                "leaps": options.get("leaps", [])[:2],
+            },
+            
+            # Raw scores
+            "composite": signal.get("composite", 0),
+            "sys_scores": [
+                signal.get("sys1_score", 0),
+                signal.get("sys2_score", 0),
+                signal.get("sys3_score", 0),
+                signal.get("sys4_score", 0)
+            ],
+            "sentiment": signal.get("sentiment", "Unknown"),
+            "regime": signal.get("regime", "Unknown"),
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 # ── Root redirect ──

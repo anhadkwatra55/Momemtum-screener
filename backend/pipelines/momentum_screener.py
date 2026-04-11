@@ -286,6 +286,66 @@ def compute_price_target(
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  TRADE CARD HELPERS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def compute_whale_grade(signal: dict) -> str:
+    """
+    A/B/C grade from composite score + conviction + momentum phase.
+    
+    A = Ultra/High conviction + trending + composite > 1.0
+    B = Moderate conviction + composite > 0.3
+    C = Everything else with a trade signal
+    """
+    tier = signal.get("conviction_tier", "")
+    composite = abs(signal.get("composite", 0))
+    regime = signal.get("regime", "")
+    
+    if tier in ("Ultra Conviction", "High Conviction") and composite >= 1.0 and regime == "Trending":
+        return "A"
+    elif tier in ("High Conviction", "Moderate Conviction") and composite >= 0.3:
+        return "B"
+    else:
+        return "C"
+
+
+def compute_entry_range(signal: dict) -> dict:
+    """
+    Entry zone = price ± 0.5 × daily ATR.
+    This gives a tight range around current price for limit orders.
+    """
+    price = signal.get("price", 0)
+    vol = signal.get("volatility_20d") or 25.0
+    daily_atr = price * (vol / 100) / (252 ** 0.5)
+    
+    return {
+        "low": round(price - 0.5 * daily_atr, 2),
+        "high": round(price + 0.5 * daily_atr, 2),
+    }
+
+
+def compute_hold_period(signal: dict) -> dict:
+    """
+    Holding period based on momentum phase + regime.
+    """
+    phase = signal.get("momentum_phase", "Neutral")
+    regime = signal.get("regime", "Unknown")
+    
+    if phase == "Fresh" and regime == "Trending":
+        return {"min_days": 12, "max_days": 18}
+    elif phase == "Fresh":
+        return {"min_days": 8, "max_days": 14}
+    elif phase == "Exhausting":
+        return {"min_days": 3, "max_days": 5}
+    elif regime == "Mean-Reverting":
+        return {"min_days": 5, "max_days": 10}
+    elif regime == "Choppy":
+        return {"min_days": 3, "max_days": 5}
+    else:
+        return {"min_days": 7, "max_days": 14}
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PROBABILITY CALCULATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
