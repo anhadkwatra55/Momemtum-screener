@@ -65,6 +65,7 @@ from validators import validate_universe, validate_ohlcv_dataframe
 from engine import run_pipeline_sync, run_pipeline_progressive, get_wave_version, pipeline_status as _engine_status
 from insider_signals import fetch_insider_buys_parallel, fetch_insider_buys_single
 import agents.market_pulse as agent_pulse
+import agents.claude_picks as claude_picks
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
@@ -746,7 +747,7 @@ if _SERVER_MODE:
         origin.strip()
         for origin in os.environ.get(
             "ALLOWED_ORIGINS",
-            "https://momentum-screener.vercel.app"
+            "https://headstart-ai.vercel.app"
         ).split(",")
         if origin.strip()
     ]
@@ -1892,6 +1893,44 @@ async def subscribe_newsletter(request: Request):
 
 
 
+# ── Claude Picks Routes ──
+
+@app.post("/api/claude/generate-picks")
+async def api_generate_claude_picks(request: Request):
+    """Send HEADSTART signals to Claude → get structured BUY/SELL/AVOID picks."""
+    try:
+        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        result = claude_picks.generate_picks(
+            signal_limit=body.get("signal_limit", 10),
+            gex_regime=body.get("gex_regime"),
+            spy_vrp=body.get("spy_vrp"),
+            notes=body.get("notes"),
+        )
+        return encode_response(result)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/claude/picks")
+async def api_get_claude_picks(ticker: Optional[str] = Query(None), limit: int = Query(20)):
+    """Retrieve recent Claude picks, optionally filtered by ticker."""
+    try:
+        picks = claude_picks.get_pick_history(ticker=ticker, limit=limit)
+        return encode_response({"picks": picks, "count": len(picks)})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/claude/stats")
+async def api_get_claude_stats():
+    """Aggregate stats on Claude pick performance."""
+    try:
+        stats = claude_picks.get_pick_stats()
+        return encode_response(stats)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 @app.post("/api/backtest/cancel")
 async def cancel_backtest():
     _CANCEL_EVENT.set()
@@ -2167,6 +2206,33 @@ async def add_ticker(request: Request):
                 db.upsert_ticker(ticker, sector, name)
 
         return {"added": fetched, "count": len(fetched)}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Historical Ledger ──
+
+@app.get("/api/ledger/performance")
+async def get_historical_ledger():
+    """Retrieve the historical track record of #1 picks."""
+    try:
+        ledger = db.get_historical_ledger()
+        
+        # Calculate summary metrics
+        total = len(ledger)
+        wins = sum(1 for p in ledger if p["hit"])
+        win_rate = round((wins / total * 100), 1) if total > 0 else 0.0
+        avg_return = round(sum(p["return_pct"] for p in ledger) / total, 2) if total > 0 else 0.0
+        
+        stats = {
+            "total_picks": total,
+            "win_rate": win_rate,
+            "avg_return": avg_return,
+            "wins": wins,
+            "losses": total - wins
+        }
+        
+        return encode_response({"stats": stats, "ledger": ledger})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 

@@ -242,7 +242,7 @@ services:
       - MALLOC_TRIM_THRESHOLD_=100000
       - MAC_MINI_SERVER_MODE=true
       - API_KEY=${API_KEY:-}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://momentum-screener.vercel.app}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://headstart-ai.vercel.app}
       - REDIS_URL=redis://redis:6379/0
       - INTERNAL_TRIGGER_KEY=${INTERNAL_TRIGGER_KEY:-momentum-internal-2024}
     deploy:
@@ -1014,7 +1014,7 @@ CLOUDFLARE_TUNNEL_TOKEN=
 API_KEY=
 
 # Allowed CORS Origins (comma-separated)
-ALLOWED_ORIGINS=https://momentum-screener.vercel.app
+ALLOWED_ORIGINS=https://headstart-ai.vercel.app
 
 # Internal trigger key (dashboard → API, Docker-network only)
 INTERNAL_TRIGGER_KEY=momentum-internal-2024

@@ -53,8 +53,8 @@ A full-stack quantitative momentum research platform that screens **1,500+ US eq
 ### Step 1: Clone & Navigate
 
 ```bash
-git clone https://github.com/anhadkwatra55/Momemtum-screener.git
-cd Momemtum-screener
+git clone https://github.com/anhadkwatra55/Headstart-AI.git
+cd Headstart-AI
 ```
 
 ### Step 2: Start the Backend (FastAPI — Port 8060)

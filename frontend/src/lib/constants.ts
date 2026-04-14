@@ -78,6 +78,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Portfolio X-Ray", icon: "briefcase.fill", pageId: "portfolio-intel", section: "PORTFOLIO" },
   { label: "Income Engine", icon: "dollarsign.circle.fill", pageId: "income-engine", section: "PORTFOLIO" },
   // STRATEGY — "Can I prove this works?"
+  { label: "Historical Ledger", icon: "list.bullet.clipboard.fill", pageId: "ledger", section: "STRATEGY" },
   { label: "Strategy Lab", icon: "flask.fill", pageId: "strategy", section: "STRATEGY" },
   { label: "Alpha Calls", icon: "chart.line.uptrend.xyaxis", pageId: "alpha-calls", section: "STRATEGY" },
   { label: "Signals & Evidence", icon: "radar.fill", pageId: "signals", section: "STRATEGY" },

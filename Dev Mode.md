@@ -93,7 +93,7 @@ Copy the output — this is your API_KEY. You'll set it in both your server AND 
 ```bash
 cd ~/Desktop/momentum-screener-server/backend
 source venv/bin/activate
-MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 ```
 You should see: `🔒 [SERVER MODE] Security active: CORS=..., Rate=60/min, API-Key=SET`
 
@@ -116,7 +116,7 @@ Copy the `https://______.trycloudflare.com` URL it prints.
 Note: URL stays constant as long as this terminal is running. If you restart cloudflared, you get a new URL and must update Vercel.
 
 ### Step 6: Connect Vercel
-In Vercel Dashboard → momemtum-screener → Settings → Environment Variables:
+In Vercel Dashboard → headstart-ai → Settings → Environment Variables:
 ```
 NEXT_PUBLIC_API_URL = <paste the trycloudflare.com URL from step 5>
 NEXT_PUBLIC_API_KEY = 911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c
@@ -137,7 +137,7 @@ Ctrl+C in the server terminal (or: kill $(lsof -ti :8060))
 # Restart prod backend
 cd ~/Desktop/momentum-screener-server/backend
 source venv/bin/activate
-MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 
 # Restart Cloudflare tunnel (new terminal tab) — USE THE RESILIENT SCRIPT:
 bash ~/Desktop/momentum-screener-dev/scripts/tunnel.sh
@@ -165,7 +165,7 @@ cd ~/Desktop/momentum-screener-server
 git pull origin main
 cd backend
 source venv/bin/activate
-MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 ```
 
 Cloudflare tunnel stays running — no need to restart it or update Vercel unless you restarted cloudflared.
@@ -209,7 +209,7 @@ Your server is already up. If you need to restart it:
 
 cd ~/Desktop/momentum-screener-server/backend
 source venv/bin/activate
-MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://momemtum-screener.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 
 
 Terminal 2 — Cloudflare Tunnel (this is what you need NOW)
