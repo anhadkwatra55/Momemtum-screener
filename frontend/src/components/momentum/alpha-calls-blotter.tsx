@@ -294,17 +294,10 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               </select>
             </div>
             <span style={{ width: 1, height: 16, background: T.border }} />
-<<<<<<< Updated upstream
-            {/* Filter params - show real values from meta if available */}
-            <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim }}>
-              <span>Δ ≥ {filterParams?.delta_floor || "0.35"}</span>
-              <span>DTE: {filterParams?.dte_range || "90–150d"}</span>
-              <span>Prem: {filterParams?.premium_range || "$1–$8"}</span>
-=======
+            {/* Filter params */}
             <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim, alignItems: "center" }}>
               <span>Filters:</span>
               <span style={{ color: T.textSec, fontFamily: "var(--font-mono, monospace)", fontSize: 10 }}>{CATEGORY_META[category].params}</span>
->>>>>>> Stashed changes
             </div>
             <div style={{ flex: 1 }} />
             <button onClick={() => fetchData(true)} disabled={loading || refreshing}
