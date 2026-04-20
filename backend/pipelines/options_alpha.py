@@ -273,6 +273,16 @@ def _scan_one_ticker(symbol: str) -> list[dict]:
                     # Breakeven %
                     be_pct = (((opt["strike"] + mid) / price) - 1) * 100
 
+                    volume_val = int(opt.get("volume", 0) or 0)
+
+                    # ── STRICT INSTITUTIONAL FILTER ──
+                    # 1. Volume must be significantly higher than OI OR massive absolute size
+                    # 2. Must have a minimum volume baseline
+                    if volume_val < 200:
+                        continue
+                    if volume_val < (oi * 1.5) and volume_val < 500:
+                        continue
+
                     # COMPOSITE QUANT SCORE (0-100)
                     quant_score = (pop * 40) + (max(0, edge) * 100 * 4) + (min(10, oi / 1000) * 2)
 

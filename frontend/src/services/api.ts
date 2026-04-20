@@ -809,7 +809,11 @@ export async function fetchSummary(): Promise<{ summary: KPISummary }> {
  * Fetches only the signals table (~1MB). Tier 2 — fast table render.
  */
 export async function fetchSignals(): Promise<{ signals: Signal[] }> {
-  return apiFetch<{ signals: Signal[] }>("/api/signals", { cache: true, cacheTTLSeconds: 60 });
+  const res = await apiFetch<any>("/api/signals", { cache: true, cacheTTLSeconds: 60 });
+  if (Array.isArray(res)) {
+    return { signals: res };
+  }
+  return { signals: res.signals || [] };
 }
 
 /**
