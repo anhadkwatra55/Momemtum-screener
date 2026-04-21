@@ -779,13 +779,17 @@ if _SERVER_MODE:
     async def api_key_middleware(request: Request, call_next):
         """Enforce API key on all /api/* routes (except health and OPTIONS preflight).
         Also handles CORS preflight for cloudflare tunnel (127.0.0.1) requests
-        that may not carry the correct Origin header."""
+        that may not carry the correct Origin header.
+        Requests from localhost (cloudflared tunnel) bypass API key checks
+        since they can only originate from the trusted tunnel process."""
+        client_host = request.client.host if request.client else ""
+        is_tunnel = client_host in ("127.0.0.1", "::1")
+
         if request.method == "OPTIONS":
             # Cloudflared connects from 127.0.0.1 — its HTTP/2 probing may
             # send OPTIONS without a valid Origin, causing CORSMiddleware to
             # reject with 400.  Short-circuit with proper CORS headers here.
-            client_host = request.client.host if request.client else ""
-            if client_host in ("127.0.0.1", "::1"):
+            if is_tunnel:
                 origin = request.headers.get("origin", _ALLOWED_ORIGINS[0])
                 return Response(
                     status_code=200,
@@ -799,7 +803,8 @@ if _SERVER_MODE:
                     },
                 )
             return await call_next(request)
-        if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        # API key enforcement — skip for tunnel (cloudflared) requests
+        if not is_tunnel and request.url.path.startswith("/api/") and request.url.path != "/api/health":
             if _API_KEY:
                 key = request.headers.get("x-api-key", "")
                 if key != _API_KEY:
