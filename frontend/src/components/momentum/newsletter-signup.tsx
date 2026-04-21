@@ -6,6 +6,7 @@ import { SFIcon } from "@/components/ui/sf-icon";
 import { AppleButton } from "@/components/ui/apple-button";
 import { Card } from "@/components/ui/card";
 import { SPRING_TRANSITION_PROPS } from "@/lib/constants";
+import { getAuthHeaders } from "@/services/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
 
@@ -22,7 +23,7 @@ export function NewsletterSignup() {
     try {
       const res = await fetch(`${API_URL}/api/newsletter/subscribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ email }),
       });
       

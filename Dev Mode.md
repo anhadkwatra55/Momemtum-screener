@@ -97,6 +97,11 @@ MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24
 ```
 You should see: `🔒 [SERVER MODE] Security active: CORS=..., Rate=60/min, API-Key=SET`
 
+
+### KILL the port first and then restart fresh - 
+```kill -9 $(lsof -ti :8060) 2>/dev/null; cd ~/Desktop/momentum-screener-server/backend && source venv/bin/activate && MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+```
+
 ### Step 5: Start Cloudflare Tunnel (new terminal tab)
 
 **Option A — Resilient tunnel script (recommended):**

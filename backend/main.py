@@ -777,8 +777,27 @@ if _SERVER_MODE:
 
     @app.middleware("http")
     async def api_key_middleware(request: Request, call_next):
-        """Enforce API key on all /api/* routes (except health and OPTIONS preflight)."""
+        """Enforce API key on all /api/* routes (except health and OPTIONS preflight).
+        Also handles CORS preflight for cloudflare tunnel (127.0.0.1) requests
+        that may not carry the correct Origin header."""
         if request.method == "OPTIONS":
+            # Cloudflared connects from 127.0.0.1 — its HTTP/2 probing may
+            # send OPTIONS without a valid Origin, causing CORSMiddleware to
+            # reject with 400.  Short-circuit with proper CORS headers here.
+            client_host = request.client.host if request.client else ""
+            if client_host in ("127.0.0.1", "::1"):
+                origin = request.headers.get("origin", _ALLOWED_ORIGINS[0])
+                return Response(
+                    status_code=200,
+                    content="OK",
+                    headers={
+                        "Access-Control-Allow-Origin": origin,
+                        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type, X-API-Key, If-None-Match",
+                        "Access-Control-Allow-Credentials": "true",
+                        "Access-Control-Max-Age": "600",
+                    },
+                )
             return await call_next(request)
         if request.url.path.startswith("/api/") and request.url.path != "/api/health":
             if _API_KEY:
@@ -968,11 +987,15 @@ async def get_insider_buys(limit: int = 20, lookback_days: int = 180):
         scan_tickers = list(cfg.ALL_TICKERS)[:200]
 
     try:
-        results = fetch_insider_buys_parallel(
-            scan_tickers,
-            lookback_days=lookback_days,
-            max_workers=3,
-            progress=True,
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            None,
+            lambda: fetch_insider_buys_parallel(
+                scan_tickers,
+                lookback_days=lookback_days,
+                max_workers=3,
+                progress=True,
+            )
         )
         _CACHED_INSIDER_BUYS = results
         _INSIDER_CACHE_TIME = _time.time()

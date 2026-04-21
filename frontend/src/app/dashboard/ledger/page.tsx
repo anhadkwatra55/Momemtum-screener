@@ -16,6 +16,7 @@ import {
 import { cn, getTextColorClass, getBackgroundColorClass, getBorderColorClass } from "@/lib/utils";
 import { AppleCard } from "@/components/ui/apple-card";
 import SFIcon from "@/components/ui/SFIcon";
+import { getAuthHeaders } from "@/services/api";
 
 const SPRING_TRANSITION_PROPS = { type: "spring", ...SPRING_PHYSICS_DEFAULT };
 
@@ -128,7 +129,7 @@ export default function HistoricalLedgerPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(process.env.NEXT_PUBLIC_API_URL + "/api/ledger/performance")
+    fetch(process.env.NEXT_PUBLIC_API_URL + "/api/ledger/performance", { headers: getAuthHeaders() })
       .then(res => res.json())
       .then(d => {
         setData(d);

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { SFIcon } from "@/components/ui/sf-icon";
 import { SPRING_TRANSITION_PROPS } from "@/lib/constants";
+import { getAuthHeaders } from "@/services/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
 
@@ -211,7 +212,9 @@ export function AgentBriefing() {
   useEffect(() => {
     async function fetchBriefing() {
       try {
-        const res = await fetch(`${API_URL}/api/agent/morning-brief`);
+        const res = await fetch(`${API_URL}/api/agent/morning-brief`, {
+          headers: getAuthHeaders(),
+        });
         if (res.ok) {
           const data = await res.json();
           setBriefing(data);

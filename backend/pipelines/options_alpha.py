@@ -1,494 +1,364 @@
 """
-options_alpha.py — Alpha-Flow Options Intelligence Pipeline (v2 — Optimized)
+options_alpha.py — Alpha-Flow Options Intelligence Pipeline (v3 — 3D Engine)
 ==============================================================================
-High-performance options scanner with:
-  1. Per-ticker HV caching (eliminates N+1 yfinance bug)
-  2. Vectorized Pandas gates (no iterrows for filtering)
-  3. Connection pooling + anti-ban jitter
-  4. Module-level ticker list caching (24h TTL)
-  5. Retry with exponential backoff on yfinance calls
-
-The quant math and 7 institutional gate logic are UNCHANGED.
+Incorporates GEX, VRP, Vectorized Greeks, Skew-Adjusted Delta, and 9 Strategy Tabs.
 """
-
 from __future__ import annotations
-
 import logging
 import math
 import random
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-
 import numpy as np
+import pandas as pd
+from scipy.stats import norm
+import yfinance as yf
 
 logger = logging.getLogger("options_alpha")
-
-try:
-    import yfinance as yf
-    HAS_YF = True
-except ImportError:
-    HAS_YF = False
-
-try:
-    from scipy.stats import norm
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
-
-try:
-    import pandas as pd
-    HAS_PD = True
-except ImportError:
-    HAS_PD = False
-
-try:
-    import requests as _requests
-    HAS_REQ = True
-except ImportError:
-    HAS_REQ = False
-
-
-# ═══════════════════════════════════════════════════════════════
-# 0. NOTE: yfinance handles its own sessions (requires curl_cffi).
-#    We do NOT pass a custom requests.Session — it would break.
-#    Anti-ban jitter + retry logic is applied manually below.
-# ═══════════════════════════════════════════════════════════════
-
-
-# ═══════════════════════════════════════════════════════════════
-# 1. CORE QUANT PROTOCOL (THE MATH) — Unchanged
-# ═══════════════════════════════════════════════════════════════
-
-class FlowProtocol:
-    @staticmethod
-    def calculate_greeks(S, K, T, r, sigma):
-        """Calculates Delta and Probability of Profit (POP)"""
-        if T <= 0 or sigma <= 0:
-            return 0, 0
-        try:
-            d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
-            d2 = d1 - sigma * np.sqrt(T)
-            delta = float(norm.cdf(d1))
-            pop = float(norm.cdf(d2))
-            if math.isnan(delta) or math.isinf(delta):
-                delta = 0
-            if math.isnan(pop) or math.isinf(pop):
-                pop = 0
-            return round(delta, 2), round(pop, 2)
-        except Exception:
-            return 0, 0
-
-
-# ═══════════════════════════════════════════════════════════════
-# 2. TICKER UNIVERSE — Direct from momentum_config (DB-first, no Wikipedia)
-# ═══════════════════════════════════════════════════════════════
 
 try:
     import momentum_config as cfg
 except ImportError:
     from pipelines import momentum_config as cfg
 
+CONTRACT_SIZE = 100
+FC = {
+    'BULLISH_VOL_OI_RATIO': 2.5, 'BULLISH_MIN_VOL': 500, 'BULLISH_MAX_DTE': 45, 'BULLISH_VRP_PCTL': 0.75,
+    'BEARISH_VOL_OI_RATIO': 2.5, 'BEARISH_MIN_VOL': 500, 'BEARISH_MAX_DTE': 45, 'BEARISH_VRP_PCTL': 0.75,
+    'CONVICTION_CALL_MIN_PREM_ABS': 25000, 'CONVICTION_CALL_MIN_DELTA': 0.30, 'CONVICTION_CALL_ZG_PROX': 0.05,
+    'CONVICTION_PUT_MIN_PREM_ABS': 25000,
+    'LEAPS_MIN_DTE': 365, 'LEAPS_FALLBACK_DTE': 180, 'LEAPS_MIN_OI': 50, 'LEAPS_MONEYNESS_LOW': 0.80, 'LEAPS_MONEYNESS_HIGH': 1.20,
+    'PUT_SELL_DELTA_LOW': -0.30, 'PUT_SELL_DELTA_HIGH': -0.15, 'PUT_SELL_MIN_DTE': 15, 'PUT_SELL_MAX_DTE': 60, 'PUT_SELL_MIN_VOL': 50,
+    'CHEAP_MAX_PRICE': 1.00, 'CHEAP_MIN_PRICE': 0.01, 'CHEAP_MAX_DTE': 14, 'CHEAP_MIN_VOL': 50, 'CHEAP_WALL_PROX': 0.015,
+}
 
-def get_sp500() -> list[str]:
-    """Return S&P 500 tickers from the hardcoded UNIVERSE config.
-    Instant — no network calls."""
-    return cfg.STOCK_TICKERS  # ~1500 tickers from S&P 1500
+# 1. CORE MATH
+def compute_vectorized_greeks(df, r=0.043):
+    S = df['spot'].values.astype(np.float64)
+    K = df['strike'].values.astype(np.float64)
+    T = np.maximum(df['T'].values.astype(np.float64), 1e-8)
+    sigma = np.maximum(df['impliedVolatility'].values.astype(np.float64), 1e-8)
+    is_call = (df['option_type'] == 'call').values
+    sqT = np.sqrt(T)
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * sqT)
+    d2 = d1 - sigma * sqT
+    Nd1 = norm.cdf(d1)
+    Nd2 = norm.cdf(d2)
+    nd1 = norm.pdf(d1)
+    eRT = np.exp(-r * T)
+    delta = np.where(is_call, Nd1, Nd1 - 1.0)
+    gamma = nd1 / (S * sigma * sqT)
+    vega = S * nd1 * sqT / 100.0
+    theta = np.where(
+        is_call,
+        (-(S * nd1 * sigma) / (2.0 * sqT) - r * K * eRT * Nd2) / 365.0,
+        (-(S * nd1 * sigma) / (2.0 * sqT) + r * K * eRT * norm.cdf(-d2)) / 365.0,
+    )
+    dollar_gamma = gamma * S**2 / 100.0
+    out = df.copy()
+    out['delta'] = delta
+    out['gamma'] = gamma
+    out['theta'] = theta
+    out['vega'] = vega
+    out['dollar_gamma'] = dollar_gamma
+    return out
 
+def compute_skew_adjusted_delta(df):
+    df = df.sort_values(['ticker', 'expiry', 'option_type', 'strike']).reset_index(drop=True)
+    dIV_dK = np.zeros(len(df))
+    for _, idx in df.groupby(['ticker', 'expiry', 'option_type']).groups.items():
+        idx_arr = np.array(idx)
+        if len(idx_arr) < 3: continue
+        sub = df.loc[idx_arr]
+        dIV_dK[idx_arr] = np.gradient(sub['impliedVolatility'].values, sub['strike'].values)
+    df['dIV_dK'] = dIV_dK
+    df['dIV_dSpot'] = -df['dIV_dK']
+    df['skew_adj_delta'] = df['delta'] + (df['vega'] * 100.0) * df['dIV_dSpot']
+    df['total_premium'] = df['mid_price'] * CONTRACT_SIZE
+    return df
 
-def get_nasdaq100() -> list[str]:
-    """Return NASDAQ-heavy tickers from the Technology sector in UNIVERSE.
-    Instant — no network calls."""
-    return cfg.UNIVERSE.get("Technology", [])
+def compute_gex_profile(df):
+    df = df.copy()
+    df['contract_gex'] = np.where(
+        df['option_type'] == 'call',
+        df['openInterest'] * df['dollar_gamma'] * CONTRACT_SIZE,
+       -df['openInterest'] * df['dollar_gamma'] * CONTRACT_SIZE,
+    )
+    return df
 
+def gex_by_strike(df, ticker):
+    t = df[df['ticker'] == ticker]
+    cg = t[t['option_type'] == 'call'].groupby('strike')['contract_gex'].sum()
+    pg = t[t['option_type'] == 'put'].groupby('strike')['contract_gex'].sum()
+    g = pd.DataFrame({'call_gex': cg, 'put_gex': pg}).fillna(0)
+    g['net_gex'] = g['call_gex'] + g['put_gex']
+    g['cum_gex'] = g['net_gex'].cumsum()
+    return g.sort_index().reset_index()
 
+def find_zero_gamma(gex_df):
+    cum = gex_df['cum_gex'].values
+    strikes = gex_df['strike'].values
+    flips = np.where(np.diff(np.sign(cum)))[0]
+    if len(flips) == 0: return strikes[np.argmin(np.abs(cum))]
+    i = flips[0]
+    s1, s2 = strikes[i], strikes[i+1]
+    g1, g2 = cum[i], cum[i+1]
+    return s1 + (s2 - s1) * (-g1) / (g2 - g1) if g2 != g1 else (s1+s2)/2
 
-# ═══════════════════════════════════════════════════════════════
-# 3. SINGLE-TICKER SCAN — Optimized with:
-#    - Per-ticker HV caching (closure, computed ONCE)
-#    - Vectorized Pandas gates (no iterrows for filtering)
-#    - Anti-ban jitter + retry with backoff
-#    - Connection pooling via shared session
-# ═══════════════════════════════════════════════════════════════
+def compute_discrete_iv2(df, ticker, r=0.043):
+    t = df[df['ticker'] == ticker]
+    spot = t['spot'].iloc[0]
+    exp_dte = t.groupby('expiry')['dte'].first()
+    best_exp = exp_dte.iloc[(exp_dte - 30).abs().argsort()[:1]].index[0]
+    edf = t[t['expiry'] == best_exp]
+    T = edf['T'].iloc[0]
+    dte = int(edf['dte'].iloc[0])
+    F = spot * np.exp(r * T)
 
-def _yf_retry(fn, retries=2, base_delay=1.0):
-    """Retry a yfinance call with exponential backoff."""
-    for attempt in range(retries + 1):
-        try:
-            return fn()
-        except Exception as e:
-            if attempt == retries:
-                raise
-            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
-            logger.debug(f"yfinance retry {attempt + 1}/{retries}: {e}, sleeping {delay:.1f}s")
-            _time.sleep(delay)
+    calls = edf[edf['option_type'] == 'call'].sort_values('strike')
+    puts  = edf[edf['option_type'] == 'put'].sort_values('strike')
+    all_k = np.sort(edf['strike'].unique())
+    if len(all_k) == 0: return 0, 0, 0, dte, best_exp
+    K0 = all_k[all_k <= F][-1] if (all_k <= F).any() else all_k[0]
 
+    rows = []
+    for _, r_ in puts[puts['strike'] < K0].iterrows(): rows.append((r_['strike'], r_['mid_price'], 'bad'))
+    k0p = puts[puts['strike'] == K0]
+    k0c = calls[calls['strike'] == K0]
+    if not k0p.empty and not k0c.empty: rows.append((K0, (k0p['mid_price'].iloc[0]+k0c['mid_price'].iloc[0])/2, 'both'))
+    elif not k0p.empty: rows.append((K0, k0p['mid_price'].iloc[0], 'bad'))
+    elif not k0c.empty: rows.append((K0, k0c['mid_price'].iloc[0], 'good'))
+    for _, r_ in calls[calls['strike'] > K0].iterrows(): rows.append((r_['strike'], r_['mid_price'], 'good'))
 
-def _scan_one_ticker(symbol: str) -> list[dict]:
-    """
-    Scan a single ticker with all optimizations applied.
+    if len(rows) < 2: return 0, 0, 0, dte, best_exp
+    strip = pd.DataFrame(rows, columns=['K', 'Q', 'comp']).sort_values('K').reset_index(drop=True)
+    Kv = strip['K'].values
+    dK = np.empty(len(Kv))
+    dK[0] = Kv[1] - Kv[0]
+    dK[-1] = Kv[-1] - Kv[-2]
+    dK[1:-1] = (Kv[2:] - Kv[:-2]) / 2.0
+    contrib = (dK / Kv**2) * np.exp(r * T) * strip['Q'].values
+    strip['c'] = contrib
 
-    Key changes from v1:
-      1. HV is computed ONCE per ticker via closure (not per-contract)
-      2. Vectorized Pandas filtering for gates 3-6
-      3. Anti-ban jitter before yfinance calls
-      4. Shared requests.Session for connection pooling
-    """
-    if not HAS_YF:
-        return []
+    total_iv2 = (2.0/T) * contrib.sum() - (1.0/T)*((F/K0)-1)**2
+    bad_iv2   = (2.0/T) * strip.loc[strip['comp'].isin(['bad','both']), 'c'].sum()
+    good_iv2  = (2.0/T) * strip.loc[strip['comp'].isin(['good','both']), 'c'].sum()
+    return total_iv2, bad_iv2, good_iv2, dte, best_exp
 
-    results = []
-
-    # Anti-ban jitter: small random delay to spread requests
-    _time.sleep(random.uniform(0.05, 0.3))
-
+# 2. FETCHING
+def fetch_single_ticker(sym, min_dte=1, max_dte=730):
     try:
-        t = yf.Ticker(symbol.replace(".", "-"))
+        tkr = yf.Ticker(sym)
+        hist = tkr.history(period='21d')
+        if hist.empty: return sym, None, None, 0, "no price data"
+        spot = float(hist['Close'].iloc[-1])
+        if spot < 1.0: return sym, None, None, 0, "penny stock"
+        
+        lr = np.log(hist['Close'] / hist['Close'].shift(1)).dropna().values
+        rv2 = np.sum(lr**2) * (252.0 / 21.0)
 
-        # Use retry wrapper for the initial price fetch
-        price = _yf_retry(lambda: t.fast_info["lastPrice"])
-
-        # ── Gate 1: Price Floor ($25) ──
-        if price < 25:
-            return []
-
-        expirations = _yf_retry(lambda: t.options)
-        if not expirations:
-            return []
-
-        today = datetime.now()
-
-        # ── Gate 2: DTE 90-150 days (pre-filter expirations) ──
-        valid_expiries = [
-            e for e in expirations
-            if 90 <= (datetime.strptime(e, "%Y-%m-%d") - today).days <= 150
-        ]
-        if not valid_expiries:
-            return []
-
-        # ── Pre-compute HV ONCE for this ticker (fixes N+1 bug) ──
-        _hv: float | None = None
-
-        def _get_edge(iv: float) -> float:
-            nonlocal _hv
-            if _hv is None:
-                try:
-                    hist = t.history(period="30d")["Close"]
-                    if len(hist) >= 20:
-                        _hv = float(np.log(hist / hist.shift(1)).dropna().std() * np.sqrt(252))
-                    else:
-                        _hv = 0.0
-                except Exception:
-                    _hv = 0.0
-                if math.isnan(_hv) or math.isinf(_hv):
-                    _hv = 0.0
-            if _hv == 0.0:
-                return 0
-            return round(_hv - iv, 3)
-
-        for exp in valid_expiries:
-            try:
-                chain = _yf_retry(lambda: t.option_chain(exp).calls)
-                if chain is None or chain.empty:
-                    continue
-
-                dte_days = (datetime.strptime(exp, "%Y-%m-%d") - today).days
-                dte_years = dte_days / 365.0
-
-                # ══════════════════════════════════════════════════
-                # VECTORIZED GATES (3-6) — filter DataFrame in bulk
-                # ══════════════════════════════════════════════════
-
-                # Ensure numeric columns, fill NaN with 0
-                chain = chain.copy()
-                for col in ["bid", "ask", "lastPrice", "openInterest", "impliedVolatility", "volume"]:
-                    if col in chain.columns:
-                        chain[col] = pd.to_numeric(chain[col], errors="coerce").fillna(0)
-
-                # Compute mid price (bid/ask → mid, fallback to lastPrice)
-                has_quotes = (chain["bid"] > 0) & (chain["ask"] > 0)
-                chain["mid"] = 0.0
-                chain.loc[has_quotes, "mid"] = (chain.loc[has_quotes, "bid"] + chain.loc[has_quotes, "ask"]) / 2
-                chain.loc[~has_quotes, "mid"] = chain.loc[~has_quotes, "lastPrice"]
-                chain["after_hours"] = ~has_quotes
-
-                # Spread %
-                chain["spread_pct"] = 0.0
-                chain.loc[has_quotes, "spread_pct"] = (
-                    (chain.loc[has_quotes, "ask"] - chain.loc[has_quotes, "bid"]) / chain.loc[has_quotes, "mid"] * 100
-                )
-
-                # Must have SOME price
-                has_price = chain["mid"] > 0
-
-                # Gate 3: Premium $1-$8
-                gate3 = (chain["mid"] >= 1.0) & (chain["mid"] <= 8.0)
-
-                # Gate 4: ATM/OTM only (strike >= stock price)
-                gate4 = chain["strike"] >= price
-
-                # Gate 5: Spread <= 10% (skip for after-hours)
-                gate5 = chain["after_hours"] | (chain["spread_pct"] <= 10)
-
-                # Gate 6: OI > 100 (skip for after-hours)
-                oi_col = chain["openInterest"].astype(int)
-                gate6 = chain["after_hours"] | (oi_col > 100)
-
-                # Combined vectorized mask
-                mask = has_price & gate3 & gate4 & gate5 & gate6
-                survivors = chain[mask]
-
-                if survivors.empty:
-                    continue
-
-                # ══════════════════════════════════════════════════
-                # ITERATE only survivors — compute Greeks + score
-                # ══════════════════════════════════════════════════
-
-                for _, opt in survivors.iterrows():
-                    bid = float(opt["bid"])
-                    ask = float(opt["ask"])
-                    mid = float(opt["mid"])
-                    after_hours = bool(opt["after_hours"])
-                    oi = int(opt["openInterest"])
-                    iv = float(opt["impliedVolatility"])
-                    spread_pct_val = float(opt["spread_pct"])
-
-                    # Calculate Quant Metrics
-                    if after_hours or iv < 0.10:
-                        ratio = price / float(opt["strike"])
-                        delta = round(max(0, min(1.0, 0.5 + (ratio - 1.0) * 2.5)), 2)
-                        pop = round(max(0, min(1.0, delta * 0.85)), 2)
-                        edge = 0
-                    else:
-                        delta, pop = FlowProtocol.calculate_greeks(
-                            price, opt["strike"], dte_years, 0.04, iv
-                        )
-                        edge = _get_edge(iv)  # Uses cached HV — no extra API call
-
-                    # ── Gate 7: Delta >= 0.35 ──
-                    if delta < 0.35:
-                        continue
-
-                    # Breakeven %
-                    be_pct = (((opt["strike"] + mid) / price) - 1) * 100
-
-                    volume_val = int(opt.get("volume", 0) or 0)
-
-                    # ── STRICT INSTITUTIONAL FILTER ──
-                    # 1. Volume must be significantly higher than OI OR massive absolute size
-                    # 2. Must have a minimum volume baseline
-                    if volume_val < 200:
-                        continue
-                    if volume_val < (oi * 1.5) and volume_val < 500:
-                        continue
-
-                    # COMPOSITE QUANT SCORE (0-100)
-                    quant_score = (pop * 40) + (max(0, edge) * 100 * 4) + (min(10, oi / 1000) * 2)
-
-                    results.append({
-                        "ticker": symbol,
-                        "stock_price": round(price, 2),
-                        "strike": float(opt["strike"]),
-                        "expiration": exp,
-                        "dte": dte_days,
-                        "bid": round(bid, 2),
-                        "ask": round(ask, 2),
-                        "mid_price": round(mid, 2),
-                        "delta": delta,
-                        "pop": pop,
-                        "vol_edge": edge,
-                        "breakeven_pct": round(be_pct, 2),
-                        "open_interest": oi,
-                        "volume": int(opt.get("volume", 0) or 0),
-                        "implied_volatility": round(iv * 100, 1),
-                        "spread_pct": round(spread_pct_val, 1),
-                        "quant_score": round(quant_score, 2),
-                        "moneyness": "ATM" if abs(opt["strike"] - price) / price < 0.03 else "OTM",
-                    })
-
-            except Exception as e:
-                logger.debug(f"Chain error {symbol}/{exp}: {e}")
-                continue
-
+        expiries = tkr.options
+        today = datetime.now().date()
+        rows = []
+        for exp_str in expiries:
+            exp_date = datetime.strptime(exp_str, '%Y-%m-%d').date()
+            dte = (exp_date - today).days
+            if dte < min_dte or dte > max_dte: continue
+            try: chain = tkr.option_chain(exp_str)
+            except: continue
+            for opt_type, frame in [('call', chain.calls), ('put', chain.puts)]:
+                if frame.empty: continue
+                tmp = frame.copy()
+                tmp['ticker'] = sym
+                tmp['spot'] = spot
+                tmp['expiry'] = exp_str
+                tmp['dte'] = dte
+                tmp['T'] = max(dte / 365.0, 1e-5)
+                tmp['option_type'] = opt_type
+                tmp['mid_price'] = (tmp['bid'] + tmp['ask']) / 2.0
+                rows.append(tmp)
+        if not rows: return sym, spot, None, rv2, "no valid expirations"
+        df = pd.concat(rows, ignore_index=True)
+        return sym, spot, df, rv2, None
     except Exception as e:
-        logger.debug(f"Ticker scan failed {symbol}: {e}")
+        return sym, None, None, 0, str(e)[:80]
 
-    return results
-
-
-# ═══════════════════════════════════════════════════════════════
-# 4. PUBLIC API — Parallel scan with optimized orchestration
-# ═══════════════════════════════════════════════════════════════
-
-def get_alpha_calls(
-    limit: int = 75,
-    max_workers: int = 4,
-    sort_by: str = "quant_score",
-    universe: str = "sp500",
-    **kwargs,
-) -> dict:
-    """
-    Run the Alpha-Flow scan across S&P 500 and/or NASDAQ 100.
-
-    v2 changes:
-      - 4 workers (up from 2)
-      - Connection pooling via shared session
-      - Ticker list cached 24h
-      - HV computed once per ticker
-      - Vectorized gate filtering
-    """
-    # ── Build ticker universe (DB-first, config fallback) ──
-    # Priority: validated tickers from momentum pipeline DB (sorted by price DESC = large caps first)
-    # This eliminates delisted tickers automatically since only active tickers are in the signals table
+def get_alpha_calls(limit=75, max_workers=4, sort_by="quant_score", universe="sp500", **kwargs):
     try:
-        try:
-            import db as _db
-        except ImportError:
-            from pipelines import db as _db
+        import db as _db
+    except ImportError:
+        from pipelines import db as _db
 
-        validated = _db.get_validated_tickers(min_price=25.0)
-        if validated and len(validated) >= 20:
-            # DB has validated tickers — use them (already sorted by price DESC)
-            if universe == "nasdaq100":
-                tech_set = set(cfg.UNIVERSE.get("Technology", []))
-                tickers = [t for t in validated if t in tech_set]
-                src = f"Technology ({len(tickers)} validated)"
-            else:
-                tickers = validated
-                src = f"Validated Universe ({len(tickers)} tickers)"
-            logger.info(f"Alpha-Flow: Using {len(tickers)} DB-validated tickers (sorted by price DESC)")
-        else:
-            raise ValueError("DB too small, use config fallback")
-    except Exception as e:
-        # Cold start: no signals in DB yet — use config
-        logger.info(f"Alpha-Flow: DB not ready ({e}), using config fallback")
+    validated = _db.get_validated_tickers(min_price=25.0)
+    if validated and len(validated) >= 20:
         if universe == "nasdaq100":
-            tickers = get_nasdaq100()
-            src = "Technology (config)"
-        elif universe == "both":
-            tickers = list(cfg.ALL_TICKERS)
-            src = "S&P 1500 (config)"
+            tech_set = set(cfg.UNIVERSE.get("Technology", []))
+            tickers = [t for t in validated if t in tech_set]
+            src = f"Technology ({len(tickers)} validated)"
         else:
-            tickers = get_sp500()
+            tickers = validated
+            src = f"Validated Universe ({len(tickers)} tickers)"
+    else:
+        if universe == "nasdaq100":
+            tickers = cfg.UNIVERSE.get("Technology", [])
+            src = "Technology (config)"
+        else:
+            tickers = cfg.STOCK_TICKERS
             src = "S&P 1500 (config)"
-
-    if not tickers:
-        return {
-            "calls": [],
-            "meta": {"error": "No universe available", "universe_size": 0},
-            "timestamp": datetime.now().isoformat(),
-        }
 
     scan_tickers = tickers[:limit]
-    logger.info(f"Alpha-Flow v2: Scanning {len(scan_tickers)}/{len(tickers)} {src} tickers ({max_workers} workers)")
-
-    all_calls: list[dict] = []
+    
+    all_chains = []
+    spot_prices = {}
+    rv2_cache = {}
     errors = 0
-    timed_out = False
+    t0 = _time.monotonic()
 
-    # Overall scan timeout: 4 minutes
-    SCAN_TIMEOUT = 240
-    scan_start = _time.monotonic()
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(fetch_single_ticker, t): t for t in scan_tickers}
+        for f in as_completed(futures):
+            sym, spot, df, rv2, err = f.result()
+            if err: errors += 1
+            else:
+                spot_prices[sym] = spot
+                rv2_cache[sym] = rv2
+                if df is not None: all_chains.append(df)
+                
+    if not all_chains:
+        return {"calls": [], "meta": {"error": "No data", "universe_size": len(tickers)}, "timestamp": datetime.now().isoformat()}
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_scan_one_ticker, sym): sym
-            for sym in scan_tickers
-        }
-        completed = 0
-        for future in as_completed(futures):
-            elapsed = _time.monotonic() - scan_start
-            if elapsed > SCAN_TIMEOUT:
-                logger.warning(
-                    f"Alpha-Flow: Timeout ({SCAN_TIMEOUT}s) after "
-                    f"{completed}/{len(scan_tickers)} tickers. Returning partial."
-                )
-                timed_out = True
-                for f in futures:
-                    f.cancel()
-                break
-            try:
-                results = future.result(timeout=30)
-                all_calls.extend(results)
-            except Exception:
-                errors += 1
-            completed += 1
+    df = pd.concat(all_chains, ignore_index=True)
+    df = df.dropna(subset=['strike', 'volume', 'openInterest', 'impliedVolatility'])
+    df['impliedVolatility'] = np.maximum(df['impliedVolatility'], 0.001)
+    df = df[(df['volume'] > 0) & (df['openInterest'] > 0)]
+    df['moneyness_ratio'] = df['strike'] / df['spot']
+    
+    df = compute_vectorized_greeks(df)
+    df = compute_skew_adjusted_delta(df)
+    df = compute_gex_profile(df)
+    
+    # Structural features
+    df['bad_vrp'] = 0.0
+    df['good_vrp'] = 0.0
+    df['total_net_gex'] = 0.0
+    df['zero_gamma_level'] = 0.0
+    df['gamma_wall_strike'] = 0.0
+    df['hv'] = 0.0
+    
+    for tkr in spot_prices.keys():
+        mask = df['ticker'] == tkr
+        g = gex_by_strike(df, tkr)
+        if not g.empty:
+            df.loc[mask, 'total_net_gex'] = g['net_gex'].sum()
+            df.loc[mask, 'zero_gamma_level'] = find_zero_gamma(g)
+            wall_idx = g['net_gex'].abs().idxmax()
+            df.loc[mask, 'gamma_wall_strike'] = g.loc[wall_idx, 'strike']
+            
+        tiv, biv, giv, _, _ = compute_discrete_iv2(df, tkr)
+        trv = rv2_cache.get(tkr, 0)
+        df.loc[mask, 'hv'] = np.sqrt(max(0, trv))
+        df.loc[mask, 'bad_vrp'] = max(0, biv - trv) if biv else 0
+        df.loc[mask, 'good_vrp'] = max(0, giv - trv) if giv else 0
+
+    df['strategy_category'] = ""
+    calls = df[df['option_type'] == 'call'].copy()
+    puts = df[df['option_type'] == 'put'].copy()
+
+    good_vrp_75 = calls['good_vrp'].quantile(FC['BULLISH_VRP_PCTL']) if not calls.empty else 0
+    bad_vrp_75 = puts['bad_vrp'].quantile(FC['BEARISH_VRP_PCTL']) if not puts.empty else 0
+    
+    # 1. Bullish
+    mask_bull = (calls['volume'] > calls['openInterest'] * FC['BULLISH_VOL_OI_RATIO']) & (calls['volume'] > FC['BULLISH_MIN_VOL']) & (calls['dte'] < FC['BULLISH_MAX_DTE']) & (calls['good_vrp'] >= good_vrp_75)
+    df.loc[calls[mask_bull].index, 'strategy_category'] += "unusually_bullish,"
+
+    # 2. Bearish
+    mask_bear = (puts['volume'] > puts['openInterest'] * FC['BEARISH_VOL_OI_RATIO']) & (puts['volume'] > FC['BEARISH_MIN_VOL']) & (puts['dte'] < FC['BEARISH_MAX_DTE']) & (puts['bad_vrp'] >= bad_vrp_75)
+    df.loc[puts[mask_bear].index, 'strategy_category'] += "unusually_bearish,"
+
+    # 3. Conviction Calls
+    call_prem = max(calls['total_premium'].quantile(0.95), FC['CONVICTION_CALL_MIN_PREM_ABS']) if not calls.empty else 25000
+    mask_cc = (calls['total_premium'] > call_prem) & (calls['skew_adj_delta'] > FC['CONVICTION_CALL_MIN_DELTA']) & (((calls['spot'] - calls['zero_gamma_level']).abs() / calls['spot']) < FC['CONVICTION_CALL_ZG_PROX'])
+    df.loc[calls[mask_cc].index, 'strategy_category'] += "conviction_calls,"
+
+    # 4. Conviction Puts
+    put_prem = max(puts['total_premium'].quantile(0.95), FC['CONVICTION_PUT_MIN_PREM_ABS']) if not puts.empty else 25000
+    mask_cp = (puts['total_premium'] > put_prem) & (puts['total_net_gex'] < 0)
+    df.loc[puts[mask_cp].index, 'strategy_category'] += "conviction_puts,"
+
+    # 5. LEAPS
+    mask_leaps = (calls['dte'] > FC['LEAPS_FALLBACK_DTE']) & (calls['impliedVolatility'] < calls['hv']) & (calls['openInterest'] >= FC['LEAPS_MIN_OI']) & (calls['moneyness_ratio'] >= FC['LEAPS_MONEYNESS_LOW']) & (calls['moneyness_ratio'] <= FC['LEAPS_MONEYNESS_HIGH'])
+    df.loc[calls[mask_leaps].index, 'strategy_category'] += "leaps,"
+
+    # 6. Put Sells
+    mask_ps = (puts['strike'] < puts['spot']) & (puts['delta'].between(FC['PUT_SELL_DELTA_LOW'], FC['PUT_SELL_DELTA_HIGH'])) & (puts['dte'] > FC['PUT_SELL_MIN_DTE']) & (puts['dte'] < FC['PUT_SELL_MAX_DTE']) & (puts['impliedVolatility'] > puts['hv']) & (puts['volume'] > FC['PUT_SELL_MIN_VOL'])
+    df.loc[puts[mask_ps].index, 'strategy_category'] += "put_sells,"
+
+    # 7. Cheap Calls
+    mask_cheap = (calls['mid_price'] < FC['CHEAP_MAX_PRICE']) & (calls['strike'] > calls['spot']) & (calls['dte'] < FC['CHEAP_MAX_DTE']) & (calls['volume'] > FC['CHEAP_MIN_VOL']) & (((calls['spot'] - calls['gamma_wall_strike']).abs() / calls['spot']) < FC['CHEAP_WALL_PROX'])
+    df.loc[calls[mask_cheap].index, 'strategy_category'] += "cheap_calls,"
+    
+    # Base masks for backward compatibility
+    mask_swing = (calls['dte'].between(21, 90)) & (calls['delta'].between(0.35, 0.60)) & (calls['mid_price'].between(0.5, 8.0))
+    df.loc[calls[mask_swing].index, 'strategy_category'] += "swing,"
+    
+    # Fallback to keep everything that passed any rule
+    final_df = df[df['strategy_category'] != ""]
+    
+    # Calculate score
+    final_df['quant_score'] = 50 + (np.clip(final_df['good_vrp'], 0, 1) * 30) + (np.clip(final_df['openInterest']/1000, 0, 5) * 4)
+
+    all_calls = []
+    for _, r in final_df.iterrows():
+        categories = [c for c in r['strategy_category'].split(",") if c]
+        for cat in categories:
+            all_calls.append({
+                "ticker": r['ticker'],
+                "stock_price": round(r['spot'], 2),
+                "strike": float(r['strike']),
+                "expiration": r['expiry'],
+                "dte": int(r['dte']),
+                "bid": round(r['bid'], 2),
+                "ask": round(r['ask'], 2),
+                "mid_price": round(r['mid_price'], 2),
+                "delta": float(r['delta']),
+                "pop": float(max(0, min(1, r['delta'] * 0.85)) if r['option_type']=='call' else max(0, min(1, -r['delta']))),
+                "vol_edge": float(max(0, r['hv'] - r['impliedVolatility'])),
+                "breakeven_pct": round(r['total_premium']/r['spot']*100, 2),
+                "open_interest": int(r['openInterest']),
+                "volume": int(r['volume']),
+                "implied_volatility": round(r['impliedVolatility'] * 100, 1),
+                "spread_pct": round((r['ask'] - r['bid']) / r['mid_price'] * 100, 1) if r['mid_price'] > 0 else 0,
+                "quant_score": round(r['quant_score'], 2),
+                "moneyness": "ATM" if abs(r['moneyness_ratio'] - 1) < 0.03 else "OTM",
+                "strategy_category": cat,
+                "skew_adj_delta": float(r['skew_adj_delta']),
+                "dollar_gamma": float(r['dollar_gamma']),
+                "contract_gex": float(r['contract_gex']),
+                "bad_vrp": float(r['bad_vrp']),
+                "good_vrp": float(r['good_vrp'])
+            })
 
     # Sort
-    reverse = sort_by not in ("breakeven_pct", "spread_pct")
-    all_calls.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse)
+    all_calls.sort(key=lambda x: x.get(sort_by, 0), reverse=True)
 
-    scan_elapsed = round(_time.monotonic() - scan_start, 1)
+    scan_elapsed = round(_time.monotonic() - t0, 1)
     tickers_with_calls = len(set(c["ticker"] for c in all_calls))
-    logger.info(
-        f"Alpha-Flow v2: Done in {scan_elapsed}s — "
-        f"{len(all_calls)} contracts from {tickers_with_calls} tickers"
-    )
-
+    
     return {
         "calls": all_calls,
         "meta": {
-            "universe_source": src,
-            "universe_size": len(tickers),
-            "tickers_scanned": completed if timed_out else len(scan_tickers),
-            "contracts_found": len(all_calls),
-            "tickers_with_calls": tickers_with_calls,
-            "errors": errors,
-            "partial": timed_out,
+            "universe_source": src, "universe_size": len(tickers),
+            "tickers_scanned": len(scan_tickers), "contracts_found": len(all_calls),
+            "tickers_with_calls": tickers_with_calls, "errors": errors, "partial": False,
             "scan_time_seconds": scan_elapsed,
-            "filters": {
-                "price_floor": "$25",
-                "dte_range": "90-150d",
-                "premium_range": "$1-$8",
-                "spread_max": "10%",
-                "oi_floor": "100",
-                "delta_floor": "0.35",
-                "moneyness": "ATM/OTM",
-            },
         },
         "timestamp": datetime.now().isoformat(),
     }
 
-
-# ═══════════════════════════════════════════════════════════════
-# 5. DB-BACKED PIPELINE — Scan + persist to SQLite
-# ═══════════════════════════════════════════════════════════════
-
-def run_alpha_pipeline(
-    universe: str = "sp500",
-    max_workers: int = 4,
-    limit: int = 500,
-) -> dict:
-    """
-    Run a full alpha scan and persist results to the alpha_calls DB table.
-    Called on startup and by the daily scheduler.
-
-    Args:
-        universe: Which ticker universe to scan ('sp500', 'nasdaq100', 'both')
-        max_workers: Thread pool size for parallel scanning
-        limit: Max number of tickers to scan (passed from frontend)
-
-    Returns scan metadata dict.
-    """
-    try:
-        import db
-    except ImportError:
-        from pipelines import db
-
-    # Use get_alpha_calls() for the actual scanning
-    result = get_alpha_calls(
-        limit=limit,
-        max_workers=max_workers,
-        sort_by="quant_score",
-        universe=universe,
-    )
-
-    calls = result.get("calls", [])
-    meta = result.get("meta", {})
-
-    # Persist to SQLite
-    n = db.upsert_alpha_calls_bulk(calls, universe, meta)
-    logger.info(f"Alpha pipeline: persisted {n} contracts for {universe}")
-
-    return meta
+def run_alpha_pipeline(universe="sp500", max_workers=4, limit=500):
+    try: import db
+    except ImportError: from pipelines import db
+    result = get_alpha_calls(limit=limit, max_workers=max_workers, universe=universe)
+    db.upsert_alpha_calls_bulk(result.get("calls", []), universe, result.get("meta", {}))
+    return result.get("meta", {})
