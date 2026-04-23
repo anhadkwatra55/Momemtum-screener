@@ -92,6 +92,7 @@ interface Props { onTickerSelect?: (ticker: string) => void; }
 interface TickerGroup {
   ticker: string; price: number; best: AlphaCall; total: number;
   expiries: { exp: string; dte: number; contracts: AlphaCall[] }[];
+  calls: AlphaCall[];
 }
 
 const STRATEGY_LABELS: Record<string, { label: string; tag: string; color: string }> = {
@@ -267,7 +268,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
         const expiries = Object.entries(byExp)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([exp, cs]) => ({ exp, dte: cs[0].dte, contracts: cs.sort((a, b) => a.strike - b.strike) }));
-        return { ticker, price: best.stock_price, best, total: calls.length, expiries };
+        return { ticker, price: best.stock_price, best, total: calls.length, expiries, calls };
       });
   }, [filteredCalls, sortBy]);
 
