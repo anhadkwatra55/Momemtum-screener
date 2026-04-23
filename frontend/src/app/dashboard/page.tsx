@@ -56,6 +56,7 @@ const LazyWeeklyMomentumPanel = dynamic(() => import('@/components/momentum/week
 import { ResearchCardGrid } from "@/components/momentum/research-card";
 import { DailyMovers } from "@/components/momentum/daily-movers";
 import { TodayView } from "@/components/momentum/today-view";
+const LazyMarketPulseView = dynamic(() => import('@/components/momentum/market-pulse-view').then(m => ({ default: m.MarketPulseView })), { ssr: false });
 const LazyAlphaCallsBlotter = dynamic(() => import('@/components/momentum/alpha-calls-blotter').then(m => ({ default: m.AlphaCallsBlotter })), { ssr: false });
 const LazyWhaleTrackerBlotter = dynamic(() => import('@/components/momentum/whale-tracker-blotter').then(m => ({ default: m.WhaleTrackerBlotter })), { ssr: false });
 const LazyAgentBriefing = dynamic(() => import('@/components/momentum/agent-briefing').then(m => ({ default: m.AgentBriefing })), { ssr: false });
@@ -296,155 +297,15 @@ const DashboardPage = memo(() => {
 
             {/* ══════ MARKET PULSE ══════ */}
             {activePage === "market-pulse" && (
-              <motion.div
-                key="market-pulse"
-                {...PAGE_MOTION_VARIANTS}
-                className="pt-4 md:pt-6 pb-8 md:pb-12"
-              >
-                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                  <h1 className="text-[20px] font-bold md:text-[24px] flex items-center gap-3 font-mono-data tracking-[0.06em] text-[#E8E8E8]">
-                    <span className="text-[#00FF66]">⚡</span>
-                    Market Pulse
-                  </h1>
-                  <div className="flex items-center gap-3">
-                    <LazyTickerSearch
-                      onSelectTicker={handlePageTickerSelect}
-                      onDataRefresh={refresh}
-                    />
-                    <div className="flex items-center gap-2 bg-[#111111] border border-[#2A2A2A] rounded-[2px] px-2.5 py-1 text-[#00FF66] text-[10px] font-mono-data tracking-[0.1em] uppercase">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#00FF66] ct-pulse" />
-                      {pipeline.connected ? "LIVE" : "OFFLINE"}
-                    </div>
-                  </div>
-                </div>
-
-                {data.all_quotes?.length > 0 && (
-                  <Card className="mb-4 p-3">
-                    <QuoteRotator quotes={data.all_quotes} />
-                  </Card>
-                )}
-
-                <div className="mb-4">
-                  <LazyAgentBriefing />
-                </div>
-
-                <DataReveal
-                  loading={tierLoading.summary && kpiStripItems.length === 0}
-                  skeleton={<KPISkeleton />}
-                  className="mb-4"
-                >
-                  <KPIStrip className="" items={kpiStripItems} />
-                </DataReveal>
-
-                {/* ── Research Cards (Moby.invest-style) ── */}
-                {(data.top_picks?.length > 0) && (
-                  <div className="mb-4">
-                    <ResearchCardGrid
-                      signals={data.top_picks || []}
-                      title="HEADSTART RESEARCH"
-                      subtitle="Highest conviction signals — multi-system agreement, trending regime, confirmed fresh momentum"
-                      maxCards={6}
-                      onViewChart={handlePageTickerSelect}
-                      onViewDetail={handlePageTickerSelect}
-                    />
-                  </div>
-                )}
-
-                {/* ── Daily Movers ── */}
-                {data.signals?.length > 0 && (
-                  <div className="mb-4">
-                    <h2 className="text-[13px] font-bold text-[#E8E8E8] font-mono-data tracking-[0.08em] uppercase flex items-center gap-2 mb-3">
-                      <span className="text-[#FFD600]">◆</span> DAILY MOVERS
-                    </h2>
-                    <DailyMovers signals={data.signals} maxItems={5} />
-                  </div>
-                )}
-
-                {/* Two-column layout: main content + weekly panel */}
-                <div className="flex flex-col xl:flex-row gap-4">
-                  {/* Left: main Market Pulse content */}
-                  <div className="flex-1 min-w-0 space-y-4">
-                    <DataReveal
-                      loading={tierLoading.signals && !data.signals?.length}
-                      skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={5} /><SectionSkeleton rows={5} /></div>}
-                      delay={100}
-                    >
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <LazyLeaderboard signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                        <LazyTopSignals signals={data.signals} onSelectTicker={handlePageTickerSelect} />
-                      </div>
-                    </DataReveal>
-
-                    <DataReveal
-                      loading={tierLoading.signals && !data.signals?.length}
-                      skeleton={<div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><SectionSkeleton rows={3} /><SectionSkeleton rows={3} /></div>}
-                      delay={200}
-                    >
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <LazyMiniSignalList title="Fresh Momentum" icon="leaf.fill" signals={data.fresh_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                        <LazyMiniSignalList title="Exhausting Signals" icon="flame.fill" signals={data.exhausting_momentum || []} onSelectTicker={handlePageTickerSelect} />
-                      </div>
-                    </DataReveal>
-
-                    {(data.hidden_gems || []).length > 0 && (
-                      <CardReveal loading={false} delay={300}>
-                        <Card className="p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <h2 className={cn("text-base font-bold md:text-lg flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                              <SFIcon name="diamond.fill" size="text-lg" className="text-cyan-400" /> Hidden Gems — Underrated Picks
-                            </h2>
-                            <AppleButton variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300" onClick={() => setActivePage("hidden-alpha")} glowColor="cyan">
-                              View All <span className="ml-1 text-sm font-semibold">→</span>
-                            </AppleButton>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-4 text-balance">
-                            Strong momentum + high probability, but haven&apos;t moved much yet — the market hasn&apos;t priced it in.
-                          </p>
-                          <div className="space-y-1">
-                            {(data.hidden_gems || []).slice(0, 5).map((s: typeof data.signals[0], i: number) => (
-                              <motion.div
-                                key={s.ticker}
-                                className="flex items-center justify-between py-3 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-white/5"
-                                onClick={() => handlePageTickerSelect(s.ticker)}
-                                whileHover={LIST_ITEM_HOVER_MOTION_PROPS}
-                                initial={{ opacity: 0, y: 6 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ ...SPRING_TRANSITION_PROPS, delay: i * 0.06 }}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span className="font-bold text-cyan-400 font-mono-data text-base w-14">{s.ticker}</span>
-                                  <span className="text-xs text-muted-foreground/80 max-w-[120px] truncate">{s.sector}</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-mono-data text-sm font-semibold">{s.composite.toFixed(2)}</span>
-                                  <span className={cn("font-mono-data text-xs font-semibold", s.probability > 60 ? "text-emerald-400" : "text-amber-400")}>{s.probability}%</span>
-                                  <span className={cn("font-mono-data text-xs font-semibold", s.daily_change > 0 ? "text-emerald-400" : s.daily_change < 0 ? "text-rose-400" : "text-slate-400")}>{s.daily_change > 0 ? '+' : ''}{s.daily_change}%</span>
-                                </div>
-                              </motion.div>
-                            ))}
-                          </div>
-                        </Card>
-                      </CardReveal>
-                    )}
-
-                    <CardReveal loading={!data.sector_regimes} delay={400}>
-                      <Card className="p-3">
-                        <h2 className={cn("text-base font-bold md:text-lg mb-3 flex items-center gap-2", TRACKING_HEADING_CLASS)}>
-                          <SFIcon name="globe.americas.fill" size="text-lg" className="text-cyan-400" /> Sector Regime Heatmap
-                        </h2>
-                        <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
-                      </Card>
-                    </CardReveal>
-                  </div>
-
-                  {/* Right: Weekly Top Momentum Panel (sticky on desktop) */}
-                  <div className="xl:w-[320px] xl:shrink-0">
-                    <div className="xl:sticky xl:top-[90px] space-y-4">
-                      <LazyNewsletterSignup />
-                      <LazyWeeklyMomentumPanel onSelectTicker={handlePageTickerSelect} />
-                    </div>
-                  </div>
-                </div>
+              <motion.div key="market-pulse" {...PAGE_MOTION_VARIANTS}>
+                <LazyMarketPulseView
+                  data={data}
+                  tierLoading={tierLoading}
+                  pipelineConnected={pipeline.connected}
+                  onTickerSelect={handlePageTickerSelect}
+                  onNavigate={setActivePage}
+                  onDataRefresh={refresh}
+                />
               </motion.div>
             )}
 

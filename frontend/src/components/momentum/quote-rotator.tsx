@@ -20,9 +20,10 @@ const QUOTE_TRANSITION_VARIANTS = {
 interface QuoteRotatorProps {
   quotes: Quote[];
   intervalMs?: number;
+  compact?: boolean;
 }
 
-export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15000 }: QuoteRotatorProps) {
+export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15000, compact = false }: QuoteRotatorProps) {
   const [idx, setIdx] = useState(0);
 
   const rotate = useCallback(() => {
@@ -40,15 +41,16 @@ export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15
       <AppleCard
         className={cn(
           "relative overflow-hidden",
-          "text-center p-8 md:p-12 lg:p-16",
-          "min-h-[200px] md:min-h-[240px] flex flex-col justify-center items-center",
+          compact ? "text-center p-6 md:p-8" : "text-center p-8 md:p-12 lg:p-16",
+          compact ? "min-h-[160px] flex flex-col justify-center items-center" : "min-h-[200px] md:min-h-[240px] flex flex-col justify-center items-center",
           "touch-manipulation"
         )}
       >
         <div className="max-w-3xl mx-auto flex flex-col items-center" aria-live="polite">
           <p
             className={cn(
-              "font-inter text-xl md:text-2xl lg:text-3xl italic leading-relaxed tracking-hero",
+              "font-inter italic leading-relaxed tracking-hero",
+              compact ? "text-lg md:text-xl" : "text-xl md:text-2xl lg:text-3xl",
               getTextColorClass('slate', '500')
             )}
           >
@@ -56,7 +58,8 @@ export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15
           </p>
           <p
             className={cn(
-              "mt-4 font-inter text-base md:text-lg lg:text-xl font-medium tracking-hero",
+              "mt-4 font-inter font-medium tracking-hero",
+              compact ? "text-sm md:text-base" : "text-base md:text-lg lg:text-xl",
               getTextColorClass('slate', '600')
             )}
           >
@@ -73,8 +76,8 @@ export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15
     <AppleCard
       className={cn(
         "relative overflow-hidden",
-        "text-center p-8 md:p-12 lg:p-16",
-        "min-h-[200px] md:min-h-[240px] flex flex-col justify-center items-center",
+        compact ? "text-center p-6 md:p-8" : "text-center p-8 md:p-12 lg:p-16",
+        compact ? "min-h-[160px] flex flex-col justify-center items-center" : "min-h-[200px] md:min-h-[240px] flex flex-col justify-center items-center",
         "touch-manipulation"
       )}
     >
@@ -87,7 +90,8 @@ export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15
         >
           <p
             className={cn(
-              "font-inter text-xl md:text-2xl lg:text-3xl italic leading-relaxed tracking-hero",
+              "font-inter italic leading-relaxed tracking-hero",
+              compact ? "text-lg md:text-xl" : "text-xl md:text-2xl lg:text-3xl",
               getTextColorClass('slate', '300')
             )}
           >
@@ -95,7 +99,8 @@ export const QuoteRotator = memo(function QuoteRotator({ quotes, intervalMs = 15
           </p>
           <p
             className={cn(
-              "mt-4 font-inter text-base md:text-lg lg:text-xl font-semibold tracking-hero",
+              "mt-4 font-inter font-semibold tracking-hero",
+              compact ? "text-sm md:text-base" : "text-base md:text-lg lg:text-xl",
               getTextColorClass('cyan', '400')
             )}
           >

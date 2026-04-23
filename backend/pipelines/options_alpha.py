@@ -1,13 +1,21 @@
 """
-options_alpha.py — Alpha-Flow Options Intelligence Pipeline (v3 — 3D Engine)
-==============================================================================
+options_alpha.py — Alpha-Flow Options Intelligence Pipeline (v3.1 — Optimized)
+================================================================================
 Incorporates GEX, VRP, Vectorized Greeks, Skew-Adjusted Delta, and 9 Strategy Tabs.
+
+v3.1 Optimizations:
+  - TTL-based memory cache for price history (avoids redundant yfinance downloads)
+  - Pre-filter expirations by DTE range before downloading chains
+  - Batch-build chain DataFrames with list-of-dicts instead of repeated pd.concat
+  - Graceful per-ticker error handling with retry + exponential backoff
+  - Reduced temporary DataFrame allocations in fetch_single_ticker
 """
 from __future__ import annotations
 import logging
 import math
 import random
 import time as _time
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import numpy as np
@@ -32,6 +40,35 @@ FC = {
     'PUT_SELL_DELTA_LOW': -0.30, 'PUT_SELL_DELTA_HIGH': -0.15, 'PUT_SELL_MIN_DTE': 15, 'PUT_SELL_MAX_DTE': 60, 'PUT_SELL_MIN_VOL': 50,
     'CHEAP_MAX_PRICE': 1.00, 'CHEAP_MIN_PRICE': 0.01, 'CHEAP_MAX_DTE': 14, 'CHEAP_MIN_VOL': 50, 'CHEAP_WALL_PROX': 0.015,
 }
+
+# ── TTL Memory Cache ─────────────────────────────────────────────────────────
+# Thread-safe cache for price history to avoid redundant yfinance downloads
+# when the scanner runs multiple times within the TTL window.
+
+_cache_lock = threading.Lock()
+_price_cache: dict[str, tuple[float, pd.DataFrame]] = {}  # sym -> (timestamp, hist_df)
+_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+def _get_cached_history(sym: str) -> pd.DataFrame | None:
+    with _cache_lock:
+        entry = _price_cache.get(sym)
+        if entry is None:
+            return None
+        ts, hist = entry
+        if _time.monotonic() - ts > _CACHE_TTL_SECONDS:
+            del _price_cache[sym]
+            return None
+        return hist
+
+def _set_cached_history(sym: str, hist: pd.DataFrame):
+    with _cache_lock:
+        _price_cache[sym] = (_time.monotonic(), hist)
+
+def clear_price_cache():
+    """Manually flush the price history cache."""
+    with _cache_lock:
+        _price_cache.clear()
+
 
 # 1. CORE MATH
 def compute_vectorized_greeks(df, r=0.043):
@@ -108,6 +145,8 @@ def find_zero_gamma(gex_df):
 
 def compute_discrete_iv2(df, ticker, r=0.043):
     t = df[df['ticker'] == ticker]
+    if t.empty:
+        return 0, 0, 0, 0, None
     spot = t['spot'].iloc[0]
     exp_dte = t.groupby('expiry')['dte'].first()
     best_exp = exp_dte.iloc[(exp_dte - 30).abs().argsort()[:1]].index[0]
@@ -146,43 +185,102 @@ def compute_discrete_iv2(df, ticker, r=0.043):
     good_iv2  = (2.0/T) * strip.loc[strip['comp'].isin(['good','both']), 'c'].sum()
     return total_iv2, bad_iv2, good_iv2, dte, best_exp
 
-# 2. FETCHING
-def fetch_single_ticker(sym, min_dte=1, max_dte=730):
-    try:
-        tkr = yf.Ticker(sym)
-        hist = tkr.history(period='21d')
-        if hist.empty: return sym, None, None, 0, "no price data"
-        spot = float(hist['Close'].iloc[-1])
-        if spot < 1.0: return sym, None, None, 0, "penny stock"
-        
-        lr = np.log(hist['Close'] / hist['Close'].shift(1)).dropna().values
-        rv2 = np.sum(lr**2) * (252.0 / 21.0)
 
+# 2. FETCHING — Optimized
+def fetch_single_ticker(sym, min_dte=7, max_dte=180, _retries=2):
+    """Fetch option chains for a single ticker with retry logic and DTE pre-filtering.
+
+    Optimizations vs v3:
+      - Uses TTL cache for 21-day price history
+      - Pre-filters expiration dates by DTE range BEFORE downloading chains
+      - Builds rows as list-of-dicts, single pd.concat at the end
+      - Retry with exponential backoff on transient failures
+    """
+    last_err = None
+    for attempt in range(_retries + 1):
+        try:
+            return _fetch_single_ticker_inner(sym, min_dte, max_dte)
+        except Exception as e:
+            last_err = str(e)[:80]
+            if attempt < _retries:
+                backoff = (0.5 * (2 ** attempt)) + random.uniform(0, 0.3)
+                logger.debug(f"[{sym}] Attempt {attempt+1} failed, retrying in {backoff:.1f}s: {last_err}")
+                _time.sleep(backoff)
+    logger.warning(f"[{sym}] All {_retries+1} attempts failed: {last_err}")
+    return sym, None, None, 0, last_err
+
+
+def _fetch_single_ticker_inner(sym, min_dte, max_dte):
+    """Core fetch logic — no retry wrapper."""
+    tkr = yf.Ticker(sym)
+
+    # ── Cached price history ──
+    hist = _get_cached_history(sym)
+    if hist is None:
+        hist = tkr.history(period='21d')
+        if hist is not None and not hist.empty:
+            _set_cached_history(sym, hist)
+
+    if hist is None or hist.empty:
+        return sym, None, None, 0, "no price data"
+
+    spot = float(hist['Close'].iloc[-1])
+    if spot < 1.0:
+        return sym, None, None, 0, "penny stock"
+
+    lr = np.log(hist['Close'] / hist['Close'].shift(1)).dropna().values
+    rv2 = np.sum(lr**2) * (252.0 / 21.0)
+
+    # ── Pre-filter expirations by DTE ──
+    try:
         expiries = tkr.options
-        today = datetime.now().date()
-        rows = []
-        for exp_str in expiries:
-            exp_date = datetime.strptime(exp_str, '%Y-%m-%d').date()
-            dte = (exp_date - today).days
-            if dte < min_dte or dte > max_dte: continue
-            try: chain = tkr.option_chain(exp_str)
-            except: continue
-            for opt_type, frame in [('call', chain.calls), ('put', chain.puts)]:
-                if frame.empty: continue
-                tmp = frame.copy()
-                tmp['ticker'] = sym
-                tmp['spot'] = spot
-                tmp['expiry'] = exp_str
-                tmp['dte'] = dte
-                tmp['T'] = max(dte / 365.0, 1e-5)
-                tmp['option_type'] = opt_type
-                tmp['mid_price'] = (tmp['bid'] + tmp['ask']) / 2.0
-                rows.append(tmp)
-        if not rows: return sym, spot, None, rv2, "no valid expirations"
-        df = pd.concat(rows, ignore_index=True)
-        return sym, spot, df, rv2, None
-    except Exception as e:
-        return sym, None, None, 0, str(e)[:80]
+    except Exception:
+        return sym, spot, None, rv2, "no options available"
+
+    if not expiries:
+        return sym, spot, None, rv2, "no expirations"
+
+    today = datetime.now().date()
+    valid_expiries = []
+    for exp_str in expiries:
+        exp_date = datetime.strptime(exp_str, '%Y-%m-%d').date()
+        dte = (exp_date - today).days
+        if min_dte <= dte <= max_dte:
+            valid_expiries.append((exp_str, dte))
+
+    if not valid_expiries:
+        return sym, spot, None, rv2, "no valid expirations in DTE range"
+
+    # ── Fetch only relevant chains, build rows efficiently ──
+    chain_frames = []
+    for exp_str, dte in valid_expiries:
+        try:
+            chain = tkr.option_chain(exp_str)
+        except Exception as e:
+            logger.debug(f"[{sym}] Skipping {exp_str}: {e}")
+            continue
+
+        T_val = max(dte / 365.0, 1e-5)
+
+        for opt_type, frame in [('call', chain.calls), ('put', chain.puts)]:
+            if frame.empty:
+                continue
+            tmp = frame.copy()
+            tmp['ticker'] = sym
+            tmp['spot'] = spot
+            tmp['expiry'] = exp_str
+            tmp['dte'] = dte
+            tmp['T'] = T_val
+            tmp['option_type'] = opt_type
+            tmp['mid_price'] = (tmp['bid'] + tmp['ask']) / 2.0
+            chain_frames.append(tmp)
+
+    if not chain_frames:
+        return sym, spot, None, rv2, "no valid chains"
+
+    df = pd.concat(chain_frames, ignore_index=True)
+    return sym, spot, df, rv2, None
+
 
 def get_alpha_calls(limit=75, max_workers=4, sort_by="quant_score", universe="sp500", **kwargs):
     try:

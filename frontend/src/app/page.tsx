@@ -4,75 +4,144 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import React, { useState, useCallback } from "react";
 
-/* ── Anthropic Cream Palette ── */
+/* ── Dark Premium Palette ── */
 const P = {
-  cream: "#f5f2ed",
-  warmGray: "#e8e4de",
-  charcoal: "#1a1a1a",
-  charcoalLight: "#2d2d2d",
-  textPrimary: "#1a1a1a",
-  textSecondary: "#5a5a5a",
-  textMuted: "#8a8a8a",
+  bg: "#0a0a0a",
+  surface: "#111111",
+  card: "#161616",
+  cardHover: "#1c1c1c",
+  border: "#1e1e1e",
+  borderHover: "#2a2a2a",
+  textPrimary: "#e8e8e8",
+  textSecondary: "#888888",
+  textMuted: "#555555",
   gold: "#e2b857",
-  goldSoft: "rgba(226,184,87,0.15)",
+  goldSoft: "rgba(226,184,87,0.10)",
+  goldGlow: "rgba(226,184,87,0.04)",
   green: "#4ade80",
+  greenSoft: "rgba(74,222,128,0.08)",
   purple: "#9f7aea",
+  purpleSoft: "rgba(159,122,234,0.08)",
+  red: "#e05252",
+  redSoft: "rgba(224,82,82,0.08)",
+  cream: "#f5f2ed",
 };
 
 const ease = [0.33, 1, 0.68, 1] as const;
 
 /* ── Animations ── */
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease } },
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease } },
+};
+const fadeIn = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.5, ease } },
 };
 const stagger = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.3 } },
+  show: { opacity: 1, transition: { staggerChildren: 0.12, delayChildren: 0.2 } },
+};
+const staggerSlow = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.18, delayChildren: 0.3 } },
 };
 
-/* ── Feature Card ── */
-function FeatureCard({ title, description, tag, href }: { title: string; description: string; tag: string; href: string }) {
+/* ── Bento Card Component ── */
+function BentoCard({
+  title, subtitle, description, icon, accentColor, accentBg, href, span,
+}: {
+  title: string; subtitle: string; description: string;
+  icon: string; accentColor: string; accentBg: string;
+  href: string; span?: boolean;
+}) {
   return (
-    <Link href={href}>
+    <Link href={href} style={{ textDecoration: "none", gridColumn: span ? "span 2" : undefined }}>
       <motion.div
         variants={fadeUp}
-        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+        whileHover={{ y: -3, transition: { duration: 0.2 } }}
         style={{
-          background: "white",
-          border: `1px solid ${P.warmGray}`,
-          borderRadius: 12,
-          padding: "32px 28px",
+          background: P.card,
+          border: `1px solid ${P.border}`,
+          borderRadius: 16,
+          padding: "36px 32px",
           cursor: "pointer",
-          transition: "box-shadow 0.3s ease, border-color 0.3s ease",
+          transition: "border-color 0.3s ease, background 0.3s ease",
+          height: "100%",
+          position: "relative",
+          overflow: "hidden",
         }}
         onMouseEnter={e => {
-          (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(0,0,0,0.08)";
-          (e.currentTarget as HTMLElement).style.borderColor = P.gold;
+          (e.currentTarget as HTMLElement).style.borderColor = P.borderHover;
+          (e.currentTarget as HTMLElement).style.background = P.cardHover;
         }}
         onMouseLeave={e => {
-          (e.currentTarget as HTMLElement).style.boxShadow = "none";
-          (e.currentTarget as HTMLElement).style.borderColor = P.warmGray;
+          (e.currentTarget as HTMLElement).style.borderColor = P.border;
+          (e.currentTarget as HTMLElement).style.background = P.card;
         }}
       >
+        {/* Corner glow */}
+        <div style={{
+          position: "absolute", top: -40, right: -40, width: 120, height: 120,
+          borderRadius: "50%", background: accentBg, filter: "blur(40px)",
+          pointerEvents: "none", opacity: 0.5,
+        }} />
+
+        <div style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 40, height: 40, borderRadius: 10,
+          background: accentBg, marginBottom: 20, fontSize: 18,
+        }}>
+          {icon}
+        </div>
         <span style={{
-          display: "inline-block", fontSize: 10, fontFamily: "var(--font-mono)",
-          fontWeight: 500, color: P.gold, letterSpacing: "0.1em",
-          textTransform: "uppercase", marginBottom: 12,
-          padding: "3px 8px", borderRadius: 4,
-          background: P.goldSoft,
-        }}>{tag}</span>
+          display: "block", fontSize: 10, fontFamily: "var(--font-mono)",
+          fontWeight: 600, color: accentColor, letterSpacing: "0.12em",
+          textTransform: "uppercase", marginBottom: 10,
+        }}>{subtitle}</span>
         <h3 style={{
           fontFamily: "var(--font-serif), Georgia, serif",
-          fontSize: 22, fontWeight: 500, color: P.charcoal,
-          marginBottom: 8, lineHeight: 1.3,
+          fontSize: 22, fontWeight: 500, color: P.textPrimary,
+          marginBottom: 10, lineHeight: 1.3,
         }}>{title}</h3>
         <p style={{
-          fontSize: 14, lineHeight: 1.6, color: P.textSecondary,
+          fontSize: 14, lineHeight: 1.7, color: P.textSecondary,
           fontFamily: "var(--font-sans)",
         }}>{description}</p>
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          marginTop: 20, fontSize: 12, fontFamily: "var(--font-mono)",
+          color: accentColor, letterSpacing: "0.04em",
+          transition: "gap 0.2s ease",
+        }}>
+          Explore <span style={{ fontSize: 14 }}>→</span>
+        </span>
       </motion.div>
     </Link>
+  );
+}
+
+/* ── Pillar Item ── */
+function PillarItem({ num, title, desc }: { num: string; title: string; desc: string }) {
+  return (
+    <motion.div variants={fadeUp} style={{
+      display: "flex", gap: 20, alignItems: "flex-start",
+    }}>
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
+        color: P.gold, minWidth: 28, lineHeight: "24px", letterSpacing: "0.06em",
+      }}>{num}</span>
+      <div>
+        <h4 style={{
+          fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600,
+          color: P.textPrimary, marginBottom: 6,
+        }}>{title}</h4>
+        <p style={{
+          fontSize: 13, lineHeight: 1.7, color: P.textSecondary,
+          fontFamily: "var(--font-sans)",
+        }}>{desc}</p>
+      </div>
+    </motion.div>
   );
 }
 
@@ -81,11 +150,11 @@ function StatPill({ label, value }: { label: string; value: string }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-      padding: "12px 24px", background: "white", borderRadius: 8,
-      border: `1px solid ${P.warmGray}`,
+      padding: "14px 28px", background: P.card, borderRadius: 10,
+      border: `1px solid ${P.border}`,
     }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: P.charcoal }}>{value}</span>
-      <span style={{ fontSize: 11, color: P.textMuted, fontWeight: 400, letterSpacing: "0.02em" }}>{label}</span>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 600, color: P.textPrimary }}>{value}</span>
+      <span style={{ fontSize: 10, color: P.textMuted, fontWeight: 400, letterSpacing: "0.06em", textTransform: "uppercase" as const }}>{label}</span>
     </div>
   );
 }
@@ -100,7 +169,7 @@ export default function LandingPage() {
     const q = query.trim().toUpperCase();
     
     if (!q) {
-      router.push("/dashboard");
+      router.push("/dashboard?view=today");
       return;
     }
     
@@ -125,133 +194,137 @@ export default function LandingPage() {
   }, [query, router]);
 
   return (
-    <div style={{ background: P.cream, minHeight: "100vh", color: P.textPrimary }}>
+    <div style={{ background: P.bg, minHeight: "100vh", color: P.textPrimary }}>
 
       {/* ── Top Nav ── */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "16px 40px", borderBottom: `1px solid ${P.warmGray}`,
+        padding: "16px 40px", borderBottom: `1px solid ${P.border}`,
         position: "sticky", top: 0, zIndex: 50,
-        background: `${P.cream}f0`, backdropFilter: "blur(12px)",
+        background: `${P.bg}e6`, backdropFilter: "blur(16px)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600,
-            color: P.charcoal, letterSpacing: "0.06em",
+            color: P.textPrimary, letterSpacing: "0.08em",
           }}>HEADSTART</span>
           <span style={{
             fontSize: 9, fontFamily: "var(--font-mono)", color: P.textMuted,
-            padding: "2px 6px", borderRadius: 4, border: `1px solid ${P.warmGray}`,
+            padding: "2px 6px", borderRadius: 4, border: `1px solid ${P.border}`,
           }}>BETA</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <Link href="/dashboard" style={{ fontSize: 13, color: P.textSecondary, textDecoration: "none", fontWeight: 400 }}>
+          <Link href="/dashboard?view=today" style={{ fontSize: 13, color: P.textSecondary, textDecoration: "none", fontWeight: 400 }}>
             Dashboard
           </Link>
-          <Link href="/dashboard" style={{
+          <Link href="/dashboard?view=today" style={{
             fontSize: 12, fontFamily: "var(--font-mono)", fontWeight: 500,
-            padding: "6px 16px", borderRadius: 6,
-            background: P.charcoal, color: P.cream,
+            padding: "8px 20px", borderRadius: 8,
+            background: P.gold, color: P.bg,
             textDecoration: "none", letterSpacing: "0.02em",
+            transition: "opacity 0.2s ease",
           }}>
             Launch Terminal →
           </Link>
         </div>
       </nav>
 
-      {/* ── Dark Hero with Logo Image ── */}
+      {/* ── Hero Section ── */}
       <motion.section
         initial="hidden"
         animate="show"
         variants={stagger}
         style={{
-          background: "linear-gradient(180deg, #111111 0%, #1a1a1a 60%, #2a2520 85%, #f5f2ed 100%)",
           textAlign: "center",
-          padding: "60px 24px 80px",
+          padding: "100px 24px 60px",
           position: "relative",
           overflow: "hidden",
         }}
       >
-        {/* Subtle radial glow */}
+        {/* Subtle radial glows */}
         <div style={{
-          position: "absolute", top: "30%", left: "50%", transform: "translateX(-50%)",
-          width: 500, height: 300, borderRadius: "50%",
-          background: "radial-gradient(ellipse, rgba(226,184,87,0.06) 0%, transparent 70%)",
+          position: "absolute", top: "20%", left: "50%", transform: "translateX(-50%)",
+          width: 600, height: 400, borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(226,184,87,0.04) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
+        <div style={{
+          position: "absolute", top: "60%", left: "30%", transform: "translateX(-50%)",
+          width: 300, height: 300, borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(74,222,128,0.02) 0%, transparent 70%)",
           pointerEvents: "none",
         }} />
 
         <motion.p variants={fadeUp} style={{
-          fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
-          color: P.gold, letterSpacing: "0.14em", textTransform: "uppercase",
-          marginBottom: 24, position: "relative", zIndex: 1,
+          fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
+          color: P.gold, letterSpacing: "0.16em", textTransform: "uppercase",
+          marginBottom: 28, position: "relative", zIndex: 1,
         }}>
-          HEADSTART
+          Institutional-Grade Intelligence
         </motion.p>
 
         <motion.h1 variants={fadeUp} style={{
           fontFamily: "var(--font-serif), Georgia, serif",
-          fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 400,
-          lineHeight: 1.15, letterSpacing: "-0.02em",
-          color: "#f5f2ed", marginBottom: 20,
+          fontSize: "clamp(40px, 5.5vw, 64px)", fontWeight: 400,
+          lineHeight: 1.1, letterSpacing: "-0.025em",
+          color: P.textPrimary, marginBottom: 24,
           position: "relative", zIndex: 1,
         }}>
-          Smarter Alpha.
+          The edge you didn&apos;t know<br />
+          <span style={{ color: P.gold }}>you were missing.</span>
         </motion.h1>
 
         <motion.p variants={fadeUp} style={{
-          fontSize: 17, lineHeight: 1.7, color: "rgba(245,242,237,0.65)",
-          maxWidth: 520, margin: "0 auto",
+          fontSize: 17, lineHeight: 1.8, color: P.textSecondary,
+          maxWidth: 540, margin: "0 auto",
           fontFamily: "var(--font-sans)",
           position: "relative", zIndex: 1,
         }}>
-          The edge you didn&apos;t know you were missing. We scan thousands of options, track momentum shifts, and surface the trades that actually matter.
+          We track market sentiment, options flow, and momentum shifts across the entire S&P universe — so you don&apos;t have to. Institutional tools, simplified.
         </motion.p>
       </motion.section>
 
-      {/* ── Search Bar Section (cream zone) ── */}
+      {/* ── Search Bar Section ── */}
       <motion.section
         initial="hidden"
         animate="show"
         variants={stagger}
-        style={{ maxWidth: 600, margin: "-30px auto 0", padding: "0 24px 50px", position: "relative", zIndex: 2 }}
+        style={{ maxWidth: 600, margin: "0 auto", padding: "0 24px 60px", position: "relative", zIndex: 2 }}
       >
         <motion.form variants={fadeUp} onSubmit={handleSearch} style={{
-          display: "flex", maxWidth: 520, margin: "0 auto",
-          background: "white", borderRadius: 10,
-          border: `1px solid ${P.warmGray}`,
-          boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+          display: "flex", maxWidth: 540, margin: "0 auto",
+          background: P.card, borderRadius: 12,
+          border: `1px solid ${P.border}`,
           overflow: "hidden",
-          transition: "box-shadow 0.3s ease, border-color 0.3s ease",
+          transition: "border-color 0.3s ease",
         }}
         onFocus={(e) => {
-          (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 24px ${P.goldSoft}`;
           (e.currentTarget as HTMLElement).style.borderColor = P.gold;
         }}
         onBlur={(e) => {
-          (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(0,0,0,0.08)";
-          (e.currentTarget as HTMLElement).style.borderColor = P.warmGray;
+          (e.currentTarget as HTMLElement).style.borderColor = P.border;
         }}
         >
           <input
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="How can I help you trade today?"
+            placeholder="Search a ticker or ask anything..."
             style={{
-              flex: 1, padding: "14px 20px", border: "none", outline: "none",
+              flex: 1, padding: "15px 20px", border: "none", outline: "none",
               fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 400,
-              color: P.charcoal, background: "transparent",
+              color: P.textPrimary, background: "transparent",
             }}
           />
           <button type="submit" style={{
-            padding: "14px 24px", border: "none", cursor: "pointer",
-            fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500,
-            background: P.charcoal, color: P.cream,
+            padding: "15px 28px", border: "none", cursor: "pointer",
+            fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
+            background: P.gold, color: P.bg,
             letterSpacing: "0.04em",
-            transition: "background 0.2s ease",
+            transition: "opacity 0.2s ease",
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = P.charcoalLight)}
-          onMouseLeave={e => (e.currentTarget.style.background = P.charcoal)}
+          onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+          onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
           >
             Explore →
           </button>
@@ -265,8 +338,8 @@ export default function LandingPage() {
         viewport={{ once: true, margin: "-50px" }}
         variants={stagger}
         style={{
-          display: "flex", justifyContent: "center", gap: 16,
-          padding: "0 24px 60px", flexWrap: "wrap",
+          display: "flex", justifyContent: "center", gap: 12,
+          padding: "0 24px 80px", flexWrap: "wrap",
         }}
       >
         {[
@@ -282,38 +355,127 @@ export default function LandingPage() {
       </motion.section>
 
       {/* ── Divider ── */}
-      <div style={{ maxWidth: 120, margin: "0 auto 60px", height: 1, background: P.warmGray }} />
+      <div style={{ maxWidth: 80, margin: "0 auto 80px", height: 1, background: P.border }} />
 
-      {/* ── Feature Cards ── */}
+      {/* ── "The Why" Section ── */}
       <motion.section
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, margin: "-80px" }}
         variants={stagger}
         style={{
-          maxWidth: 1000, margin: "0 auto", padding: "0 24px 80px",
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 20,
+          maxWidth: 800, margin: "0 auto", padding: "0 24px 100px",
+          textAlign: "center",
         }}
       >
-        <FeatureCard
-          tag="Options Flow"
-          title="Alpha-Flow Options"
-          description="Scans S&P 500 call options for high-conviction swing trades using institutional filters, Black-Scholes delta, and a composite quant score."
-          href="/dashboard?view=alpha-calls"
-        />
-        <FeatureCard
-          tag="Momentum"
-          title="Momentum Lifecycle"
-          description="Track emerging, trending, and exhausting momentum phases across the entire market with multi-timeframe confirmation signals."
-          href="/dashboard?view=momentum-lifecycle"
-        />
-        <FeatureCard
-          tag="Portfolio"
-          title="Portfolio X-Ray"
-          description="Diagnose concentration risk, correlation clusters, and sector exposure across your holdings with institutional-grade analytics."
-          href="/dashboard?view=portfolio-intel"
-        />
+        <motion.p variants={fadeUp} style={{
+          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
+          color: P.gold, letterSpacing: "0.16em", textTransform: "uppercase",
+          marginBottom: 20,
+        }}>
+          Why Headstart
+        </motion.p>
+        <motion.h2 variants={fadeUp} style={{
+          fontFamily: "var(--font-serif), Georgia, serif",
+          fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 400, color: P.textPrimary,
+          marginBottom: 20, lineHeight: 1.15, letterSpacing: "-0.02em",
+        }}>
+          Institutional-Grade Momentum,{" "}
+          <span style={{ fontStyle: "italic", color: P.textSecondary }}>Simplified.</span>
+        </motion.h2>
+        <motion.p variants={fadeUp} style={{
+          fontSize: 16, lineHeight: 1.8, color: P.textSecondary,
+          maxWidth: 580, margin: "0 auto 48px",
+          fontFamily: "var(--font-sans)",
+        }}>
+          Hedge funds spend millions on quant infrastructure. We distill the same edge — momentum signals, options flow, sector rotation — into a single research terminal anyone can use.
+        </motion.p>
+
+        {/* Three pillars */}
+        <motion.div variants={staggerSlow} style={{
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 32,
+          textAlign: "left", maxWidth: 700, margin: "0 auto",
+        }}>
+          <PillarItem num="01" title="Quantitative Signals" desc="Multi-system composite scores across momentum, mean-reversion, and volatility regimes — updated in real-time." />
+          <PillarItem num="02" title="Options Intelligence" desc="Unusual activity detection powered by GEX analysis, volatility risk premium, and skew-adjusted Greeks." />
+          <PillarItem num="03" title="Verified Track Record" desc="Every signal is logged and tracked. No cherry-picking. Full transparency into historical hit rates." />
+        </motion.div>
+      </motion.section>
+
+      {/* ── Divider ── */}
+      <div style={{ maxWidth: 80, margin: "0 auto 80px", height: 1, background: P.border }} />
+
+      {/* ── Bento Grid: "The What" ── */}
+      <motion.section
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-80px" }}
+        variants={stagger}
+        style={{
+          maxWidth: 1060, margin: "0 auto", padding: "0 24px 100px",
+        }}
+      >
+        <motion.div variants={fadeUp} style={{ textAlign: "center", marginBottom: 56 }}>
+          <p style={{
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
+            color: P.gold, letterSpacing: "0.16em", textTransform: "uppercase",
+            marginBottom: 16,
+          }}>
+            Your Research Terminal
+          </p>
+          <h2 style={{
+            fontFamily: "var(--font-serif), Georgia, serif",
+            fontSize: "clamp(26px, 3.5vw, 36px)", fontWeight: 400, color: P.textPrimary,
+            lineHeight: 1.2, letterSpacing: "-0.02em",
+          }}>
+            Four views. Zero noise.
+          </h2>
+        </motion.div>
+
+        <motion.div variants={stagger} style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: 16,
+        }}>
+          <BentoCard
+            icon="◉"
+            subtitle="Executive Summary"
+            title="Today View"
+            description="Your daily briefing. Market regime, top momentum shifts, and high-conviction signals — all in one glance. Start every session here."
+            accentColor={P.green}
+            accentBg={P.greenSoft}
+            href="/dashboard?view=today"
+            span
+          />
+          <BentoCard
+            icon="◈"
+            subtitle="Deep Dive"
+            title="Market Pulse"
+            description="Sector rotation heatmaps, hidden gems, daily movers, and the signals that institutional desks actually track."
+            accentColor={P.purple}
+            accentBg={P.purpleSoft}
+            href="/dashboard?view=market-pulse"
+          />
+          <BentoCard
+            icon="◇"
+            subtitle="Options Intelligence"
+            title="Alpha Calls"
+            description="Unusual institutional options flow. GEX-powered strike analysis. Conviction trades with quantified edge."
+            accentColor={P.gold}
+            accentBg={P.goldSoft}
+            href="/dashboard?view=alpha-calls"
+          />
+          <BentoCard
+            icon="▣"
+            subtitle="Backtesting"
+            title="Strategy Lab"
+            description="Prove it works. Backtest any momentum strategy against historical data with institutional-grade metrics and performance attribution."
+            accentColor={P.green}
+            accentBg={P.greenSoft}
+            href="/dashboard?view=strategy"
+            span
+          />
+        </motion.div>
       </motion.section>
 
       {/* ── Philosophy Section ── */}
@@ -327,9 +489,16 @@ export default function LandingPage() {
           textAlign: "center",
         }}
       >
+        <motion.p variants={fadeUp} style={{
+          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
+          color: P.textMuted, letterSpacing: "0.16em", textTransform: "uppercase",
+          marginBottom: 20,
+        }}>
+          Our Philosophy
+        </motion.p>
         <motion.h2 variants={fadeUp} style={{
           fontFamily: "var(--font-serif), Georgia, serif",
-          fontSize: 32, fontWeight: 400, color: P.charcoal,
+          fontSize: 32, fontWeight: 400, color: P.textPrimary,
           marginBottom: 20, lineHeight: 1.2,
         }}>
           Research-grade clarity.<br />
@@ -345,30 +514,38 @@ export default function LandingPage() {
 
       {/* ── CTA Footer ── */}
       <section style={{
-        padding: "60px 24px", textAlign: "center",
-        borderTop: `1px solid ${P.warmGray}`,
-        background: "white",
+        padding: "80px 24px", textAlign: "center",
+        borderTop: `1px solid ${P.border}`,
+        background: P.surface,
       }}>
         <p style={{
-          fontFamily: "var(--font-serif), Georgia, serif",
-          fontSize: 24, fontWeight: 400, color: P.charcoal, marginBottom: 24,
+          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
+          color: P.textMuted, letterSpacing: "0.14em", textTransform: "uppercase",
+          marginBottom: 20,
         }}>
-          Ready to think differently about markets?
+          Get Started
         </p>
-        <Link href="/dashboard" style={{
-          display: "inline-block", padding: "12px 32px", borderRadius: 8,
-          fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
-          background: P.charcoal, color: P.cream,
+        <p style={{
+          fontFamily: "var(--font-serif), Georgia, serif",
+          fontSize: 28, fontWeight: 400, color: P.textPrimary, marginBottom: 32,
+          lineHeight: 1.2,
+        }}>
+          Ready to think differently<br />about markets?
+        </p>
+        <Link href="/dashboard?view=today" style={{
+          display: "inline-block", padding: "14px 40px", borderRadius: 10,
+          fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600,
+          background: P.gold, color: P.bg,
           textDecoration: "none", letterSpacing: "0.04em",
-          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+          transition: "transform 0.2s ease, opacity 0.2s ease",
         }}
         onMouseEnter={(e) => {
           (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-          (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 20px rgba(0,0,0,0.12)";
+          (e.currentTarget as HTMLElement).style.opacity = "0.9";
         }}
         onMouseLeave={(e) => {
           (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-          (e.currentTarget as HTMLElement).style.boxShadow = "none";
+          (e.currentTarget as HTMLElement).style.opacity = "1";
         }}
         >
           Launch Terminal →
@@ -381,9 +558,9 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer style={{
         padding: "24px 40px",
-        borderTop: `1px solid ${P.warmGray}`,
+        borderTop: `1px solid ${P.border}`,
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        fontSize: 11, color: P.textMuted,
+        fontSize: 11, color: P.textMuted, background: P.bg,
       }}>
         <span style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}>HEADSTART © 2026</span>
         <span>Built for quantitative minds.</span>
