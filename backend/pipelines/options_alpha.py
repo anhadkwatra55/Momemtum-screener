@@ -430,6 +430,7 @@ def get_alpha_calls(limit=75, max_workers=4, sort_by="quant_score", universe="sp
                 "quant_score": round(r['quant_score'], 2),
                 "moneyness": "ATM" if abs(r['moneyness_ratio'] - 1) < 0.03 else "OTM",
                 "strategy_category": cat,
+                "option_type": r['option_type'],
                 "skew_adj_delta": float(r['skew_adj_delta']),
                 "dollar_gamma": float(r['dollar_gamma']),
                 "contract_gex": float(r['contract_gex']),

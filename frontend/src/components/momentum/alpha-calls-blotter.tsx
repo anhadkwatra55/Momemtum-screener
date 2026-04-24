@@ -593,6 +593,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                                         >
                                           <td className="px-6 py-3 font-bold text-zinc-100 flex items-center gap-2">
                                             {c.quant_score >= 75 && <div className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]" />}
+                                            <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-black", c.option_type === 'put' ? "bg-purple-500/10 text-purple-400" : "bg-emerald-500/10 text-emerald-400")}>{c.option_type === 'put' ? 'P' : 'C'}</span>
                                             ${c.strike}
                                           </td>
                                           <td className="px-6 py-3 font-black text-emerald-400">${c.mid_price.toFixed(2)}</td>
@@ -646,7 +647,13 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex flex-col">
                     <span className="text-xs font-black text-zinc-600 uppercase tracking-widest mb-1">Contract Focus</span>
-                    <h2 className="text-2xl font-black text-white">{selected.ticker} <span className="text-emerald-400 font-mono">${selected.strike}</span></h2>
+                    <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                      {selected.ticker} 
+                      <div className="flex items-center gap-2">
+                        <span className={cn("text-xs px-2 py-1 rounded font-black", selected.option_type === 'put' ? "bg-purple-500/10 text-purple-400" : "bg-emerald-500/10 text-emerald-400")}>{selected.option_type === 'put' ? 'PUT' : 'CALL'}</span>
+                        <span className="text-emerald-400 font-mono">${selected.strike}</span>
+                      </div>
+                    </h2>
                   </div>
                   <Donut score={selected.quant_score} size={50} />
                 </div>
