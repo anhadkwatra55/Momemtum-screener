@@ -92,7 +92,7 @@ def _generate_dummy_response(prompt):
     if "briefing" in prompt.lower():
         return "1. The market is showing strong momentum clustering in Semis and Financials.\n2. HEADSTART's Alpha Flow captured 3 new Ultra Conviction setups overnight.\n3. Volatility contraction points to an imminent breakout for $AAPL and $NVDA."
     if "newsletter" in prompt.lower():
-        return "# The Sunday Quant Report\n\n**Market Overview**\nThis week saw a rotation out of mega-caps into mid-cap value. The HEADSTART Engine maintained a 74% win rate on its High Conviction calls.\n\n**Top 3 Setups for Next Week**\n- **$NFLX**: Volatility squeeze leading into earnings.\n- **$AMZN**: Strong alpha divergence compared to QQQ.\n- **$JPM**: Financials are experiencing a macro tailwind.\n\n**Risk Management Tip**\nDon't front-run breakouts. Let the daily candle close to confirm the regime change."
+        return "# The Sunday Quant Report\n\n**Market Overview**\nThis week saw a rotation out of mega-caps into mid-cap value. The HEADSTART Engine maintained a 74% win rate on its High Conviction calls.\n\n**Top 3 Setups for Next Week**\n- **$NFLX**: Volatility squeeze leading into earnings.\n- **$AMZN**: Strong alpha divergence compared to QQQ.\n- **$MXL**: Insane vertical move off 4-system alignment.\n\n**Risk Management Tip**\nDon't front-run breakouts. Let the daily candle close to confirm the regime change."
     return "I am the HEADSTART agent. Simulated response successful."
 
 def generate_morning_briefing():

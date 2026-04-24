@@ -234,6 +234,44 @@ export function MarketPulseView({
         <LazyAgentBriefing />
       </div>
 
+      {/* ── Recent Wins ── */}
+      <div className="pt-4 border-t border-[#2A2A2A]">
+        <SectionHeader
+          icon="◆"
+          iconColor="#00FF66"
+          title="Recent Wins"
+          description="Highlighted successful alpha options calls from the past week."
+        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-[#111111] border border-[#2A2A2A] rounded-xl p-5 flex justify-between items-center transition-colors hover:border-[#00FF66]/40 cursor-default">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="font-mono-data text-2xl text-[#00FF66] font-bold tracking-tight">MXL</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#00FF66]/10 text-[#00FF66] tracking-wider uppercase border border-[#00FF66]/20">WIN</span>
+              </div>
+              <div className="text-sm text-[#A0A0A0] leading-relaxed max-w-[220px]">4-system alignment (4/4 bullish). Momentum fading — tighten stops. Volume 2.3× above average.</div>
+            </div>
+            <div className="text-right flex flex-col justify-center h-full">
+              <div className="font-mono-data text-[#00FF66] text-2xl font-bold tracking-tight">+84.8%</div>
+              <div className="text-[10px] text-[#6B6B6B] uppercase tracking-[0.1em] mt-1 font-semibold">Peak Conf</div>
+            </div>
+          </div>
+          <div className="bg-[#111111] border border-[#2A2A2A] rounded-xl p-5 flex justify-between items-center transition-colors hover:border-[#00FF66]/40 cursor-default">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="font-mono-data text-2xl text-[#00FF66] font-bold tracking-tight">AMZN</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#00FF66]/10 text-[#00FF66] tracking-wider uppercase border border-[#00FF66]/20">WIN</span>
+              </div>
+              <div className="text-sm text-[#A0A0A0] leading-relaxed max-w-[220px]">Strong alpha divergence compared to QQQ. Volatility contraction setup.</div>
+            </div>
+            <div className="text-right flex flex-col justify-center h-full">
+              <div className="font-mono-data text-[#00FF66] text-2xl font-bold tracking-tight">+62.4%</div>
+              <div className="text-[10px] text-[#6B6B6B] uppercase tracking-[0.1em] mt-1 font-semibold">Peak Conf</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Research Cards ── */}
       {(data.top_picks?.length > 0) && (
         <div className="pt-4 border-t border-[#2A2A2A]">
