@@ -253,6 +253,7 @@ CREATE TABLE IF NOT EXISTS alpha_calls (
     quant_score       REAL,
     moneyness         TEXT,
     strategy_category TEXT,
+    option_type       TEXT,
     skew_adj_delta    REAL,
     dollar_gamma      REAL,
     contract_gex      REAL,
@@ -900,7 +901,7 @@ _ALPHA_COLS = [
     "universe", "ticker", "stock_price", "strike", "expiration", "dte",
     "bid", "ask", "mid_price", "delta", "pop", "vol_edge", "breakeven_pct",
     "open_interest", "volume", "implied_volatility", "spread_pct",
-    "quant_score", "moneyness", "strategy_category", "skew_adj_delta",
+    "quant_score", "moneyness", "strategy_category", "option_type", "skew_adj_delta",
     "dollar_gamma", "contract_gex", "bad_vrp", "good_vrp"
 ]
 
@@ -942,6 +943,7 @@ def upsert_alpha_calls_bulk(calls: List[dict], universe: str, meta: dict) -> int
                     c.get("quant_score", 0),
                     c.get("moneyness", ""),
                     c.get("strategy_category", ""),
+                    c.get("option_type", ""),
                     c.get("skew_adj_delta", 0),
                     c.get("dollar_gamma", 0),
                     c.get("contract_gex", 0),
@@ -1042,6 +1044,7 @@ def load_alpha_calls(
             "quant_score": r["quant_score"],
             "moneyness": r["moneyness"],
             "strategy_category": r["strategy_category"],
+            "option_type": r["option_type"],
             "skew_adj_delta": r["skew_adj_delta"],
             "dollar_gamma": r["dollar_gamma"],
             "contract_gex": r["contract_gex"],
