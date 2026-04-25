@@ -686,6 +686,79 @@ def _dispatch_webhooks(data: dict) -> None:
 
 _agent_scheduler = None
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  WARM-START — Serve from JSON cache on restart
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Max age (hours) before we consider momentum_data.json stale and re-run
+_WARM_START_MAX_AGE_HOURS = float(os.environ.get("PIPELINE_CACHE_MAX_AGE_HOURS", "20"))
+
+
+def _try_warm_start() -> bool:
+    """Load momentum_data.json into memory cache if it is fresh enough.
+
+    Returns True if warm-start succeeded (pipeline re-run skipped).
+    Returns False if data is missing/stale (pipeline must run).
+
+    Override with FORCE_PIPELINE_RUN=true to always re-run the full pipeline.
+    """
+    global _CACHED_DASHBOARD_DATA
+
+    if os.environ.get("FORCE_PIPELINE_RUN", "").lower() in ("true", "1", "yes"):
+        print("  🔄 [WARM-START] FORCE_PIPELINE_RUN=true — skipping warm-start, full pipeline will run.")
+        return False
+
+    data_path = PIPELINES_DIR / "momentum_data.json"
+    if not data_path.exists():
+        print("  ⚡ [WARM-START] No cached momentum_data.json — full pipeline needed.")
+        return False
+
+    try:
+        import time as _time
+        age_seconds = _time.time() - data_path.stat().st_mtime
+        age_hours = age_seconds / 3600
+
+        if age_hours > _WARM_START_MAX_AGE_HOURS:
+            print(f"  ⚡ [WARM-START] momentum_data.json is {age_hours:.1f}h old (max {_WARM_START_MAX_AGE_HOURS}h) — re-running pipeline.")
+            return False
+
+        print(f"  ✅ [WARM-START] Loading cached data ({age_hours:.1f}h old) — skipping full pipeline re-run …")
+        t0 = _time.monotonic()
+
+        if HAS_ORJSON:
+            with open(data_path, "rb") as f:
+                raw = f.read()
+            data = orjson.loads(raw)
+        else:
+            with open(data_path, "r") as f:
+                data = json.load(f)
+
+        _CACHED_DASHBOARD_DATA = data
+
+        # Populate in-memory cache so all API endpoints serve instantly
+        cache = get_cache()
+        cache.set_dashboard(data)
+
+        # Seed segmented cache keys (signals, summary, derived)
+        charts = data.get("charts", {})
+        if charts:
+            stored = cache.set_charts_bulk(charts)
+            print(f"  ✅ [WARM-START] Pre-loaded {stored} ticker charts into cache")
+
+        elapsed = _time.monotonic() - t0
+        n_tickers = data.get("_meta", {}).get("tickers_screened", len(data.get("signals", [])))
+        print(f"  ✅ [WARM-START] Serving {n_tickers} tickers from cache in {elapsed:.2f}s (instant!)")
+
+        # Mark pipeline as done so frontend doesn't wait
+        _engine_status.update("done", f"Warm-start — {n_tickers} tickers served from cache (age {age_hours:.1f}h)")
+
+        return True
+
+    except Exception as e:
+        print(f"  ⚠ [WARM-START] Failed to load cache ({e}) — running full pipeline.")
+        return False
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Modern lifespan handler — replaces deprecated @app.on_event."""
@@ -696,13 +769,20 @@ async def lifespan(app: FastAPI):
     cache = get_cache()
     print(f"  Cache backend: {cache.stats()['backend']}")
 
-    # Start background pipeline in thread (engine handles its own parallelism)
-    pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
-    pipeline_thread.start()
+    # ── Warm-start: serve from JSON cache if data is fresh ──
+    _warm_started = _try_warm_start()
 
-    # Alpha warm-up: deferred until after momentum pipeline finishes
-    # (launched from _run_pipeline_background to avoid OOM on Railway)
-    print("  \U0001f4ca Alpha pipeline will start after momentum completes")
+    if not _warm_started:
+        # Cold start — run full progressive pipeline in background thread
+        pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
+        pipeline_thread.start()
+        print("  📊 Alpha pipeline will start after momentum completes")
+    else:
+        # Data served from cache — only run alpha if it needs refreshing
+        # (alpha has its own age-check in _refresh_alpha_cache_background)
+        alpha_warm_thread = threading.Thread(target=_refresh_alpha_cache_background, args=(True,), daemon=True)
+        alpha_warm_thread.start()
+        print("  ✅ [WARM-START] Alpha pipeline: checking if scan is needed …")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
