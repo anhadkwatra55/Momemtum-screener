@@ -38,7 +38,7 @@ const TooltipContent = React.memo(
     children,
     ...props
   }: TooltipPrimitive.Popup.Props) => {
-    const MotionPopup = motion(TooltipPrimitive.Popup)
+    const MotionPopup = motion.create(TooltipPrimitive.Popup) as any
 
     return (
       <TooltipPrimitive.Portal>

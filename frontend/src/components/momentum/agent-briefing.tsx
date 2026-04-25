@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { SFIcon } from "@/components/ui/sf-icon";
-import { SPRING_TRANSITION_PROPS } from "@/lib/constants";
+import { SPRING_TRANSITION_PROPS, API_BASE } from "@/lib/constants";
 import { getAuthHeaders } from "@/services/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || API_BASE;
 
 interface StockInsight {
   ticker: string;
@@ -53,8 +53,8 @@ function GradeBadge({ grade }: { grade: string }) {
     grade === "A"
       ? { color: C.green, bg: C.greenDim, border: `${C.green}40` }
       : grade === "B"
-      ? { color: C.gold, bg: C.goldDim, border: `${C.gold}40` }
-      : { color: C.textMuted, bg: C.surface, border: C.border };
+        ? { color: C.gold, bg: C.goldDim, border: `${C.gold}40` }
+        : { color: C.textMuted, bg: C.surface, border: C.border };
   return (
     <span
       style={{
@@ -250,9 +250,9 @@ export function AgentBriefing() {
         <span className="text-[10px] text-gray-500 font-mono">
           {briefing?.timestamp
             ? new Date(briefing.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+              hour: "2-digit",
+              minute: "2-digit",
+            })
             : ""}
         </span>
       </div>

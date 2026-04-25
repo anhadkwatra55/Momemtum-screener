@@ -104,9 +104,9 @@ const buttonVariants = cva(
   }
 )
 
-const MotionButtonPrimitive = motion(ButtonPrimitive);
+const MotionButtonPrimitive = motion.create(ButtonPrimitive) as any;
 
-interface ButtonProps extends ButtonPrimitive.Props, VariantProps<typeof buttonVariants> {}
+interface ButtonProps extends ButtonPrimitive.Props, VariantProps<typeof buttonVariants> { }
 
 const Button = React.memo(React.forwardRef<
   React.ElementRef<typeof ButtonPrimitive>,
@@ -140,12 +140,12 @@ const Button = React.memo(React.forwardRef<
     // Utilizing getFocusBackgroundColorValue for consistent color tokenization
     // by translating COLORS hex values to rgba strings for Framer Motion's backgroundColor.
     backgroundColor:
-      variant === "default"     ? getFocusBackgroundColorValue('cyan', FOCUS_NEUTRAL_OPACITY) :
-      variant === "secondary"   ? getFocusBackgroundColorValue('violet', FOCUS_NEUTRAL_OPACITY) :
-      variant === "destructive" ? getFocusBackgroundColorValue('rose', FOCUS_NEUTRAL_OPACITY) :
-      variant === "outline"     ? getFocusBackgroundColorValue(FOCUS_NEUTRAL_COLOR_KEY, FOCUS_NEUTRAL_OPACITY) :
-      variant === "ghost"       ? getFocusBackgroundColorValue(FOCUS_NEUTRAL_COLOR_KEY, FOCUS_NEUTRAL_OPACITY) :
-      'transparent', // For link variant or any other future variants
+      variant === "default" ? getFocusBackgroundColorValue('cyan', FOCUS_NEUTRAL_OPACITY) :
+        variant === "secondary" ? getFocusBackgroundColorValue('violet', FOCUS_NEUTRAL_OPACITY) :
+          variant === "destructive" ? getFocusBackgroundColorValue('rose', FOCUS_NEUTRAL_OPACITY) :
+            variant === "outline" ? getFocusBackgroundColorValue(FOCUS_NEUTRAL_COLOR_KEY, FOCUS_NEUTRAL_OPACITY) :
+              variant === "ghost" ? getFocusBackgroundColorValue(FOCUS_NEUTRAL_COLOR_KEY, FOCUS_NEUTRAL_OPACITY) :
+                'transparent', // For link variant or any other future variants
     transition: MOTION_SPRING_CONFIG,
   }, [disabled, interactiveGlowShadow, variant]);
 

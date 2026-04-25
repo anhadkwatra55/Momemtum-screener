@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { API_BASE } from "@/lib/constants";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+const API = process.env.NEXT_PUBLIC_API_URL || API_BASE;
 import { getAuthHeaders } from "@/services/api";
 
 interface WhaleSignal {

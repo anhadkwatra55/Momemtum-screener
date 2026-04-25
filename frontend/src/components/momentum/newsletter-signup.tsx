@@ -5,10 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SFIcon } from "@/components/ui/sf-icon";
 import { AppleButton } from "@/components/ui/apple-button";
 import { Card } from "@/components/ui/card";
-import { SPRING_TRANSITION_PROPS } from "@/lib/constants";
+import { SPRING_TRANSITION_PROPS, API_BASE } from "@/lib/constants";
 import { getAuthHeaders } from "@/services/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || API_BASE;
 
 export function NewsletterSignup() {
   const [email, setEmail] = useState("");
@@ -18,7 +18,7 @@ export function NewsletterSignup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    
+
     setStatus("loading");
     try {
       const res = await fetch(`${API_URL}/api/newsletter/subscribe`, {
@@ -26,7 +26,7 @@ export function NewsletterSignup() {
         headers: getAuthHeaders(),
         body: JSON.stringify({ email }),
       });
-      
+
       const data = await res.json();
       if (res.ok) {
         setStatus("success");
@@ -46,7 +46,7 @@ export function NewsletterSignup() {
     <Card className="p-6 border border-white/5 bg-gradient-to-br from-[#111111] to-[#0A0A0A] relative overflow-hidden group">
       {/* Decorative Glow */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all duration-700 pointer-events-none" />
-      
+
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-purple-400">
           <SFIcon name="envelope.fill" size={16} />
@@ -109,7 +109,7 @@ export function NewsletterSignup() {
             </motion.div>
           )}
         </AnimatePresence>
-        
+
         {status === "error" && (
           <motion.p
             initial={{ opacity: 0 }}

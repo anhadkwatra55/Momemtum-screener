@@ -281,10 +281,42 @@ CREATE TABLE IF NOT EXISTS alpha_scan_meta (
 """
 
 
+def _migrate_alpha_calls_table(conn: sqlite3.Connection) -> None:
+    """
+    Add missing columns to alpha_calls table if they don't exist.
+    This handles the schema drift where new columns were added to SCHEMA_SQL
+    but existing databases don't have them.
+    """
+    # Get existing columns
+    cursor = conn.execute("PRAGMA table_info(alpha_calls)")
+    existing_columns = {row["name"].lower() for row in cursor.fetchall()}
+    
+    # Define columns to add with their types and defaults
+    columns_to_add = [
+        ("strategy_category", "TEXT DEFAULT ''"),
+        ("option_type", "TEXT DEFAULT ''"),
+        ("skew_adj_delta", "REAL DEFAULT 0"),
+        ("dollar_gamma", "REAL DEFAULT 0"),
+        ("contract_gex", "REAL DEFAULT 0"),
+        ("bad_vrp", "REAL DEFAULT 0"),
+        ("good_vrp", "REAL DEFAULT 0"),
+    ]
+    
+    for col_name, col_def in columns_to_add:
+        if col_name.lower() not in existing_columns:
+            try:
+                conn.execute(f"ALTER TABLE alpha_calls ADD COLUMN {col_name} {col_def}")
+                print(f"Added column {col_name} to alpha_calls table")
+            except sqlite3.OperationalError as e:
+                print(f"Failed to add column {col_name}: {e}")
+
+
 def init_db(db_path=None) -> None:
     """Create all tables if they don't exist."""
     with db_session(db_path) as conn:
         conn.executescript(SCHEMA_SQL)
+        # Migrate existing tables if needed
+        _migrate_alpha_calls_table(conn)
         # Record schema version
         existing = conn.execute(
             "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"

@@ -203,7 +203,7 @@ def fetch_single_ticker(sym, min_dte=7, max_dte=180, _retries=2):
         except Exception as e:
             last_err = str(e)[:80]
             if attempt < _retries:
-                backoff = (0.5 * (2 ** attempt)) + random.uniform(0, 0.3)
+                backoff = (2.0 * (2 ** attempt)) + random.uniform(0, 0.3)
                 logger.debug(f"[{sym}] Attempt {attempt+1} failed, retrying in {backoff:.1f}s: {last_err}")
                 _time.sleep(backoff)
     logger.warning(f"[{sym}] All {_retries+1} attempts failed: {last_err}")
@@ -305,6 +305,11 @@ def get_alpha_calls(limit=75, max_workers=4, sort_by="quant_score", universe="sp
             tickers = cfg.STOCK_TICKERS
             src = "S&P 1500 (config)"
 
+    # Optional: Return early on weekends to avoid unnecessary API calls
+    # from datetime import datetime
+    # if datetime.now().weekday() >= 5:  # 5=Saturday, 6=Sunday
+    #     return {"calls": [], "meta": {"error": "Market closed (weekend)", "universe_size": len(tickers)}, "timestamp": datetime.now().isoformat()}
+
     scan_tickers = tickers[:limit]
     
     all_chains = []
@@ -313,8 +318,16 @@ def get_alpha_calls(limit=75, max_workers=4, sort_by="quant_score", universe="sp
     errors = 0
     t0 = _time.monotonic()
 
+    # Rate limiting: limit concurrent requests and add delay between them
+    rate_limit_sem = threading.Semaphore(2)
+
+    def _throttled_fetch(sym):
+        with rate_limit_sem:
+            _time.sleep(0.3)
+            return fetch_single_ticker(sym)
+
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(fetch_single_ticker, t): t for t in scan_tickers}
+        futures = {pool.submit(_throttled_fetch, t): t for t in scan_tickers}
         for f in as_completed(futures):
             sym, spot, df, rv2, err = f.result()
             if err: errors += 1

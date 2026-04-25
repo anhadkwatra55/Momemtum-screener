@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { PipelineStatus } from "@/types/momentum";
+import { API_BASE } from "@/lib/constants";
 
-const _apiBase = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8060";
+const _apiBase = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE || API_BASE;
 const WS_PIPELINE_URL = _apiBase.replace(/^http/, "ws") + "/ws/pipeline";
 
 interface PipelineState {

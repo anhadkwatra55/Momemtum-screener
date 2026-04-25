@@ -5,7 +5,7 @@ import { motion, type MotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { INTERACTIVE_TRANSITION } from "@/lib/constants"
 
-const MotionInputPrimitive = motion(InputPrimitive)
+const MotionInputPrimitive = motion.create(InputPrimitive) as any
 
 const Input = React.memo(
   React.forwardRef<HTMLInputElement, React.ComponentPropsWithoutRef<"input">>(

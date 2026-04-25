@@ -11,8 +11,8 @@ import { XIcon } from "lucide-react"
 import { SPRING_PHYSICS_DEFAULT, OVERLAY_TRANSITION_DEFAULT, Z_INDEX_OVERLAY, Z_INDEX_SHEET_CONTENT } from "@/lib/constants"
 
 // Define motion versions of the primitive components for animation
-const MotionSheetPrimitiveBackdrop = motion(SheetPrimitive.Backdrop);
-const MotionSheetPrimitivePopup = motion(SheetPrimitive.Popup);
+const MotionSheetPrimitiveBackdrop = motion.create(SheetPrimitive.Backdrop) as any;
+const MotionSheetPrimitivePopup = motion.create(SheetPrimitive.Popup) as any;
 
 // Sheet Root
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
@@ -102,7 +102,7 @@ function SheetContent({
   const handleClose = React.useCallback(() => {
     // This function will be passed to SheetPrimitive.Close, but when used with the handle it needs to be explicitly invoked
     // SheetPrimitive.Close can be called directly or implicitly via render prop
-    const closeFn = (props as any).onClose || (() => {}); // Get close function from props or provide a no-op
+    const closeFn = (props as any).onClose || (() => { }); // Get close function from props or provide a no-op
     closeFn();
   }, [props]);
 

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { getAuthHeaders } from "@/services/api";
+import { API_BASE } from "@/lib/constants";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || API_BASE;
 
 /* ── Contract type from Hidden Alpha Engine ── */
 interface Contract {

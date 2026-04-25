@@ -24,8 +24,8 @@ import {
 
 // --- Framer Motion Wrapped Primitives ---
 
-const MotionDialogOverlay = motion(DialogPrimitive.Backdrop);
-const MotionDialogPopup = motion(DialogPrimitive.Popup);
+const MotionDialogOverlay = motion.create(DialogPrimitive.Backdrop) as any;
+const MotionDialogPopup = motion.create(DialogPrimitive.Popup) as any;
 
 // --- Component Definitions ---
 

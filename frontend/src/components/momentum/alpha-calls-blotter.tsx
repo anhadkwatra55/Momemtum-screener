@@ -3,17 +3,18 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlphaContractModal } from "./alpha-contract-modal";
-import { 
-  COLORS, 
-  SPRING_TRANSITION_PROPS, 
-  MOTION_VARIANTS, 
+import {
+  COLORS,
+  SPRING_TRANSITION_PROPS,
+  MOTION_VARIANTS,
   TRACKING_HEADING_CLASS,
-  INTERACTIVE_CARD_SHADOW_GLOW
+  INTERACTIVE_CARD_SHADOW_GLOW,
+  API_BASE
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { SFIcon } from "@/components/ui/sf-icon";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8060";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || API_BASE;
 import { getAuthHeaders } from "@/services/api";
 
 interface AlphaCall {
@@ -27,11 +28,11 @@ interface AlphaCall {
 
 interface AlphaCallsData {
   calls: AlphaCall[];
-  meta: { 
-    universe_source: string; universe_size: number; tickers_scanned: number; 
-    contracts_found: number; tickers_with_calls: number; errors: number; 
-    partial?: boolean; scan_time_seconds?: number; warming_up?: boolean; 
-    message?: string; filters: Record<string, string>; 
+  meta: {
+    universe_source: string; universe_size: number; tickers_scanned: number;
+    contracts_found: number; tickers_with_calls: number; errors: number;
+    partial?: boolean; scan_time_seconds?: number; warming_up?: boolean;
+    message?: string; filters: Record<string, string>;
   };
   timestamp: string;
   refresh_started?: boolean;
@@ -57,10 +58,10 @@ function Donut({ score, size = 36 }: { score: number; size?: number }) {
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={T.surface} strokeWidth="2.5" />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="2.5"
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.surface} strokeWidth="2.5" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="2.5"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          transform={`rotate(-90 ${size/2} ${size/2})`} style={{ transition: "stroke-dashoffset 0.5s ease" }} />
+          transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset 0.5s ease" }} />
       </svg>
       <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color }}>{Math.round(score)}</span>
     </div>
@@ -117,7 +118,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
   const [universe, setUniverse] = useState<"sp500" | "nasdaq100" | "both">("sp500");
   const [refreshing, setRefreshing] = useState(false);
   const [scanElapsed, setScanElapsed] = useState<number | null>(null);
-  
+
   // ── New Filters ──
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [moneynessFilter, setMoneynessFilter] = useState<string>("All"); // ITM, ATM, OTM
@@ -136,11 +137,11 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 180_000);
     try {
-      const params = new URLSearchParams({ 
+      const params = new URLSearchParams({
         limit: "500", // Always scan full range for institutional feel
-        sort_by: "quant_score", 
-        universe, 
-        ...(refresh && { refresh: "true" }) 
+        sort_by: "quant_score",
+        universe,
+        ...(refresh && { refresh: "true" })
       });
       const res = await fetch(`${API_URL}/api/screener/alpha-calls?${params}`, { signal: controller.signal, headers: getAuthHeaders() });
       clearTimeout(timer);
@@ -154,6 +155,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
       if (result.error) throw new Error(result.error);
 
       setData(result);
+      console.log('[ALPHA-DEBUG] API response:', { calls: result.calls?.length, sample: result.calls?.[0], meta: result.meta });
       setError(null);
       setLoading(false);
 
@@ -213,12 +215,13 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
   // ── Filtered & Sorted Calls ──
   const filteredCalls = useMemo(() => {
+    console.log('[FILTER-DEBUG]', { total: data?.calls?.length, activeCategory, moneynessFilter, dteFilter, categories: [...new Set(data?.calls?.map(c => c.strategy_category))] });
     if (!data?.calls?.length) return [];
-    
+
     let result = data.calls.filter(c => {
       // Category
-      if (activeCategory && c.strategy_category !== activeCategory) return false;
-      
+      if (activeCategory && (c.strategy_category || '') !== activeCategory) return false;
+
       // Moneyness
       if (moneynessFilter !== "All") {
         const isCall = c.option_type === 'call' || (!c.option_type && c.delta > 0);
@@ -226,12 +229,12 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
         const atm = Math.abs(ratio - 1) < 0.03;
         const itm = isCall ? ratio < 0.97 : ratio > 1.03;
         const otm = isCall ? ratio > 1.03 : ratio < 0.97;
-        
+
         if (moneynessFilter === "ITM" && !itm) return false;
         if (moneynessFilter === "ATM" && !atm) return false;
         if (moneynessFilter === "OTM" && !otm) return false;
       }
-      
+
       // DTE Range
       if (dteFilter !== "All") {
         if (dteFilter === "Weeklies" && c.dte >= 14) return false;
@@ -239,16 +242,16 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
         if (dteFilter === "Long" && (c.dte < 60 || c.dte > 180)) return false;
         if (dteFilter === "LEAPS" && c.dte <= 180) return false;
       }
-      
+
       // Conviction
       if (highConvictionOnly && c.quant_score < 75 && c.vol_edge <= 0) return false;
-      
+
       return true;
     });
 
     // Sort
     result.sort((a, b) => b[sortBy] - a[sortBy]);
-    
+
     return result;
   }, [data?.calls, activeCategory, moneynessFilter, dteFilter, highConvictionOnly, sortBy]);
 
@@ -293,8 +296,8 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                   Synced {timeAgo(data.timestamp)}
                 </div>
               )}
-              <button 
-                onClick={() => fetchData(true)} 
+              <button
+                onClick={() => fetchData(true)}
                 disabled={loading || refreshing}
                 className="group flex items-center gap-2 px-3 py-1.5 rounded-md border border-zinc-800 hover:border-emerald-500/50 bg-zinc-900/50 transition-all active:scale-95"
               >
@@ -318,43 +321,43 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
           {/* ── DYNAMIC CATEGORY TABS ── */}
           <div className="mb-6">
-             <div className="flex items-center gap-1 p-1 bg-zinc-900/80 border border-zinc-800 rounded-lg w-fit overflow-x-auto no-scrollbar">
-                {["", ...dynamicCategories].map((cat) => {
-                  const meta = STRATEGY_LABELS[cat] || { label: cat.replace(/_/g, ' '), tag: "ALT", color: T.textSec };
-                  const isActive = activeCategory === cat;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => { setActiveCategory(cat); setExpandedTicker(null); setSelected(null); }}
-                      className={cn(
-                        "relative px-4 py-2 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap",
-                        isActive ? "text-emerald-400" : "text-zinc-500 hover:text-zinc-300"
-                      )}
-                    >
-                      {isActive && (
-                        <motion.div 
-                          layoutId="activeTab"
-                          className="absolute inset-0 bg-emerald-500/10 border border-emerald-500/20 rounded-md"
-                          transition={SPRING_TRANSITION_PROPS}
-                        />
-                      )}
-                      <span className="relative z-10">{meta.label}</span>
-                    </button>
-                  );
-                })}
-             </div>
+            <div className="flex items-center gap-1 p-1 bg-zinc-900/80 border border-zinc-800 rounded-lg w-fit overflow-x-auto no-scrollbar">
+              {["", ...dynamicCategories].map((cat) => {
+                const meta = STRATEGY_LABELS[cat] || { label: cat.replace(/_/g, ' '), tag: "ALT", color: T.textSec };
+                const isActive = activeCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => { setActiveCategory(cat); setExpandedTicker(null); setSelected(null); }}
+                    className={cn(
+                      "relative px-4 py-2 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                      isActive ? "text-emerald-400" : "text-zinc-500 hover:text-zinc-300"
+                    )}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeTab"
+                        className="absolute inset-0 bg-emerald-500/10 border border-emerald-500/20 rounded-md"
+                        transition={SPRING_TRANSITION_PROPS}
+                      />
+                    )}
+                    <span className="relative z-10">{meta.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* ── ADVANCED FILTER BAR ── */}
           <div className="flex flex-wrap items-center gap-4 p-4 bg-zinc-900/40 border border-zinc-800/50 rounded-xl mb-8">
-            
+
             {/* Universe */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Universe</span>
               <div className="flex bg-zinc-950 rounded-md border border-zinc-800 p-0.5">
                 {(["sp500", "nasdaq100", "both"] as const).map((u) => (
-                  <button 
-                    key={u} 
+                  <button
+                    key={u}
                     onClick={() => setUniverse(u)}
                     className={cn(
                       "px-3 py-1 rounded-sm text-[10px] font-bold uppercase transition-all",
@@ -374,8 +377,8 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Moneyness</span>
               <div className="flex bg-zinc-950 rounded-md border border-zinc-800 p-0.5">
                 {["All", "ITM", "ATM", "OTM"].map((m) => (
-                  <button 
-                    key={m} 
+                  <button
+                    key={m}
                     onClick={() => setMoneynessFilter(m)}
                     className={cn(
                       "px-3 py-1 rounded-sm text-[10px] font-bold uppercase transition-all",
@@ -395,8 +398,8 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Horizon</span>
               <div className="flex bg-zinc-950 rounded-md border border-zinc-800 p-0.5">
                 {["All", "Weeklies", "Swing", "Long", "LEAPS"].map((d) => (
-                  <button 
-                    key={d} 
+                  <button
+                    key={d}
                     onClick={() => setDteFilter(d)}
                     className={cn(
                       "px-3 py-1 rounded-sm text-[10px] font-bold uppercase transition-all",
@@ -412,12 +415,12 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
             <div className="w-px h-4 bg-zinc-800" />
 
             {/* Conviction Toggle */}
-            <button 
+            <button
               onClick={() => setHighConvictionOnly(!highConvictionOnly)}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all",
-                highConvictionOnly 
-                  ? "bg-amber-500/10 border-amber-500/50 text-amber-500 shadow-[0_0_10px_rgba(226,184,87,0.15)]" 
+                highConvictionOnly
+                  ? "bg-amber-500/10 border-amber-500/50 text-amber-500 shadow-[0_0_10px_rgba(226,184,87,0.15)]"
                   : "bg-zinc-950 border-zinc-800 text-zinc-500 grayscale opacity-60"
               )}
             >
@@ -430,8 +433,8 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
             {/* Sort */}
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Sort</span>
-              <select 
-                value={sortBy} 
+              <select
+                value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="bg-transparent border-b border-dashed border-zinc-700 text-[11px] font-bold text-zinc-300 outline-none cursor-pointer hover:border-zinc-500"
               >
@@ -449,10 +452,10 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                 { label: `${grouped.length} Tickers`, color: "amber" },
                 { label: activeCategory ? STRATEGY_LABELS[activeCategory]?.label || activeCategory : "All Categories", color: "cyan" }
               ].map(b => (
-                <div key={b.label} className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] border", 
+                <div key={b.label} className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] border",
                   b.color === "emerald" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" :
-                  b.color === "amber" ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
-                  "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                    b.color === "amber" ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
+                      "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
                 )}>
                   {b.label}
                 </div>
@@ -462,13 +465,36 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
           {/* ═══ TICKER LIST ═══ */}
           <AnimatePresence mode="popLayout">
+            {/* Error Display - Always show if there's an error */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl"
+              >
+                <div className="flex items-center gap-3">
+                  <SFIcon name="exclamationmark.triangle.fill" size="text-xl" className="text-rose-400" />
+                  <div>
+                    <p className="text-sm font-bold text-rose-400 uppercase tracking-widest">Connection Error</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">{error}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => fetchData()}
+                  className="mt-3 px-4 py-1.5 rounded-md bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[10px] font-bold uppercase tracking-widest hover:bg-rose-500/30 transition-all"
+                >
+                  Retry Connection
+                </button>
+              </motion.div>
+            )}
+
             {loading && !data ? (
               <div className="flex flex-col items-center justify-center py-20 opacity-40">
                 <div className="w-10 h-10 border-2 border-zinc-800 border-t-emerald-500 rounded-full animate-spin mb-4" />
                 <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Scanning Universe Intelligence...</p>
               </div>
             ) : grouped.length > 0 ? (
-              <motion.div 
+              <motion.div
                 className="flex flex-col gap-3"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -478,9 +504,9 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                   const isOpen = expandedTicker === g.ticker;
                   const isTop = idx < 3;
                   return (
-                    <motion.div 
+                    <motion.div
                       layout
-                      key={g.ticker} 
+                      key={g.ticker}
                       className={cn(
                         "group bg-zinc-900/50 border rounded-xl overflow-hidden transition-all duration-300",
                         isOpen ? "border-zinc-700 ring-1 ring-zinc-700/50" : "border-zinc-800/60 hover:border-zinc-700"
@@ -516,29 +542,29 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
                         {/* Key Metrics */}
                         <div className="hidden md:flex items-center gap-6">
-                           <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">Edge</span>
-                              <span className={cn("text-xs font-mono font-bold", g.best.vol_edge > 0 ? "text-emerald-400" : "text-rose-400")}>
-                                {g.best.vol_edge > 0 ? "+" : ""}{g.best.vol_edge.toFixed(1)}%
-                              </span>
-                           </div>
-                           <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">OI Flow</span>
-                              <span className="text-xs font-mono font-bold text-zinc-300">
-                                {g.best.open_interest.toLocaleString()}
-                              </span>
-                           </div>
-                           <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">Contracts</span>
-                              <span className="text-xs font-bold text-zinc-400">
-                                {g.total}
-                              </span>
-                           </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">Edge</span>
+                            <span className={cn("text-xs font-mono font-bold", g.best.vol_edge > 0 ? "text-emerald-400" : "text-rose-400")}>
+                              {g.best.vol_edge > 0 ? "+" : ""}{g.best.vol_edge.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">OI Flow</span>
+                            <span className="text-xs font-mono font-bold text-zinc-300">
+                              {g.best.open_interest.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">Contracts</span>
+                            <span className="text-xs font-bold text-zinc-400">
+                              {g.total}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Category Tags */}
                         <div className="hidden lg:flex gap-1.5 ml-auto">
-                          {Array.from(new Set(g.calls.map(c => c.strategy_category))).slice(0, 2).map(cat => {
+                          {Array.from(new Set(g.calls.map(c => c.strategy_category).filter(Boolean))).slice(0, 2).map(cat => {
                             const meta = STRATEGY_LABELS[cat as string] || { tag: "ALT" };
                             return (
                               <span key={cat as string} className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-[8px] font-black uppercase text-zinc-500 tracking-tighter">
@@ -549,14 +575,14 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                         </div>
 
                         <div className={cn("ml-auto lg:ml-0 p-2 rounded-full transition-transform duration-300 text-zinc-600", isOpen && "rotate-180 text-zinc-300")}>
-                           <SFIcon name="chevron.down" size="text-xs" />
+                          <SFIcon name="chevron.down" size="text-xs" />
                         </div>
                       </div>
 
                       {/* Expanded Section */}
                       <AnimatePresence>
                         {isOpen && (
-                          <motion.div 
+                          <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
@@ -569,7 +595,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                                   <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{exp}</span>
                                   <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-tighter">{dte}D To Expiry</span>
                                 </div>
-                                
+
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-[11px] border-collapse min-w-[600px]">
                                     <thead>
@@ -583,7 +609,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
                                     </thead>
                                     <tbody>
                                       {contracts.map((c, ci) => (
-                                        <tr 
+                                        <tr
                                           key={ci}
                                           onClick={() => { setSelected(c); setModalCall(c); }}
                                           className={cn(
@@ -625,7 +651,7 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
               <div className="flex flex-col items-center justify-center py-32 border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
                 <SFIcon name="magnifyingglass" size="text-3xl" className="text-zinc-700 mb-4" />
                 <p className="text-sm font-bold text-zinc-500 uppercase tracking-widest">No Intelligence Matching Current Criteria</p>
-                <button 
+                <button
                   onClick={() => { setActiveCategory(""); setMoneynessFilter("All"); setDteFilter("All"); setHighConvictionOnly(false); }}
                   className="mt-4 text-[10px] font-black text-emerald-500 uppercase tracking-widest hover:text-emerald-400"
                 >
@@ -638,94 +664,94 @@ export function AlphaCallsBlotter({ onTickerSelect }: Props) {
 
         {/* ── RIGHT PANE (Institutional Sidebar) ── */}
         <div className="hidden lg:block bg-zinc-950 border-l border-zinc-900 sticky top-0 h-screen overflow-y-auto no-scrollbar">
-           {selected ? (
-             <motion.div 
-               initial={{ opacity: 0, x: 20 }}
-               animate={{ opacity: 1, x: 0 }}
-               className="p-6"
-             >
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-black text-zinc-600 uppercase tracking-widest mb-1">Contract Focus</span>
-                    <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                      {selected.ticker} 
-                      <div className="flex items-center gap-2">
-                        <span className={cn("text-xs px-2 py-1 rounded font-black", selected.option_type === 'put' ? "bg-purple-500/10 text-purple-400" : "bg-emerald-500/10 text-emerald-400")}>{selected.option_type === 'put' ? 'PUT' : 'CALL'}</span>
-                        <span className="text-emerald-400 font-mono">${selected.strike}</span>
-                      </div>
-                    </h2>
+          {selected ? (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="p-6"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col">
+                  <span className="text-xs font-black text-zinc-600 uppercase tracking-widest mb-1">Contract Focus</span>
+                  <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                    {selected.ticker}
+                    <div className="flex items-center gap-2">
+                      <span className={cn("text-xs px-2 py-1 rounded font-black", selected.option_type === 'put' ? "bg-purple-500/10 text-purple-400" : "bg-emerald-500/10 text-emerald-400")}>{selected.option_type === 'put' ? 'PUT' : 'CALL'}</span>
+                      <span className="text-emerald-400 font-mono">${selected.strike}</span>
+                    </div>
+                  </h2>
+                </div>
+                <Donut score={selected.quant_score} size={50} />
+              </div>
+
+              {/* Score Breakdown Card */}
+              <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl mb-6 relative overflow-hidden">
+                <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-emerald-500/5 to-transparent pointer-events-none" />
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Quant Score Analysis</span>
+                  <span className={cn("text-xs font-black px-2 py-0.5 rounded",
+                    selected.quant_score >= 75 ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+                  )}>
+                    {selected.quant_score >= 75 ? "ELITE" : "STRONG"}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {[
+                    { label: "Vol Edge", value: `${selected.vol_edge.toFixed(1)}%`, active: selected.vol_edge > 0 },
+                    { label: "Pop Probability", value: `${(selected.pop * 100).toFixed(0)}%`, active: selected.pop > 0.4 },
+                    { label: "OI Conviction", value: selected.open_interest > 1000 ? "High" : "Mid", active: true },
+                    { label: "Moneyness", value: selected.moneyness || "ATM", active: true }
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-zinc-600 uppercase">{item.label}</span>
+                      <span className={cn("text-[11px] font-mono font-bold", item.active ? "text-emerald-400" : "text-zinc-400")}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Detailed Greeks Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {[
+                  { label: "Delta", val: selected.delta.toFixed(2), c: "text-zinc-100" },
+                  { label: "IV", val: `${selected.implied_volatility}%`, c: "text-amber-400" },
+                  { label: "B/E", val: `+${selected.breakeven_pct}%`, c: "text-emerald-400" },
+                  { label: "Spread", val: `${selected.spread_pct}%`, c: "text-zinc-400" }
+                ].map(g => (
+                  <div key={g.label} className="p-3 bg-zinc-900/50 border border-zinc-800/80 rounded-lg">
+                    <div className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">{g.label}</div>
+                    <div className={cn("text-sm font-black font-mono", g.c)}>{g.val}</div>
                   </div>
-                  <Donut score={selected.quant_score} size={50} />
-                </div>
+                ))}
+              </div>
 
-                {/* Score Breakdown Card */}
-                <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl mb-6 relative overflow-hidden">
-                   <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-emerald-500/5 to-transparent pointer-events-none" />
-                   <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Quant Score Analysis</span>
-                      <span className={cn("text-xs font-black px-2 py-0.5 rounded", 
-                        selected.quant_score >= 75 ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
-                      )}>
-                        {selected.quant_score >= 75 ? "ELITE" : "STRONG"}
-                      </span>
-                   </div>
-                   <div className="flex flex-col gap-3">
-                      {[
-                        { label: "Vol Edge", value: `${selected.vol_edge.toFixed(1)}%`, active: selected.vol_edge > 0 },
-                        { label: "Pop Probability", value: `${(selected.pop * 100).toFixed(0)}%`, active: selected.pop > 0.4 },
-                        { label: "OI Conviction", value: selected.open_interest > 1000 ? "High" : "Mid", active: true },
-                        { label: "Moneyness", value: selected.moneyness || "ATM", active: true }
-                      ].map(item => (
-                        <div key={item.label} className="flex items-center justify-between">
-                           <span className="text-[10px] font-bold text-zinc-600 uppercase">{item.label}</span>
-                           <span className={cn("text-[11px] font-mono font-bold", item.active ? "text-emerald-400" : "text-zinc-400")}>{item.value}</span>
-                        </div>
-                      ))}
-                   </div>
+              {/* Strategy Context */}
+              <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl mb-8">
+                <div className="flex items-center gap-2 mb-2 text-emerald-400">
+                  <SFIcon name="info.circle.fill" size="text-[10px]" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Institutional Context</span>
                 </div>
+                <p className="text-xs text-zinc-400 leading-relaxed italic">
+                  {selected.ticker} exhibits {selected.vol_edge > 2 ? "significant" : "moderate"} volatility compression.
+                  The {selected.strategy_category?.replace(/_/g, ' ')} classification suggests
+                  {selected.open_interest > selected.volume ? " deep institutional accumulation" : " aggressive short-term positioning"}.
+                </p>
+              </div>
 
-                {/* Detailed Greeks Grid */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                   {[
-                     { label: "Delta", val: selected.delta.toFixed(2), c: "text-zinc-100" },
-                     { label: "IV", val: `${selected.implied_volatility}%`, c: "text-amber-400" },
-                     { label: "B/E", val: `+${selected.breakeven_pct}%`, c: "text-emerald-400" },
-                     { label: "Spread", val: `${selected.spread_pct}%`, c: "text-zinc-400" }
-                   ].map(g => (
-                     <div key={g.label} className="p-3 bg-zinc-900/50 border border-zinc-800/80 rounded-lg">
-                        <div className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">{g.label}</div>
-                        <div className={cn("text-sm font-black font-mono", g.c)}>{g.val}</div>
-                     </div>
-                   ))}
-                </div>
-
-                {/* Strategy Context */}
-                <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl mb-8">
-                   <div className="flex items-center gap-2 mb-2 text-emerald-400">
-                      <SFIcon name="info.circle.fill" size="text-[10px]" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Institutional Context</span>
-                   </div>
-                   <p className="text-xs text-zinc-400 leading-relaxed italic">
-                      {selected.ticker} exhibits {selected.vol_edge > 2 ? "significant" : "moderate"} volatility compression. 
-                      The {selected.strategy_category?.replace(/_/g, ' ')} classification suggests 
-                      {selected.open_interest > selected.volume ? " deep institutional accumulation" : " aggressive short-term positioning"}.
-                   </p>
-                </div>
-
-                <button 
-                  onClick={() => onTickerSelect?.(selected.ticker)}
-                  className="w-full py-4 rounded-xl bg-zinc-100 text-zinc-950 text-xs font-black uppercase tracking-widest hover:bg-white transition-all shadow-xl hover:shadow-emerald-500/10"
-                >
-                  View Full Ticker Analysis
-                </button>
-             </motion.div>
-           ) : (
-             <div className="h-full flex flex-col items-center justify-center p-12 text-center opacity-30">
-                <SFIcon name="target" size="text-5xl" className="text-zinc-800 mb-6" />
-                <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-2">Deep Intelligence</h3>
-                <p className="text-[10px] text-zinc-600 font-bold uppercase leading-relaxed">Select a contract from the flow blotter to unlock institutional analysis and greeks.</p>
-             </div>
-           )}
+              <button
+                onClick={() => onTickerSelect?.(selected.ticker)}
+                className="w-full py-4 rounded-xl bg-zinc-100 text-zinc-950 text-xs font-black uppercase tracking-widest hover:bg-white transition-all shadow-xl hover:shadow-emerald-500/10"
+              >
+                View Full Ticker Analysis
+              </button>
+            </motion.div>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center p-12 text-center opacity-30">
+              <SFIcon name="target" size="text-5xl" className="text-zinc-800 mb-6" />
+              <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-2">Deep Intelligence</h3>
+              <p className="text-[10px] text-zinc-600 font-bold uppercase leading-relaxed">Select a contract from the flow blotter to unlock institutional analysis and greeks.</p>
+            </div>
+          )}
         </div>
       </div>
 
