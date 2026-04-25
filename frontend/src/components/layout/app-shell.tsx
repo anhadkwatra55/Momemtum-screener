@@ -28,10 +28,25 @@ function AppShellInner({ children, dbStats }: AppShellProps) {
   const handleNavigate = useCallback((page: string) => {
     setActivePage(page);
     setSidebarOpen(false);
-    // Update URL without full page reload
+    // Push to browser history so back/forward buttons work between views
     const url = new URL(window.location.href);
     url.searchParams.set("view", page);
-    window.history.replaceState({}, "", url.toString());
+    // Clean up sector param when not navigating to sector-radar
+    if (page !== "sector-radar") {
+      url.searchParams.delete("sector");
+    }
+    window.history.pushState({ view: page }, "", url.toString());
+  }, []);
+
+  // Listen for browser back/forward (popstate) to update the active page
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get("view") || "market-pulse";
+      setActivePage(view);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -53,7 +68,7 @@ function AppShellInner({ children, dbStats }: AppShellProps) {
 
       {/* Main content — no z-index needed, natural flow */}
       <main className="ml-0 md:ml-[220px] flex-1 min-w-0 overflow-x-hidden px-3 py-3 md:px-5 md:py-5 min-h-screen pt-[54px] md:pt-[54px]">
-        {children(activePage, setActivePage)}
+        {children(activePage, handleNavigate)}
       </main>
     </div>
   );

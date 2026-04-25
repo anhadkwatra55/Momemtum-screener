@@ -371,6 +371,7 @@ const DashboardPage = memo(() => {
                   sectorSentiment={data.sector_sentiment}
                   rotationIdeas={data.rotation_ideas || []}
                   shockClusters={(data as any).shock_clusters || []}
+                  signals={data.signals || []}
                   onSelectTicker={handlePageTickerSelect}
                 />
               </motion.div>

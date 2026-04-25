@@ -255,11 +255,11 @@ export const Leaderboard = React.memo(function Leaderboard({ signals, onSelectTi
       {/* Sticky Header */}
       <motion.h2
         className={cn(
-          "text-3xl lg:text-4xl font-extrabold mb-6 text-slate-50",
-          `tracking-[${TYPOGRAPHY.LETTER_SPACING_TIGHT_HEADING}]`,
+          "text-lg md:text-xl font-bold mb-5 text-slate-50 flex items-center gap-2",
+          "tracking-[-0.03em]",
           "sticky top-0 pb-4 pt-0 -mx-6 px-6 -mt-6",
           `z-[${Z_INDICES.STICKY_HEADER}]`,
-          "bg-card/[0.45] backdrop-blur-xl", // Changed to match apple-card's glassmorphism
+          "bg-card/[0.45] backdrop-blur-xl",
           "rounded-t-[var(--radius-2xl)]",
           "after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px",
           "after:bg-gradient-to-r after:from-transparent after:via-white/[0.08] after:to-transparent"
@@ -268,7 +268,7 @@ export const Leaderboard = React.memo(function Leaderboard({ signals, onSelectTi
         animate={{ opacity: 1, y: 0 }}
         transition={SPRING_PHYSICS_DEFAULT}
       >
-        <SFIcon icon="trophy.fill" className={cn("mr-3", getTextColorClass('amber', '400'))} size="28" />
+        <SFIcon icon="trophy.fill" className={cn("mr-1", getTextColorClass('amber', '400'))} size="20" />
         Momentum Leaderboard
       </motion.h2>
 

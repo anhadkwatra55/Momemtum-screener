@@ -119,35 +119,35 @@ export const REGIME_STYLES: Record<string, { bg: string; text: string; border: s
 
 // Centralized constants for Framer Motion animations and general motion design.
 export const MOTION_VARIANTS = {
-    // Carbon Terminal: mechanical, no spring overshoot
-    SPRING_TRANSITION_DEFAULT: { type: "tween" as const, duration: 0.1, ease: "easeOut" as const },
-    SPRING_TRANSITION_FAST: { type: "tween" as const, duration: 0.05, ease: "easeOut" as const },
-    STAGGER_CHILDREN_DELAY_MS: 30,
-    PAGE_TRANSITION_DURATION_MS: 150,
-    PAGE_TRANSITION_INITIAL_Y: 8,
-    PAGE_TRANSITION_VARIANTS: {
-        initial: { opacity: 0, y: 8 },
-        animate: { opacity: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" } },
-        exit: { opacity: 0, y: 4, transition: { duration: 0.1, ease: "easeOut" } },
-    } as const,
-    HOVER_TRANSLATE_Y: 0, // No hover lift — mechanical
-    DEFAULT_ANIMATION_DURATION_MS: 100,
-    FLASH_ANIMATION_DURATION_MS: 500,
-    FADE_IN_OUT_DURATION_MS: 100,
+  // Carbon Terminal: mechanical, no spring overshoot
+  SPRING_TRANSITION_DEFAULT: { type: "tween" as const, duration: 0.1, ease: "easeOut" as const },
+  SPRING_TRANSITION_FAST: { type: "tween" as const, duration: 0.05, ease: "easeOut" as const },
+  STAGGER_CHILDREN_DELAY_MS: 30,
+  PAGE_TRANSITION_DURATION_MS: 150,
+  PAGE_TRANSITION_INITIAL_Y: 8,
+  PAGE_TRANSITION_VARIANTS: {
+    initial: { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" } },
+    exit: { opacity: 0, y: 4, transition: { duration: 0.1, ease: "easeOut" } },
+  } as const,
+  HOVER_TRANSLATE_Y: 0, // No hover lift — mechanical
+  DEFAULT_ANIMATION_DURATION_MS: 100,
+  FLASH_ANIMATION_DURATION_MS: 500,
+  FADE_IN_OUT_DURATION_MS: 100,
 } as const;
 
 // ── Layout & Z-Indexing Constants ────────────────────────────────────────────
 
 // Defines a consistent z-index hierarchy across the application.
 export const Z_INDICES = {
-    BASE: 10, // Default content layer
-    SIDEBAR: 40, // Sidebar navigation
-    STICKY_HEADER: 50, // Top navigation and sticky table headers
-    DROPDOWN: 60, // Select menus, toolbars, context menus
-    TOOLTIP: 70, // Tooltips and popovers
-    MODAL_OVERLAY: 80, // Full-screen overlays for modals/sheets
-    MODAL: 90, // Centered dialogs
-    BOTTOM_SHEET: 100, // Mobile bottom sheets (highest interactive elements)
+  BASE: 10, // Default content layer
+  SIDEBAR: 40, // Sidebar navigation
+  STICKY_HEADER: 50, // Top navigation and sticky table headers
+  DROPDOWN: 60, // Select menus, toolbars, context menus
+  TOOLTIP: 70, // Tooltips and popovers
+  MODAL_OVERLAY: 80, // Full-screen overlays for modals/sheets
+  MODAL: 90, // Centered dialogs
+  BOTTOM_SHEET: 100, // Mobile bottom sheets (highest interactive elements)
 } as const;
 
 // ── Interactive States & Shadows ─────────────────────────────────────────────
@@ -155,20 +155,20 @@ export const Z_INDICES = {
 // Centralized definitions for consistent hover, focus, and active states,
 // aligning with the "shadow depth and background tints instead" philosophy.
 export const INTERACTIVE_STYLES = {
-    // Carbon Terminal: no shadows, border-only feedback
-    APPLE_CARD_HOVER_SHADOW: '0 0 0 1px #00FF66',
-    APPLE_BUTTON_HOVER_SHADOWS: '0 0 0 1px #00FF66',
-    APPLE_BUTTON_FOCUS_SHADOWS: '0 0 0 1px #00FF66',
-    APPLE_BUTTON_ACTIVE_SHADOWS: 'inset 0 0 0 1px #00FF66',
+  // Carbon Terminal: no shadows, border-only feedback
+  APPLE_CARD_HOVER_SHADOW: '0 0 0 1px #00FF66',
+  APPLE_BUTTON_HOVER_SHADOWS: '0 0 0 1px #00FF66',
+  APPLE_BUTTON_FOCUS_SHADOWS: '0 0 0 1px #00FF66',
+  APPLE_BUTTON_ACTIVE_SHADOWS: 'inset 0 0 0 1px #00FF66',
 } as const;
 
 // ── Typography Constants ─────────────────────────────────────────────────────
 
 // Defines precise letter-spacing values to achieve premium typographic control.
 export const TYPOGRAPHY = {
-    LETTER_SPACING_TIGHT_HEADING: '-0.03em', // For headings, hero text, and large numbers
-    LETTER_SPACING_LOOSE_UPPERCASE: '0.1em', // For uppercase labels and badges
-    LETTER_SPACING_DEFAULT: '0em', // Standard letter spacing
+  LETTER_SPACING_TIGHT_HEADING: '-0.03em', // For headings, hero text, and large numbers
+  LETTER_SPACING_LOOSE_UPPERCASE: '0.1em', // For uppercase labels and badges
+  LETTER_SPACING_DEFAULT: '0em', // Standard letter spacing
 } as const;
 
 // ── API & Service Constants ──────────────────────────────────────────────────
@@ -188,7 +188,7 @@ export const springTransition = SPRING_PHYSICS_DEFAULT;
 
 // ── API / WebSocket Constants ────────────────────────────────────────────────
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8060";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE ?? API_BASE.replace(/^http/, "ws") + "/ws";
 
 export const API_MAX_RETRIES = 2;

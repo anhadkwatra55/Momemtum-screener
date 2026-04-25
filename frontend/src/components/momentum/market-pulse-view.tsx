@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { DashboardData, Signal } from "@/types/momentum";
@@ -152,6 +152,13 @@ export function MarketPulseView({
   onNavigate,
   onDataRefresh,
 }: MarketPulseViewProps) {
+  // Navigate to sector-radar when a heatmap tile is clicked, passing sector via URL
+  const handleSectorClick = useCallback((sectorName: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("sector", sectorName);
+    window.history.replaceState({}, "", url.toString());
+    onNavigate("sector-radar");
+  }, [onNavigate]);
   // KPI strip items
   const kpiStripItems = useMemo(() => {
     if (!data?.summary) return [];
@@ -324,8 +331,12 @@ export function MarketPulseView({
               delay={100}
             >
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <LazyLeaderboard signals={data.signals} onSelectTicker={onTickerSelect} />
-                <LazyTopSignals signals={data.signals} onSelectTicker={onTickerSelect} />
+                <div className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent rounded-2xl">
+                  <LazyLeaderboard signals={data.signals} onSelectTicker={onTickerSelect} />
+                </div>
+                <div className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent rounded-2xl">
+                  <LazyTopSignals signals={data.signals} onSelectTicker={onTickerSelect} />
+                </div>
               </div>
             </DataReveal>
           </div>
@@ -407,7 +418,7 @@ export function MarketPulseView({
             />
             <CardReveal loading={!data.sector_regimes} delay={400}>
               <Card className="p-4">
-                <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} />
+                <LazySectorHeatmap sectors={data.sector_regimes} sentiment={data.sector_sentiment} onSectorClick={handleSectorClick} />
               </Card>
             </CardReveal>
           </div>
