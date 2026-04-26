@@ -799,7 +799,8 @@ async def lifespan(app: FastAPI):
 
     # Schedule daily auto-refresh
     _schedule_next_run()
-    print(f"  ⏰ Daily auto-refresh enabled: every day at {_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}")
+    _schedule_times_str = " & ".join(f"{h:02d}:{m:02d}" for h, m in _SCHEDULE_TIMES)
+    print(f"  ⏰ Daily auto-refresh enabled: {_schedule_times_str} {_SCHEDULE_TZ}")
 
     # Set up Agent Proactive Scheduler
     global _agent_scheduler
@@ -1857,14 +1858,14 @@ async def internal_pipeline_trigger(request: Request):
 @app.get("/api/pipeline/schedule")
 async def pipeline_schedule():
     """Return the current auto-refresh schedule."""
+    _schedule_times_str = " & ".join(f"{h:02d}:{m:02d}" for h, m in _SCHEDULE_TIMES)
     return {
         "enabled": True,
-        "schedule": f"{_SCHEDULE_HOUR:02d}:{_SCHEDULE_MINUTE:02d} {_SCHEDULE_TZ}",
+        "schedule": f"{_schedule_times_str} {_SCHEDULE_TZ}",
         "next_run": _next_pipeline_run,
         "last_run": _last_pipeline_run,
         "config": {
-            "hour": _SCHEDULE_HOUR,
-            "minute": _SCHEDULE_MINUTE,
+            "times": [f"{h:02d}:{m:02d}" for h, m in _SCHEDULE_TIMES],
             "timezone": _SCHEDULE_TZ,
         },
     }
