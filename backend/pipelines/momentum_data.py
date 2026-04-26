@@ -8,6 +8,8 @@ stores everything in SQLite for instant subsequent loads.
 from __future__ import annotations
 
 import os
+import random
+import time
 import warnings
 from datetime import datetime, timedelta
 from typing import Dict, Optional
@@ -163,6 +165,7 @@ def _download_and_store(
             if progress:
                 print(f"    Re-fetching {len(missing)} missing tickers individually …")
             for t in missing:
+                time.sleep(random.uniform(1.5, 3.5))  # Jittered delay to avoid 429s
                 try:
                     df = yf.download(t, start=min_start, end=max_end,
                                      auto_adjust=True, progress=False)
@@ -237,6 +240,7 @@ def _download_and_store(
         if progress:
             print(f"    Re-fetching {len(missing)} missing tickers individually …")
         for t in missing:
+            time.sleep(random.uniform(1.5, 3.5))  # Jittered delay to avoid 429s
             try:
                 df = yf.download(t, start=min_start, end=max_end,
                                  auto_adjust=True, progress=False)

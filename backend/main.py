@@ -542,9 +542,11 @@ def _run_pipeline_background():
 
 import datetime as _dt
 
-# Configurable: run daily at 17:00 ET (after US market close)
-_SCHEDULE_HOUR = int(os.environ.get("PIPELINE_SCHEDULE_HOUR", "17"))
-_SCHEDULE_MINUTE = int(os.environ.get("PIPELINE_SCHEDULE_MINUTE", "0"))
+# Configurable: run at 12:00 PM and 5:00 PM ET (midday + market close)
+_SCHEDULE_TIMES = [
+    (12, 0),   # 12:00 PM ET — midday pulse
+    (17, 0),   # 5:00 PM ET — after market close
+]
 _SCHEDULE_TZ = os.environ.get("PIPELINE_SCHEDULE_TZ", "America/New_York")
 _scheduler_timer: Optional[threading.Timer] = None
 _last_pipeline_run: Optional[str] = None
@@ -552,7 +554,7 @@ _next_pipeline_run: Optional[str] = None
 
 
 def _seconds_until_next_run() -> float:
-    """Calculate seconds until the next scheduled run time."""
+    """Calculate seconds until the next scheduled run time (12 PM or 5 PM ET)."""
     try:
         import zoneinfo
         tz = zoneinfo.ZoneInfo(_SCHEDULE_TZ)
@@ -560,10 +562,18 @@ def _seconds_until_next_run() -> float:
     except Exception:
         now = _dt.datetime.now()
 
-    target = now.replace(hour=_SCHEDULE_HOUR, minute=_SCHEDULE_MINUTE, second=0, microsecond=0)
-    if target <= now:
-        target += _dt.timedelta(days=1)
-    return (target - now).total_seconds()
+    # Build candidate target times for today and tomorrow
+    candidates = []
+    for hour, minute in _SCHEDULE_TIMES:
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target > now:
+            candidates.append(target)
+        # Also add tomorrow's version
+        candidates.append(target + _dt.timedelta(days=1))
+
+    # Pick the soonest future time
+    next_target = min(candidates)
+    return (next_target - now).total_seconds()
 
 
 def _refresh_alpha_cache_background(startup: bool = False):
@@ -592,8 +602,11 @@ def _refresh_alpha_cache_background(startup: bool = False):
                     count = db.load_alpha_calls(universe=univ, limit=1)
                     n = len(count.get("calls", []))
                     hrs = round(age / 3600, 1)
-                    print(f"  \u2713 Alpha {univ}: DB data is {hrs}h old — skipping scan (has data)")
-                    continue
+                    if n > 0:
+                        print(f"  \u2713 Alpha {univ}: DB data is {hrs}h old — skipping scan ({n} contracts)")
+                        continue
+                    else:
+                        print(f"  \u26a0 Alpha {univ}: DB data is {hrs}h old but NO contracts found — re-scanning")
 
             print(f"  \U0001f4ca Alpha {'startup' if startup else 'daily'} pipeline: {univ}\u2026")
             t0 = _t.monotonic()

@@ -943,7 +943,20 @@ def upsert_alpha_calls_bulk(calls: List[dict], universe: str, meta: dict) -> int
     Replace all alpha_calls rows for a universe with fresh scan results.
     Also updates the alpha_scan_meta table.
     Returns number of rows written.
+
+    Safety guard: if the scan returned 0 calls but the universe was large,
+    this indicates a pipeline failure (e.g. rate limiting). In that case we
+    preserve the existing data instead of blanking the dashboard.
     """
+    # ── Data safety guard ──
+    # Don't wipe existing good data if the scan clearly failed
+    if not calls and meta.get("universe_size", 0) > 10:
+        error_msg = meta.get("error", "unknown failure")
+        print(f"  ⚠ Alpha scan for '{universe}' returned 0 calls from "
+              f"{meta.get('universe_size', '?')} tickers — preserving existing data. "
+              f"Reason: {error_msg}")
+        return 0
+
     with db_session() as conn:
         # Delete old rows for this universe
         conn.execute("DELETE FROM alpha_calls WHERE universe = ?", (universe,))
@@ -1124,7 +1137,8 @@ def has_alpha_data(universe: str = "sp500") -> bool:
 
 
 def get_alpha_scan_age(universe: str = "sp500") -> "float | None":
-    """Return age of last alpha scan in seconds, or None if no scan exists."""
+    """Return age of last alpha scan in seconds, or None if no scan exists.
+    Returns None for negative ages (future timestamps are invalid)."""
     with db_session() as conn:
         row = conn.execute(
             "SELECT scanned_at FROM alpha_scan_meta WHERE universe = ?",
@@ -1133,8 +1147,17 @@ def get_alpha_scan_age(universe: str = "sp500") -> "float | None":
         if not row or not row["scanned_at"]:
             return None
         try:
-            scanned = datetime.fromisoformat(row["scanned_at"])
-            return (datetime.now() - scanned).total_seconds()
+            # Handle both SQLite datetime('now') format and ISO format
+            scanned_str = row["scanned_at"]
+            if " " in scanned_str and ":" in scanned_str:
+                # SQLite format: "2026-04-25 23:00:00" - assume UTC
+                scanned = datetime.fromisoformat(scanned_str.replace(" ", "T") + "+00:00")
+            else:
+                scanned = datetime.fromisoformat(scanned_str)
+            
+            age = (datetime.utcnow() - scanned).total_seconds()
+            # Return None for negative ages (future timestamps are invalid)
+            return age if age >= 0 else None
         except Exception:
             return None
 

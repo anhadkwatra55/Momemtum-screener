@@ -318,7 +318,35 @@ def get_alpha_calls(limit=75, max_workers=4, sort_by="quant_score", universe="sp
     errors = 0
     t0 = _time.monotonic()
 
-    # Rate limiting: limit concurrent requests and add delay between them
+    # ── Bulk pre-fetch price history to avoid per-ticker rate limits ──
+    # One bulk yf.download() for all tickers instead of N individual calls.
+    # Results are cached so fetch_single_ticker_inner() hits memory, not network.
+    try:
+        logger.info(f"Bulk-fetching 1mo history for {len(scan_tickers)} tickers...")
+        bulk_hist = yf.download(
+            scan_tickers, period="1mo", interval="1d",
+            auto_adjust=True, progress=False, threads=True,
+        )
+        if bulk_hist is not None and not bulk_hist.empty:
+            for sym in scan_tickers:
+                try:
+                    if len(scan_tickers) == 1:
+                        sym_df = bulk_hist.copy()
+                    else:
+                        sym_df = bulk_hist[sym].copy()
+                    if isinstance(sym_df.columns, pd.MultiIndex):
+                        sym_df.columns = sym_df.columns.get_level_values(0)
+                    sym_df = sym_df.dropna(subset=["Close"])
+                    if not sym_df.empty:
+                        _set_cached_history(sym, sym_df)
+                except (KeyError, TypeError):
+                    pass
+            logger.info(f"Bulk history cached for {len(scan_tickers)} tickers")
+        del bulk_hist
+    except Exception as e:
+        logger.warning(f"Bulk history fetch failed ({e}), falling back to per-ticker")
+
+    # Rate limiting for option chain fetches (history is already cached)
     rate_limit_sem = threading.Semaphore(2)
 
     def _throttled_fetch(sym):
