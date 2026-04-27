@@ -808,20 +808,33 @@ async def lifespan(app: FastAPI):
     cache = get_cache()
     print(f"  Cache backend: {cache.stats()['backend']}")
 
+    # Check server mode early (before _SERVER_MODE global is set)
+    _is_server = os.environ.get("MAC_MINI_SERVER_MODE", "").lower() == "true"
+
     # ── Warm-start: serve from JSON cache if data is fresh ──
     _warm_started = _try_warm_start()
 
     if not _warm_started:
-        # Cold start — run full progressive pipeline in background thread
-        pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
-        pipeline_thread.start()
-        print("  📊 Alpha pipeline will start after momentum completes")
+        if _is_server:
+            # Server mode cold start — do NOT run the full pipeline.
+            # Just mark as waiting for scheduled refresh.
+            print("  🛡️ [SERVER MODE] No cached data — waiting for next scheduled pipeline run.")
+            print("  🛡️ [SERVER MODE] To force a refresh, POST to /api/refresh-pipeline.")
+        else:
+            # Dev cold start — run full progressive pipeline in background thread
+            pipeline_thread = threading.Thread(target=_run_pipeline_background, daemon=True)
+            pipeline_thread.start()
+            print("  📊 Alpha pipeline will start after momentum completes")
     else:
-        # Data served from cache — only run alpha if it needs refreshing
-        # (alpha has its own age-check in _refresh_alpha_cache_background)
-        alpha_warm_thread = threading.Thread(target=_refresh_alpha_cache_background, args=(True,), daemon=True)
-        alpha_warm_thread.start()
-        print("  ✅ [WARM-START] Alpha pipeline: checking if scan is needed …")
+        if _is_server:
+            # Server mode warm-start — skip Alpha scan entirely.
+            # Alpha data is already in SQLite from the last scheduled run.
+            print("  🛡️ [SERVER MODE] Warm-start complete — skipping Alpha pipeline (serves from DB).")
+        else:
+            # Dev mode: check if alpha needs refreshing
+            alpha_warm_thread = threading.Thread(target=_refresh_alpha_cache_background, args=(True,), daemon=True)
+            alpha_warm_thread.start()
+            print("  ✅ [WARM-START] Alpha pipeline: checking if scan is needed …")
 
     # Schedule daily auto-refresh
     _schedule_next_run()
