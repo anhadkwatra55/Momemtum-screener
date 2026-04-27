@@ -16,6 +16,7 @@ import type {
   Signal,
   KPISummary,
   TickerChartData,
+  IntelImage,
 } from "@/types/momentum";
 import {
   API_BASE,
@@ -828,6 +829,13 @@ export async function fetchTickerChart(ticker: string): Promise<{ ticker: string
  */
 export async function fetchWeeklyTopMomentum(topN: number = 5): Promise<unknown> {
   return apiFetch<unknown>(`/api/weekly-top-momentum?top_n=${topN}`, { cache: true, cacheTTLSeconds: 120 });
+}
+
+/**
+ * Fetches the latest AI-generated intelligence images.
+ */
+export async function fetchIntelImages(limit: number = 5): Promise<{ images: IntelImage[] }> {
+  return apiFetch<{ images: IntelImage[] }>(`/api/intel-images?limit=${limit}`, { cache: true, cacheTTLSeconds: 300 });
 }
 
 /**

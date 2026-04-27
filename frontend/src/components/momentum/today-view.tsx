@@ -3,6 +3,10 @@
 import React from "react";
 import { DashboardData } from "@/types/momentum";
 import { ResearchCardGrid } from "@/components/momentum/research-card";
+import dynamic from "next/dynamic";
+
+const LazyIntelNewsCard = dynamic(() => import('@/components/momentum/intel-news-card').then(m => ({ default: m.IntelNewsCard })), { ssr: false });
+
 
 // ── Educational Layer ──
 function PlainEnglishContext({ data }: { data: DashboardData }) {
@@ -76,6 +80,8 @@ interface TodayViewProps {
 }
 
 export function TodayView({ data, onTickerSelect }: TodayViewProps) {
+  const [intelIndex, setIntelIndex] = React.useState(0);
+  
   // Get latest thesis-equipped picks
   const topPicks = data.top_picks || [];
   const freshMomentum = data.fresh_momentum || [];
@@ -131,6 +137,80 @@ export function TodayView({ data, onTickerSelect }: TodayViewProps) {
             subtitle="Distinct market sectors showing significant momentum shifts." 
          />
       </div>
+
+      {/* Intelligence News (Moby Style) */}
+      <div className="mt-12 pt-8 border-t border-[#2A2A2A]">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-[24px] font-serif text-[#f5f2ed]">Daily Market Intelligence</h2>
+            <p className="text-[14px] text-[#8a8a8a] mt-1">AI-generated visual metaphors for today's most market-moving stories.</p>
+          </div>
+          
+          {data.intel_images && data.intel_images.length > 1 && (
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setIntelIndex(prev => (prev - 1 + data.intel_images!.length) % data.intel_images!.length)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/50 transition-all hover:bg-white/10 hover:text-white"
+              >
+                ←
+              </button>
+              <button 
+                onClick={() => setIntelIndex(prev => (prev + 1) % data.intel_images!.length)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/50 transition-all hover:bg-white/10 hover:text-white"
+              >
+                →
+              </button>
+            </div>
+          )}
+        </div>
+
+        {(data.intel_images && data.intel_images.length > 0) ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Featured Column (2/3) */}
+            <div className="lg:col-span-2">
+              <div className="mb-4 px-2 flex items-center justify-between">
+                <h3 className="font-serif text-xl text-[#e2b857]">Featured Briefing</h3>
+                <span className="text-[10px] font-mono-data text-white/20 uppercase tracking-widest">
+                  {intelIndex + 1} / {data.intel_images.length}
+                </span>
+              </div>
+              <LazyIntelNewsCard 
+                key={`featured-${data.intel_images[intelIndex].ticker}`}
+                image={data.intel_images[intelIndex]} 
+                onTickerSelect={onTickerSelect} 
+                featured={true}
+              />
+            </div>
+
+            {/* Stock Picks Column (1/3) */}
+            <div className="flex flex-col">
+              <div className="mb-4 px-2">
+                <h3 className="font-serif text-xl text-cyan-400">Other Stories</h3>
+              </div>
+              <div className="space-y-3">
+                {data.intel_images
+                  .filter((_, i) => i !== intelIndex)
+                  .slice(0, 4)
+                  .map((img) => (
+                    <LazyIntelNewsCard 
+                      key={`compact-${img.ticker}`}
+                      image={img} 
+                      onTickerSelect={onTickerSelect} 
+                    />
+                  ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+
+          <div className="py-12 text-center border border-dashed border-[#2A2A2A] rounded-2xl">
+            <p className="text-[#6B6B6B] font-mono-data text-xs uppercase tracking-widest">
+              Market Intelligence briefing will appear here after the 7:00 AM ET daily run.
+            </p>
+          </div>
+        )}
+      </div>
+
 
       {/* Top Picks - Clean Research Cards */}
       {allPicks.length > 0 && (

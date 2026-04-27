@@ -25,8 +25,10 @@ import pandas as pd
 
 import shutil
 
-DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
+# Force DB to live in the backend/ directory (parent of pipelines/)
+DATA_DIR = Path(__file__).resolve().parents[1] 
 DB_PATH = DATA_DIR / "quant_screener.db"
+print(f"🛢️  Database initialized at: {DB_PATH}")
 
 # For cloud deployment (Render): if persistent disk doesn't have the DB yet, copy the seeded one over.
 if str(DATA_DIR) != str(Path(__file__).parent):
@@ -278,6 +280,24 @@ CREATE TABLE IF NOT EXISTS alpha_scan_meta (
     partial           INTEGER DEFAULT 0,
     scanned_at        TEXT DEFAULT (datetime('now'))
 );
+
+-- AI Intel Images (Blueprint/Tactile visuals)
+CREATE TABLE IF NOT EXISTS intel_images (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker      TEXT NOT NULL,
+    headline    TEXT,
+    summary     TEXT,
+    metaphor    TEXT,
+    style       TEXT DEFAULT 'blueprint',
+    prompt_used TEXT,
+    image_url   TEXT,
+    image_path  TEXT,
+    width       INTEGER DEFAULT 1024,
+    height      INTEGER DEFAULT 576,
+    model_used  TEXT DEFAULT 'flux-schnell',
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_intel_images_ticker ON intel_images(ticker);
 """
 
 
@@ -310,6 +330,33 @@ def _migrate_alpha_calls_table(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError as e:
                 print(f"Failed to add column {col_name}: {e}")
 
+def _migrate_intel_images_table(conn: sqlite3.Connection) -> None:
+    """Ensure intel_images table exists and has all required columns."""
+    try:
+        conn.execute("ALTER TABLE intel_images ADD COLUMN summary TEXT")
+        print("Added column summary to intel_images table")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+
+def _migrate_corrupted_yields(conn: sqlite3.Connection) -> None:
+    """
+    Migration: Normalize corrupted 'yield_pct' values > 1.0 (e.g. 637.0 -> 6.37)
+    This ensures that 20-day ML predictions or Receipts Ledgers are not skewed.
+    """
+    try:
+        # Check if yield_pct exists in signals
+        cursor = conn.execute("PRAGMA table_info(signals)")
+        existing_columns = {row["name"].lower() for row in cursor.fetchall()}
+        
+        if "yield_pct" in existing_columns:
+            # Ensure it's treated as float during division
+            conn.execute("UPDATE signals SET yield_pct = CAST(yield_pct AS REAL) / 100.0 WHERE yield_pct > 1.0")
+            print("Normalized corrupted yield_pct in signals table")
+            
+    except sqlite3.OperationalError as e:
+        print(f"Failed to migrate corrupted yields: {e}")
+
 
 def init_db(db_path=None) -> None:
     """Create all tables if they don't exist."""
@@ -317,6 +364,8 @@ def init_db(db_path=None) -> None:
         conn.executescript(SCHEMA_SQL)
         # Migrate existing tables if needed
         _migrate_alpha_calls_table(conn)
+        _migrate_intel_images_table(conn)
+        _migrate_corrupted_yields(conn)
         # Record schema version
         existing = conn.execute(
             "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
@@ -1377,3 +1426,75 @@ def get_historical_ledger():
         logging.getLogger(__name__).error(f"Failed to fetch historical ledger: {e}")
         
     return ledger
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  INTEL IMAGES OPERATIONS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def save_intel_image(data: dict) -> int:
+    """Save an AI generated image record to DB."""
+    cols = ["ticker", "headline", "summary", "metaphor", "style", "prompt_used", "image_url", "image_path", "width", "height", "model_used"]
+    placeholders = ", ".join(["?"] * len(cols))
+    sql = f"INSERT INTO intel_images ({', '.join(cols)}) VALUES ({placeholders})"
+    
+    vals = [data.get(c) for c in cols]
+    
+    with db_session() as conn:
+        cursor = conn.execute(sql, vals)
+        return cursor.lastrowid
+
+def count_intel_images_today() -> int:
+    """Count how many intel images were generated today."""
+    with db_session() as conn:
+        row = conn.execute("SELECT COUNT(*) as c FROM intel_images WHERE date(created_at) = date('now')").fetchone()
+        return row["c"] if row else 0
+
+def delete_intel_images_older_than(days: int) -> int:
+    """Delete old intel images from DB and disk."""
+    import os
+    # Base path for frontend/public
+    base_public_path = Path(__file__).resolve().parents[2] / "frontend" / "public"
+    
+    count = 0
+    with db_session() as conn:
+        # Find old images
+        rows = conn.execute(
+            "SELECT id, image_url FROM intel_images WHERE created_at < datetime('now', '-' || ? || ' days')",
+            (days,)
+        ).fetchall()
+        
+        for r in rows:
+            img_id = r["id"]
+            img_url = r["image_url"] # e.g., /intel/AAPL_20260426.png
+            
+            # Delete physical file
+            if img_url and img_url.startswith("/"):
+                # Remove leading slash and resolve against base public path
+                file_path = base_public_path / img_url.lstrip("/")
+                try:
+                    if file_path.exists():
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"Failed to delete file {file_path}: {e}")
+            
+            # Delete DB row
+            conn.execute("DELETE FROM intel_images WHERE id = ?", (img_id,))
+            count += 1
+            
+    return count
+
+def load_intel_images(ticker: Optional[str] = None, limit: int = 5) -> List[dict]:
+    """Load latest AI generated images."""
+    sql = "SELECT * FROM intel_images"
+    params = []
+    
+    if ticker:
+        sql += " WHERE ticker = ?"
+        params.append(ticker)
+        
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    
+    with db_session() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]

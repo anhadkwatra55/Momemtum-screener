@@ -315,7 +315,15 @@ export interface KPISummary {
   action_distribution?: Record<ActionCategory, Count>; // Action category distribution.
 }
 
-// ── Full Dashboard Data (from momentum_data.json) ──
+export interface IntelImage {
+  ticker: string;
+  headline: string;
+  metaphor: string;
+  summary?: string;
+  style: string;
+  image_url: string;
+  created_at: string;
+}
 
 /**
  * Comprehensive data payload for the entire dashboard, integrating all key modules.
@@ -359,6 +367,7 @@ export interface DashboardData {
   top_picks: Signal[]; // Quant research top picks (Top Pick + Accumulate action categories).
   quote: Quote;
   all_quotes: Quote[];
+  intel_images?: IntelImage[]; // AI-generated intel images
   db_stats?: DBStats;
 }
 

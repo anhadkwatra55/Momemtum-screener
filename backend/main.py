@@ -29,6 +29,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import load_dotenv
+# Load environment variables from root .env
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 import numpy as np
 import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -61,11 +65,12 @@ from strategy_engine import (
     compare_strategies as compare_strategy_results,
 )
 from redis_cache import get_cache, RedisCache
-from validators import validate_universe, validate_ohlcv_dataframe
+from validators import validate_universe, validate_ohlcv_dataframe, validate_yield
 from engine import run_pipeline_sync, run_pipeline_progressive, get_wave_version, pipeline_status as _engine_status
 from insider_signals import fetch_insider_buys_parallel, fetch_insider_buys_single
 import agents.market_pulse as agent_pulse
 import agents.claude_picks as claude_picks
+import image_gen
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
@@ -330,9 +335,17 @@ def build_dashboard_data() -> dict:
             try:
                 tk = yf.Ticker(ticker)
                 info = tk.info or {}
-                div_yield = info.get("dividendYield") or info.get("yield") or 0
-                annual_div = info.get("dividendRate") or info.get("trailingAnnualDividendRate") or 0
-                price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose") or 0
+                annual_div = info.get("trailingAnnualDividendRate") or info.get("dividendRate") or 0
+                price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 0
+                
+                manual_yield = (annual_div / price) if price and price > 0 else 0
+                reported_yield = info.get("dividendYield") or info.get("yield") or 0
+                
+                if reported_yield > 1.0 or (reported_yield > 0 and abs(manual_yield - reported_yield) / reported_yield > 0.05):
+                    div_yield = manual_yield
+                else:
+                    div_yield = manual_yield if manual_yield > 0 else reported_yield
+                    
                 name = info.get("shortName") or info.get("longName") or ticker
                 ex_date = info.get("exDividendDate")
                 sector_info = info.get("sector") or cfg.TICKER_SECTOR.get(ticker, "Unknown")
@@ -340,6 +353,9 @@ def build_dashboard_data() -> dict:
 
                 # Find matching screened result for momentum data
                 matched = next((r for r in results if r["ticker"] == ticker), None)
+                
+                final_yield_pct = round(div_yield * 100, 2) if div_yield else 0.0
+                validated_yield_pct = validate_yield(ticker, final_yield_pct)
 
                 entry = {
                     "ticker": ticker,
@@ -347,7 +363,7 @@ def build_dashboard_data() -> dict:
                     "sector": sector_info,
                     "category": category,
                     "price": round(price, 2) if price else 0,
-                    "dividend_yield": round(div_yield * 100, 2) if div_yield else 0,
+                    "dividend_yield": validated_yield_pct,
                     "annual_dividend": round(annual_div, 2) if annual_div else 0,
                     "ex_dividend_date": ex_date if ex_date else None,
                     "composite": matched["composite"] if matched else 0,
@@ -772,6 +788,15 @@ def _try_warm_start() -> bool:
         print(f"  ⚠ [WARM-START] Failed to load cache ({e}) — running full pipeline.")
         return False
 
+def _run_intel_pipeline():
+    """Thread-safe wrapper for the daily intel image pipeline."""
+    try:
+        import asyncio
+        # image_gen is already imported at module level
+        asyncio.run(image_gen.run_daily_intel_pipeline())
+    except Exception as e:
+        print(f"Daily intel pipeline failed: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Modern lifespan handler — replaces deprecated @app.on_event."""
@@ -807,6 +832,18 @@ async def lifespan(app: FastAPI):
     _agent_scheduler = BackgroundScheduler()
     _agent_scheduler.add_job(agent_pulse.generate_morning_briefing, 'cron', hour=8, minute=30, timezone='America/New_York')
     _agent_scheduler.add_job(agent_pulse.generate_weekly_newsletter, 'cron', day_of_week='sun', hour=10, minute=0, timezone='America/New_York')
+    
+    # Daily Market Intelligence Pipeline (Pop Art Generator)
+    _agent_scheduler.add_job(
+        _run_intel_pipeline,
+        'cron',
+        hour=7,
+        minute=0,
+        timezone='America/New_York',
+        id='daily_market_intel',
+        replace_existing=True,
+    )
+    
     _agent_scheduler.start()
     print("  🤖 Market Pulse Agent activated. Scheduled tasks running.")
 
@@ -2029,6 +2066,26 @@ async def api_generate_claude_picks(request: Request):
             notes=body.get("notes"),
         )
         return encode_response(result)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/api/intel-images")
+async def get_intel_images(ticker: Optional[str] = None, limit: int = 5):
+    """Fetches the latest AI generated images for the news dashboard."""
+    try:
+        images = db.load_intel_images(ticker=ticker, limit=limit)
+        return encode_response({"images": images})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.post("/api/intel-images/generate-top-5")
+async def generate_top_5_images():
+    """Triggers background generation of images for the top 5 signals."""
+    try:
+        # Run in background to avoid timeout
+        # image_gen is already imported at module level
+        asyncio.create_task(image_gen.run_daily_intel_pipeline())
+        return {"status": "success", "message": "Daily intel generation started in background"}
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 

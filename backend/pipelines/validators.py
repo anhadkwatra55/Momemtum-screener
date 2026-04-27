@@ -273,3 +273,26 @@ def validate_universe(
         )
 
     return cleaned, all_diags
+
+# ═══════════════════════════════════════════════════════════
+#  YIELD VALIDATION
+# ═══════════════════════════════════════════════════════════
+
+def validate_yield(ticker: str, yield_val: float) -> float:
+    """
+    Validates dividend yield to catch "Impossible Yields".
+    - Caps all yield displays at 100%.
+    - Flags anything over 15% as 'High Risk' via a WARNING log.
+    
+    Returns the validated yield.
+    """
+    import logging
+    
+    if yield_val > 15.0:
+        logging.warning(f"High Risk Yield detected for {ticker}: {yield_val:.2f}% (> 15%). Potential Dividend Trap or data error.")
+        
+    if yield_val > 100.0:
+        return 100.0
+        
+    return yield_val
+

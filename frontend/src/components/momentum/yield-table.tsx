@@ -290,8 +290,10 @@ const YieldTable = React.memo(function YieldTable({ data, title, icon, onSelectT
   }, []);
 
   const getYieldColorClass = useCallback((y: number) => {
-    if (y >= 6) return getTextColorClass('emerald', '400');
-    if (y >= 3) return getTextColorClass('amber', '400');
+    // Note: y is in percentage form (e.g., 6.37 for 6.37%)
+    if (y > 15) return getTextColorClass('rose', '500'); // > 15%: Red
+    if (y >= 7 && y <= 12) return getTextColorClass('amber', '400'); // 7% - 12%: Yellow
+    if (y >= 1 && y <= 7) return getTextColorClass('emerald', '400'); // 1% - 7%: Green
     return getTextColorClass('slate', '400');
   }, []);
 
@@ -475,10 +477,19 @@ const YieldTable = React.memo(function YieldTable({ data, title, icon, onSelectT
                         ${s.price.toFixed(2)}
                       </FlashWrapper>
                     </td>
-                    <td className="py-4 px-4 text-right font-jetbrains-mono text-lg font-bold">
+                    <td className="py-4 px-4 text-right font-jetbrains-mono text-lg font-bold group/yield relative">
                       <FlashWrapper value={s.dividend_yield} className={getYieldColorClass(s.dividend_yield)}>
-                        {s.dividend_yield > 0 ? `${s.dividend_yield.toFixed(2)}%` : "—"}
+                        <span className="flex items-center justify-end gap-1">
+                          {s.dividend_yield > 15 && (
+                            <SFIcon name="exclamationmark.triangle.fill" size="sm" className="text-rose-500" />
+                          )}
+                          {s.dividend_yield > 0 ? `${s.dividend_yield.toFixed(2)}%` : "—"}
+                        </span>
                       </FlashWrapper>
+                      {/* Formula Tooltip */}
+                      <div className="absolute opacity-0 group-hover/yield:opacity-100 transition-opacity bottom-full right-4 mb-2 z-50 pointer-events-none whitespace-nowrap bg-card/95 backdrop-blur shadow-lg border border-border/50 rounded-lg px-3 py-1.5 text-xs font-inter font-normal text-muted-foreground">
+                        Yield = (Annual Div: ${s.annual_dividend.toFixed(2)}) / (Price: ${s.price.toFixed(2)})
+                      </div>
                     </td>
                     <td className="py-4 px-4 text-right font-jetbrains-mono text-lg text-foreground">
                       <FlashWrapper value={s.annual_dividend}>

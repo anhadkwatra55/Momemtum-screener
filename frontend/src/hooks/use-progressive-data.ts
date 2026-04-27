@@ -8,6 +8,7 @@ import {
   fetchSignals,
   fetchTickerChart,
   fetchDerived,
+  fetchIntelImages,
   getPipelineStatus,
 } from "@/services/api";
 import { SORTABLE_SIGNAL_KEYS, ValidSignalSortKey, DEFAULT_SIGNAL_REFRESH_INTERVAL_MS } from "@/lib/constants";
@@ -19,6 +20,7 @@ const WAVE_POLL_INTERVAL_MS = 8_000;
 interface TierLoadingState {
   summary: boolean;
   signals: boolean;
+  intel: boolean;
   derived: boolean;
   full: boolean;
 }
@@ -68,6 +70,7 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
   const [tierLoading, setTierLoading] = useState<TierLoadingState>({
     summary: true,
     signals: true,
+    intel: true,
     derived: true,
     full: false,
   });
@@ -124,15 +127,29 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
         // Signals endpoint failed — will fall back to full fetch
       }
 
-      // Tier 3: Full data (keeps everything in sync: charts, strategies, etc.)
+      // Tier 3: Intel Images
+      setTierLoading(prev => ({ ...prev, intel: true }));
+      try {
+        const res = await fetchIntelImages(5);
+        setData(prev => prev ? { ...prev, intel_images: res.images } : prev);
+        setTierLoading(prev => ({ ...prev, intel: false }));
+      } catch {
+        // Failed
+      }
+
+      // Tier 4: Full data (keeps everything in sync: charts, strategies, etc.)
       setTierLoading(prev => ({ ...prev, full: true }));
       const fullData = await fetchDashboardData();
-      setData(fullData);
+      // Merge full data but PRESERVE intel_images from Tier 3 (not in momentum_data.json)
+      setData(prev => ({
+        ...fullData,
+        intel_images: fullData.intel_images || prev?.intel_images || [],
+      }));
       // Merge any chart data into cache
       if (fullData.charts) {
         setChartCache(prev => ({ ...prev, ...fullData.charts }));
       }
-      setTierLoading({ summary: false, signals: false, derived: false, full: false });
+      setTierLoading({ summary: false, signals: false, intel: false, derived: false, full: false });
       hasFetchedOnce.current = true;
     } catch (e) {
       console.error("Failed to load dashboard data", e);

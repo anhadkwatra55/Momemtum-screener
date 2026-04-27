@@ -36,7 +36,8 @@ from momentum_data import smart_fetch
 from momentum_screener import screen_ticker, screen_universe, sector_regimes
 from momentum_strategies import generate_all_strategies
 from redis_cache import get_cache
-from validators import validate_universe
+from validators import validate_universe, validate_yield
+import image_gen
 
 warnings.filterwarnings("ignore")
 
@@ -229,11 +230,20 @@ def _fetch_single_yield(
             tk = yf.Ticker(ticker)
             info = tk.info or {}
 
-            div_yield = info.get("dividendYield") or info.get("yield") or 0
-            annual_div = info.get("dividendRate") or info.get("trailingAnnualDividendRate") or 0
-            price = (info.get("regularMarketPrice")
-                     or info.get("currentPrice")
+            annual_div = info.get("trailingAnnualDividendRate") or info.get("dividendRate") or 0
+            price = (info.get("currentPrice")
+                     or info.get("regularMarketPrice")
                      or info.get("previousClose") or 0)
+                     
+            manual_yield = (annual_div / price) if price and price > 0 else 0
+            reported_yield = info.get("dividendYield") or info.get("yield") or 0
+            
+            # The Fail-Safe Calculation
+            if reported_yield > 1.0 or (reported_yield > 0 and abs(manual_yield - reported_yield) / reported_yield > 0.05):
+                div_yield = manual_yield
+            else:
+                div_yield = manual_yield if manual_yield > 0 else reported_yield
+                
             name = info.get("shortName") or info.get("longName") or ticker
             ex_date = info.get("exDividendDate")
             sector_info = info.get("sector") or cfg.TICKER_SECTOR.get(ticker, "Unknown")
@@ -241,6 +251,10 @@ def _fetch_single_yield(
 
             # Find matching screened result for momentum data
             matched = next((r for r in results if r["ticker"] == ticker), None)
+            
+            # Calculate percentage and apply validator
+            final_yield_pct = round(div_yield * 100, 2) if div_yield else 0.0
+            validated_yield_pct = validate_yield(ticker, final_yield_pct)
 
             return {
                 "ticker": ticker,
@@ -248,7 +262,7 @@ def _fetch_single_yield(
                 "sector": sector_info,
                 "category": category,
                 "price": round(price, 2) if price else 0,
-                "dividend_yield": round(div_yield * 100, 2) if div_yield else 0,
+                "dividend_yield": validated_yield_pct,
                 "annual_dividend": round(annual_div, 2) if annual_div else 0,
                 "ex_dividend_date": ex_date if ex_date else None,
                 "composite": matched["composite"] if matched else 0,
@@ -958,5 +972,13 @@ def run_pipeline_progressive(
     pipeline_status.update("done", f"Pipeline complete — {len(all_results)} tickers in {elapsed_total:.1f}s")
     print(f"\n✓ Progressive pipeline complete: {len(all_results)} tickers in {elapsed_total:.1f}s")
     print(f"  Workers: {CPU_WORKERS} CPU / {IO_WORKERS} I/O")
+
+    # ━━━━━━━━━━━ WAVE 4 — AI Intel Images (Background) ━━━━━━━━━━━
+    try:
+        print("\n[Wave 4/4] Generating AI Intel Images (Background) …")
+        # Run in a background task so the main pipeline returns immediately
+        asyncio.create_task(image_gen.generate_top_5_news_images())
+    except Exception as e:
+        print(f"  ⚠ Wave 4 trigger failed: {e}")
 
     return final_data
