@@ -11,16 +11,20 @@ interface IntelNewsCardProps {
   featured?: boolean;
 }
 
+import { API_BASE } from "@/lib/constants";
+
 /**
  * Resolves intel image URL — handles both relative (/intel/aapl.png) and absolute URLs.
- * Relative paths are served by Next.js from the public/ directory.
+ * Relative paths are served by the FastAPI backend or Next.js public directory.
  */
 function resolveImageUrl(url: string): string {
   if (!url) return "";
   // Already absolute URL (e.g. from Together API)
   if (url.startsWith("http")) return url;
-  // Relative path — served by Next.js from public/ (e.g. /intel/aapl.png)
-  return url;
+  // Relative path — prefix with API_BASE so it works on Vercel
+  // (e.g. /intel/aapl.png -> https://tunnel.url/intel/aapl.png)
+  const cleanBase = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+  return `${cleanBase}${url}`;
 }
 
 // ── Featured Card (Moby-style hero) ──
