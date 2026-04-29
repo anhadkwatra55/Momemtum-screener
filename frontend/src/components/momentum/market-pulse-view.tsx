@@ -346,9 +346,9 @@ export function MarketPulseView({
                 </button>
               </div>
               <div className="space-y-4">
-                {intelImages.slice(1, 5).map((img) => (
+                {intelImages.slice(1).map((img) => (
                   <LazyIntelNewsCard 
-                    key={img.ticker}
+                    key={`${img.ticker}-${img.created_at}`}
                     image={img} 
                     onTickerSelect={onTickerSelect} 
                   />

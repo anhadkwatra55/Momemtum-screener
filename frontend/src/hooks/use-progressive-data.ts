@@ -130,7 +130,7 @@ export function useProgressiveData(options?: { refreshInterval?: number }): UseP
       // Tier 3: Intel Images
       setTierLoading(prev => ({ ...prev, intel: true }));
       try {
-        const res = await fetchIntelImages(5);
+        const res = await fetchIntelImages(50);
         setData(prev => prev ? { ...prev, intel_images: res.images } : prev);
         setTierLoading(prev => ({ ...prev, intel: false }));
       } catch {
