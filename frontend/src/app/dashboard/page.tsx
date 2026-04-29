@@ -61,6 +61,7 @@ const LazyAlphaCallsBlotter = dynamic(() => import('@/components/momentum/alpha-
 const LazyWhaleTrackerBlotter = dynamic(() => import('@/components/momentum/whale-tracker-blotter').then(m => ({ default: m.WhaleTrackerBlotter })), { ssr: false });
 const LazyAgentBriefing = dynamic(() => import('@/components/momentum/agent-briefing').then(m => ({ default: m.AgentBriefing })), { ssr: false });
 const LazyNewsletterSignup = dynamic(() => import('@/components/momentum/newsletter-signup').then(m => ({ default: m.NewsletterSignup })), { ssr: false });
+const LazyIntelFeedView = dynamic(() => import('@/components/momentum/intel-feed-view').then(m => ({ default: m.IntelFeedView })), { ssr: false });
 
 // ML Pipeline Sandbox — only these tickers have trained XGBoost predictions
 const ML_SANDBOX_TICKERS = new Set(["WCP.TO", "BTE.TO", "PXT.TO", "CCO.TO", "IVN.TO"]);
@@ -688,6 +689,11 @@ const DashboardPage = memo(() => {
                   </div>
                 </Card>
               </motion.div>
+            )}
+
+            {/* ══════ INTELLIGENCE FEED ══════ */}
+            {activePage === "intel-feed" && (
+              <LazyIntelFeedView onTickerSelect={handlePageTickerSelect} />
             )}
           </AnimatePresence>
         );

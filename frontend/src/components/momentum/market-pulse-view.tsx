@@ -341,12 +341,15 @@ export function MarketPulseView({
             <div className="flex flex-col">
               <div className="mb-4 flex items-center justify-between px-2">
                 <h3 className="font-serif text-2xl text-cyan-400">Stock Picks</h3>
-                <button className="text-xs font-bold text-cyan-400/60 hover:text-cyan-400">
+                <button 
+                  onClick={() => onNavigate("intel-feed")}
+                  className="text-xs font-bold text-cyan-400/60 hover:text-cyan-400"
+                >
                   View All →
                 </button>
               </div>
               <div className="space-y-4">
-                {intelImages.slice(1).map((img) => (
+                {intelImages.slice(1, 6).map((img) => (
                   <LazyIntelNewsCard 
                     key={`${img.ticker}-${img.created_at}`}
                     image={img} 
