@@ -29,13 +29,13 @@ export function IntelFeedView({ onTickerSelect }: { onTickerSelect: (ticker: str
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="flex flex-col space-y-8">
         {intelImages.map((img) => (
           <IntelNewsCard
             key={`${img.ticker}-${img.created_at}`}
             image={img}
             onTickerSelect={onTickerSelect}
-            featured={false}
+            featured={true}
           />
         ))}
         {intelImages.length === 0 && (
