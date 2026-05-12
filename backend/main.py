@@ -74,6 +74,11 @@ import agents.claude_picks as claude_picks
 import image_gen
 from apscheduler.schedulers.background import BackgroundScheduler
 
+# ── Phase 2: Redis Stream Consumer (feature-flagged) ──
+USE_REDIS_STREAM = os.environ.get("USE_REDIS_STREAM", "false").lower() == "true"
+_write_behind_consumer = None
+_write_behind_task = None
+
 # ── JSON Encoder for numpy types (fallback when orjson unavailable) ──
 
 class NumpyEncoder(json.JSONEncoder):
@@ -861,9 +866,27 @@ async def lifespan(app: FastAPI):
     _agent_scheduler.start()
     print("  🤖 Market Pulse Agent activated. Scheduled tasks running.")
 
+    # ── Phase 2: Start Redis Stream Consumer ──
+    if USE_REDIS_STREAM:
+        try:
+            from stream_consumer import WriteBehindConsumer
+            global _write_behind_consumer, _write_behind_task
+            _write_behind_consumer = WriteBehindConsumer()
+            _write_behind_task = asyncio.create_task(_write_behind_consumer.start())
+            print("  📡 Redis Stream consumer started (write-behind buffer active)")
+        except Exception as e:
+            print(f"  ⚠ Redis Stream consumer failed to start: {e}")
+
     yield  # ← App runs here
 
     # ── Shutdown ──
+    # Stop Redis Stream Consumer
+    if _write_behind_consumer:
+        _write_behind_consumer.stop()
+        if _write_behind_task:
+            _write_behind_task.cancel()
+        print("  ⏹ Redis Stream consumer stopped.")
+
     if _scheduler_timer:
         _scheduler_timer.cancel()
     
@@ -1002,6 +1025,40 @@ async def health_check():
         "pipeline": _engine_status.to_dict(),
         "cached": _CACHED_DASHBOARD_DATA is not None,
     }
+
+
+# ── Phase 4: Stateful Indicator API ──
+
+@app.get("/api/indicator-state/{ticker}")
+async def get_indicator_state(ticker: str):
+    """Return the O(1) indicator state snapshot for a ticker (Phase 4 debug endpoint)."""
+    from momentum_screener import get_ticker_state, USE_STATEFUL_INDICATORS
+    if not USE_STATEFUL_INDICATORS:
+        return JSONResponse(
+            content={"error": "Stateful indicators not enabled. Set USE_STATEFUL_INDICATORS=true"},
+            status_code=400,
+        )
+    state = get_ticker_state(ticker.upper())
+    if state is None:
+        return JSONResponse(
+            content={"error": f"No state tracked for {ticker.upper()}. Run the pipeline first."},
+            status_code=404,
+        )
+    # Serialize dataclass to dict
+    from dataclasses import asdict
+    return encode_response(asdict(state))
+
+
+@app.get("/api/indicator-states")
+async def get_all_indicator_states():
+    """Return a summary of all tracked indicator states."""
+    from momentum_screener import get_all_ticker_states, USE_STATEFUL_INDICATORS
+    if not USE_STATEFUL_INDICATORS:
+        return JSONResponse(
+            content={"error": "Stateful indicators not enabled. Set USE_STATEFUL_INDICATORS=true"},
+            status_code=400,
+        )
+    return encode_response(get_all_ticker_states())
 
 
 # ── Dashboard Data ──

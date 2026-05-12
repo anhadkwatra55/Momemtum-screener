@@ -65,6 +65,19 @@ SCREEN_CHUNK_SIZE = int(os.environ.get("SCREEN_CHUNK_SIZE", "75")) if _SERVER_MO
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 1.5  # seconds
 
+# ── Phase 3: Celery Parallel Dispatch (feature-flagged) ──
+USE_CELERY = os.environ.get("USE_CELERY", "false").lower() == "true"
+_celery_available = False
+
+if USE_CELERY:
+    try:
+        from celery import group
+        from pipeline_tasks import screen_chunk_task
+        _celery_available = True
+    except ImportError:
+        print("  ⚠ USE_CELERY=true but celery/pipeline_tasks not importable. Falling back to ThreadPool.")
+        _celery_available = False
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PROCESS-SAFE SCREENING
@@ -163,6 +176,40 @@ def screen_universe_parallel(
     results: List[dict] = []
     completed = 0
     start_time = time.perf_counter()
+
+    # ── CELERY MODE: distributed dispatch ──
+    if USE_CELERY and _celery_available:
+        try:
+            if progress:
+                print(f"    ⚡ [CELERY] Dispatching {len(tickers)} tickers in {(len(tickers) + SCREEN_CHUNK_SIZE - 1) // SCREEN_CHUNK_SIZE} chunks …")
+            
+            # Chunk tickers for distribution
+            chunks = [tickers[i:i + SCREEN_CHUNK_SIZE] for i in range(0, len(tickers), SCREEN_CHUNK_SIZE)]
+            
+            # Dispatch to Celery workers as a group
+            job = group(screen_chunk_task.s(chunk) for chunk in chunks)()
+            
+            # Wait for results with a timeout (10 min max)
+            chunk_results = job.get(timeout=600, propagate=False)
+            
+            for chunk_result in chunk_results:
+                if isinstance(chunk_result, list):
+                    results.extend(chunk_result)
+                elif isinstance(chunk_result, Exception):
+                    if progress:
+                        print(f"    ⚠ Celery chunk failed: {chunk_result}")
+            
+            results.sort(key=lambda x: abs(x.get("composite", 0)), reverse=True)
+            elapsed = time.perf_counter() - start_time
+            if progress:
+                rate = len(results) / elapsed if elapsed > 0 else 0
+                print(f"    ✓ [CELERY] Screened {len(results)} tickers in {elapsed:.1f}s ({rate:.0f}/sec)")
+            return results
+        except Exception as e:
+            if progress:
+                print(f"    ⚠ Celery dispatch failed ({e}). Falling back to ThreadPool …")
+            results = []
+            # Fall through to ThreadPool below
 
     # ── SERVER MODE: chunked path ──
     if _SERVER_MODE:

@@ -7,6 +7,7 @@ classifies market regime per-ticker & per-sector, and assigns probability.
 
 from __future__ import annotations
 
+import os
 import warnings
 from typing import Dict
 
@@ -25,6 +26,42 @@ from momentum_indicators import (
 )
 
 warnings.filterwarnings("ignore")
+
+# ── Phase 4: Stateful O(1) Indicators (feature-flagged) ──
+USE_STATEFUL_INDICATORS = os.environ.get("USE_STATEFUL_INDICATORS", "false").lower() == "true"
+_TICKER_STATES = {}  # {ticker: TickerState}
+
+if USE_STATEFUL_INDICATORS:
+    try:
+        from indicator_state import (
+            TickerState, EMAState, ADXState, TRIXState, StochState,
+            ElderState, RenkoState, HAState, HMAState,
+        )
+        from stateful_indicators import update_ema, update_adx, update_trix
+        _stateful_available = True
+    except ImportError:
+        _stateful_available = False
+        print("  ⚠ USE_STATEFUL_INDICATORS=true but modules not importable.")
+else:
+    _stateful_available = False
+
+
+def get_ticker_state(ticker: str):
+    """Return the O(1) indicator state for a ticker (or None)."""
+    return _TICKER_STATES.get(ticker)
+
+
+def get_all_ticker_states():
+    """Return summary of all tracked ticker states."""
+    return {
+        t: {
+            "ticker": s.ticker,
+            "last_update": s.last_update,
+            "composite_score": s.composite_score,
+            "sentiment": s.sentiment,
+        }
+        for t, s in _TICKER_STATES.items()
+    }
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -550,6 +587,72 @@ def screen_ticker(ticker: str, df: pd.DataFrame) -> dict | None:
 
         # Auto-generated research thesis (Moby.invest-style)
         result["thesis"] = generate_thesis(result)
+
+        # ── Phase 4: Build stateful indicator snapshot ──
+        if USE_STATEFUL_INDICATORS and _stateful_available:
+            try:
+                from datetime import datetime
+                adx_df = compute_adx(df)
+                adx_val = float(adx_df["ADX"].iloc[-1]) if not np.isnan(adx_df["ADX"].iloc[-1]) else 0.0
+                plus_di = float(adx_df["+DI"].iloc[-1]) if "+DI" in adx_df.columns else 0.0
+                minus_di = float(adx_df["-DI"].iloc[-1]) if "-DI" in adx_df.columns else 0.0
+
+                # Initialize state from final indicator values
+                state = TickerState(
+                    ticker=ticker,
+                    last_update=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    s1=ADXState(
+                        last_plus_dm_ema=plus_di,
+                        last_minus_dm_ema=minus_di,
+                        last_tr_ema=float(df["High"].iloc[-1] - df["Low"].iloc[-1]),
+                        last_dx_ema=adx_val,
+                        period=14,
+                    ),
+                    s1_trix=TRIXState(
+                        ema1=float(df["Close"].iloc[-1]),
+                        ema2=float(df["Close"].iloc[-1]),
+                        ema3=float(df["Close"].iloc[-1]),
+                        last_ema3=float(df["Close"].iloc[-2]) if len(df) > 1 else float(df["Close"].iloc[-1]),
+                        period=15,
+                    ),
+                    s1_stoch=StochState(
+                        low_queue=df["Low"].iloc[-14:].tolist(),
+                        high_queue=df["High"].iloc[-14:].tolist(),
+                    ),
+                    s2=ElderState(
+                        ema_value=float(df["Close"].iloc[-1]),
+                        macd_fast_ema=float(df["Close"].iloc[-1]),
+                        macd_slow_ema=float(df["Close"].iloc[-1]),
+                        macd_signal_ema=0.0,
+                        last_hist=0.0,
+                        last_ema=float(df["Close"].iloc[-1]),
+                        last_color=s2.get("elder_color", "Blue"),
+                        consecutive=s2.get("elder_streak", 1),
+                    ),
+                    s3=RenkoState(
+                        brick_open=float(df["Close"].iloc[-1]),
+                        brick_size=float(df["Close"].iloc[-20:].std()) if len(df) >= 20 else 1.0,
+                        last_direction=1 if s3.get("score", 0) > 0 else -1,
+                        consecutive=abs(s3.get("renko_streak", 1)),
+                        last_index=len(df) - 1,
+                    ),
+                    s4=HAState(
+                        last_ha_open=float(df["Open"].iloc[-1]),
+                        last_ha_close=float(df["Close"].iloc[-1]),
+                        consecutive=abs(s4.get("ha_streak", 1)),
+                        last_bullish=s4.get("score", 0) > 0,
+                    ),
+                    s4_hma=HMAState(
+                        wma_half_queue=df["Close"].iloc[-10:].tolist(),
+                        wma_full_queue=df["Close"].iloc[-20:].tolist() if len(df) >= 20 else df["Close"].tolist(),
+                        period=20,
+                    ),
+                    composite_score=composite,
+                    sentiment=sentiment,
+                )
+                _TICKER_STATES[ticker] = state
+            except Exception:
+                pass  # Never break screening for state tracking
 
         return result
 

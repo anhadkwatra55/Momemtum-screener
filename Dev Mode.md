@@ -102,6 +102,11 @@ You should see: `🔒 [SERVER MODE] Security active: CORS=..., Rate=60/min, API-
 ```kill -9 $(lsof -ti :8060) 2>/dev/null; cd ~/Desktop/momentum-screener-server/backend && source venv/bin/activate && MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
 ```
 
+Dev macbook pro 2019 - 
+```
+kill -9 $(lsof -ti :8060) 2>/dev/null; cd backend && source venv/bin/activate && MAC_MINI_SERVER_MODE=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+```
+
 ### Step 5: Start Cloudflare Tunnel (new terminal tab)
 
 **Option A — Resilient tunnel script (recommended):**
@@ -234,3 +239,100 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
 Terminal 4 — Dev Frontend (optional, for local dev)
 cd ~/Desktop/momentum-screener-dev/frontend
 npm run dev -- -p 3001)
+
+---
+
+## 🚀 Architecture Upgrade — High-Performance Features
+
+The backend includes optional performance upgrades that can be activated via environment variables.
+All flags default to `false` — the system runs exactly as before unless you opt-in.
+
+### Feature Flags (add to your start command)
+
+| Flag | What it does | Requires |
+|------|-------------|----------|
+| `USE_REDIS_STREAM=true` | Pushes tick data to Redis Streams for write-behind buffering | Redis (already running) |
+| `USE_CELERY=true` | Distributes screening across parallel Celery workers | Redis + Celery worker process |
+| `USE_STATEFUL_INDICATORS=true` | Builds O(1) indicator state alongside normal calculations | Nothing extra |
+
+### Example: Start with all upgrades enabled (local dev)
+```bash
+cd ~/Desktop/momentum-screener-dev/backend
+source venv/bin/activate
+USE_REDIS_STREAM=true USE_STATEFUL_INDICATORS=true python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+```
+
+### Example: Start with Celery workers (local dev)
+Terminal 1 — Celery Worker:
+```bash
+cd ~/Desktop/momentum-screener-dev/backend
+source venv/bin/activate
+celery -A celery_app worker --loglevel=info --concurrency=2
+```
+
+Terminal 2 — Backend with Celery enabled:
+```bash
+cd ~/Desktop/momentum-screener-dev/backend
+source venv/bin/activate
+USE_CELERY=true python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+```
+
+### Stateful Indicator Debug Endpoint
+When `USE_STATEFUL_INDICATORS=true`, you get two new API endpoints:
+- `GET /api/indicator-state/AAPL` — Full O(1) state for a ticker
+- `GET /api/indicator-states` — Summary of all tracked tickers
+
+---
+
+### 🐘 PostgreSQL Migration (Future — Mac Mini Production)
+
+When you're ready to switch from SQLite to PostgreSQL for better write concurrency:
+
+#### Step 1: Install PostgreSQL on Mac Mini
+```bash
+brew install postgresql@14
+brew services start postgresql@14
+```
+
+#### Step 2: Create the database
+```bash
+createdb headstart
+psql headstart -c "CREATE USER momentum WITH PASSWORD 'your_secure_password';"
+psql headstart -c "GRANT ALL PRIVILEGES ON DATABASE headstart TO momentum;"
+```
+
+#### Step 3: Install Python driver
+```bash
+cd ~/Desktop/momentum-screener-server/backend
+source venv/bin/activate
+pip install asyncpg sqlalchemy[asyncio]
+```
+
+#### Step 4: Set DATABASE_URL environment variable
+Add to your server start command:
+```bash
+DATABASE_URL="postgresql+asyncpg://momentum:your_secure_password@localhost:5432/headstart"
+```
+
+#### Step 5: Migrate data from SQLite → PostgreSQL
+```bash
+cd ~/Desktop/momentum-screener-server/backend
+source venv/bin/activate
+python3 -c "
+import sqlite3, psycopg2
+# Migration script will be provided when you're ready to switch
+print('Migration requires swapping db.py — contact dev for assistance')
+"
+```
+
+> ⚠️ **Important**: The PostgreSQL version of `db.py` exists but is NOT active.
+> You must swap `backend/pipelines/db.py` from the SQLite version to the PostgreSQL version
+> AND have a running Postgres instance before enabling this.
+> SQLite works perfectly for single-server deployments.
+
+---
+
+### Mac Mini Production: Full Upgrade Start Command
+```bash
+kill -9 $(lsof -ti :8060) 2>/dev/null; cd ~/Desktop/momentum-screener-server/backend && source venv/bin/activate && MAC_MINI_SERVER_MODE=true USE_REDIS_STREAM=true USE_STATEFUL_INDICATORS=true API_KEY=911ee14f92d5c622fb2445ab6b8f5840738a158ac45a24adbd7d7bee0c36442c ALLOWED_ORIGINS=https://headstart-ai.vercel.app python3 -m uvicorn main:app --host 0.0.0.0 --port 8060 --workers 1
+```

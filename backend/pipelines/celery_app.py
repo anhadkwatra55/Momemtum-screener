@@ -50,5 +50,9 @@ celery_app.conf.update(
     task_acks_late=True,            # ack after completion (crash safety)
 )
 
-# ── Auto-discover tasks in worker.py ──
-celery_app.autodiscover_tasks(["worker"])
+# ── Auto-discover tasks ──
+# Try both dotted paths to work from either backend/ or pipelines/
+try:
+    celery_app.autodiscover_tasks(["pipelines.worker", "pipelines.pipeline_tasks"])
+except Exception:
+    celery_app.autodiscover_tasks(["worker", "pipeline_tasks"])

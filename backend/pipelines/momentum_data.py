@@ -23,6 +23,50 @@ import momentum_config as cfg
 
 warnings.filterwarnings("ignore")
 
+# ── Phase 2: Redis Stream Write-Behind ──
+USE_REDIS_STREAM = os.environ.get("USE_REDIS_STREAM", "false").lower() == "true"
+_stream_producer = None
+
+def _get_stream_producer():
+    """Lazy-init the Redis Stream producer (only when flag is on)."""
+    global _stream_producer
+    if _stream_producer is None and USE_REDIS_STREAM:
+        try:
+            from stream_ingest import get_producer
+            _stream_producer = get_producer()
+        except Exception:
+            pass
+    return _stream_producer
+
+def _push_to_stream(ticker: str, df: pd.DataFrame):
+    """Fire-and-forget: push upserted data to Redis Stream."""
+    if not USE_REDIS_STREAM:
+        return
+    try:
+        producer = _get_stream_producer()
+        if producer and producer.redis_ok:
+            # Push the last row as a tick (most recent data point)
+            last = df.iloc[-1]
+            data = {
+                "open": float(last.get("Open", 0)),
+                "high": float(last.get("High", 0)),
+                "low": float(last.get("Low", 0)),
+                "close": float(last.get("Close", 0)),
+                "volume": int(last.get("Volume", 0)),
+                "date": str(df.index[-1])[:10],
+            }
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(producer.push_tick(ticker, data))
+                else:
+                    loop.run_until_complete(producer.push_tick(ticker, data))
+            except RuntimeError:
+                asyncio.run(producer.push_tick(ticker, data))
+    except Exception:
+        pass  # Never break the pipeline for stream failures
+
 
 def smart_fetch(
     tickers: list[str] | None = None,
@@ -149,6 +193,7 @@ def _download_and_store(
                         df = df.dropna(subset=["Close"])
                         if len(df) > 0:
                             stored += db.upsert_ohlcv(ticker, df)
+                            _push_to_stream(ticker, df)
                             loaded_tickers.add(ticker)
                     except (KeyError, TypeError):
                         pass
@@ -174,6 +219,7 @@ def _download_and_store(
                     df = df.dropna(subset=["Close"])
                     if len(df) > 0:
                         db.upsert_ohlcv(t, df)
+                        _push_to_stream(t, df)
                         stored += len(df)
                     del df
                 except Exception:
@@ -217,6 +263,7 @@ def _download_and_store(
                 df = df.dropna(subset=["Close"])
                 if len(df) > 0:
                     n = db.upsert_ohlcv(ticker, df)
+                    _push_to_stream(ticker, df)
                     stored += n
             except (KeyError, TypeError):
                 pass
@@ -249,6 +296,7 @@ def _download_and_store(
                 df = df.dropna(subset=["Close"])
                 if len(df) > 0:
                     db.upsert_ohlcv(t, df)
+                    _push_to_stream(t, df)
                     stored += len(df)
             except Exception:
                 pass
